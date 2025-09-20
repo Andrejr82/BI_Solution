@@ -1,6 +1,6 @@
 [
     {
-        "file_name": "admatao_full.parquet",
+        "file_name": "admmat.parquet",
         "row_count": 1113822,
         "column_count": 95,
         "description": "Arquivo original completo com dados de produtos, vendas, estoque e informações de UNEs",
