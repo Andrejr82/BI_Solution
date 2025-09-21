@@ -151,26 +151,45 @@ except Exception as e:
 
 # --- Função para admins aprovarem redefinição de senha ---
 def painel_aprovacao_redefinicao():
+    """Painel para aprovação de redefinições de senha - com fallback seguro"""
     st.markdown("<h3>Solicitações de Redefinição de Senha</h3>", unsafe_allow_html=True)
-    import sqlite3
 
-    conn = sqlite3.connect(auth_db.DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT username FROM usuarios WHERE redefinir_solicitado=1 AND redefinir_aprovado=0")
-    pendentes = [row[0] for row in c.fetchall()]
-    if not pendentes:
-        st.info("Nenhuma solicitação pendente.")
-    else:
-        for user in pendentes:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"Usuário: {user}")
-            with col2:
-                if st.button(f"Aprovar {user}"):
-                    auth_db.aprovar_redefinicao(user)
-                    st.success(f"Solicitação de {user} aprovada!")
-                    st.rerun()
-    conn.close()
+    if not DB_AVAILABLE:
+        st.warning("⚠️ Sistema de autenticação não disponível no Streamlit Cloud")
+        return
+
+    try:
+        import sqlite3
+
+        # Verificar se auth_db tem DB_PATH
+        if not hasattr(auth_db, 'DB_PATH'):
+            st.warning("⚠️ Caminho do banco de dados não disponível")
+            return
+
+        conn = sqlite3.connect(auth_db.DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT username FROM usuarios WHERE redefinir_solicitado=1 AND redefinir_aprovado=0")
+        pendentes = [row[0] for row in c.fetchall()]
+
+        if not pendentes:
+            st.info("Nenhuma solicitação pendente.")
+        else:
+            for user in pendentes:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"Usuário: {user}")
+                with col2:
+                    if st.button(f"Aprovar {user}"):
+                        if hasattr(auth_db, 'aprovar_redefinicao'):
+                            auth_db.aprovar_redefinicao(user)
+                            st.success(f"Solicitação de {user} aprovada!")
+                            st.rerun()
+                        else:
+                            st.error("Função de aprovação não disponível")
+        conn.close()
+    except Exception as e:
+        st.error(f"Erro ao acessar painel de aprovação: {e}")
+        logging.error(f"Erro no painel_aprovacao_redefinicao: {e}")
 
 # --- Função para usuário redefinir senha após aprovação ---
 def tela_redefinir_senha():
@@ -188,7 +207,11 @@ def tela_redefinir_senha():
             st.warning("A senha deve ter pelo menos 6 caracteres.")
         else:
             try:
-                auth_db.redefinir_senha(username, nova)
+                if DB_AVAILABLE and hasattr(auth_db, 'redefinir_senha'):
+                    auth_db.redefinir_senha(username, nova)
+                else:
+                    st.error("Sistema de redefinição não disponível no Streamlit Cloud")
+                    return
                 st.success("Senha redefinida com sucesso! Você será redirecionado para o login.")
                 time.sleep(2)
                 for k in ["authenticated", "username", "role", "ultimo_login"]:
@@ -200,17 +223,30 @@ def tela_redefinir_senha():
 
 # --- Checagem para exibir tela de redefinição após aprovação ---
 def checar_redefinicao_aprovada():
-    import sqlite3
+    """Verifica se usuário deve redefinir senha - com fallback seguro"""
+    if not DB_AVAILABLE:
+        return False
 
     username = st.session_state.get("username")
     if not username:
         return False
-    conn = sqlite3.connect(auth_db.DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT redefinir_aprovado FROM usuarios WHERE username=?", (username,))
-    row = c.fetchone()
-    conn.close()
-    return bool(row and row[0])
+
+    try:
+        import sqlite3
+        # Verificar se auth_db tem DB_PATH
+        if not hasattr(auth_db, 'DB_PATH'):
+            logging.warning("auth_db.DB_PATH não disponível")
+            return False
+
+        conn = sqlite3.connect(auth_db.DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT redefinir_aprovado FROM usuarios WHERE username=?", (username,))
+        row = c.fetchone()
+        conn.close()
+        return bool(row and row[0])
+    except Exception as e:
+        logging.error(f"Erro ao verificar redefinição aprovada: {e}")
+        return False
 
 # --- Após login, checar se usuário deve redefinir senha ---
 if st.session_state.get("authenticated") and checar_redefinicao_aprovada():
