@@ -66,33 +66,62 @@ class Settings(BaseSettings):
 
         return conn_str
 
-# Instância única das configurações para ser usada em toda a aplicação
-try:
-    settings = Settings()
-except Exception as e:
-    # Em caso de erro no Streamlit Cloud, tentar com secrets
-    import logging
+# Função para carregar configurações de forma segura
+def load_settings():
+    """Carrega configurações de forma segura, tentando diferentes fontes"""
     import os
+    import logging
 
-    logging.warning(f"Erro ao carregar settings padrão: {e}")
-    logging.info("Tentando carregar do Streamlit secrets...")
+    # Primeiro, tentar carregar apenas do ambiente (.env)
+    try:
+        settings = Settings()
+        logging.info("✅ Settings carregadas do ambiente")
+        return settings
+    except Exception as e:
+        logging.warning(f"Erro ao carregar do ambiente: {e}")
 
+    # Se falhou, tentar carregar do Streamlit secrets
     try:
         import streamlit as st
 
-        # Criar settings usando os secrets do Streamlit
+        # Obter valores dos secrets ou variáveis de ambiente
+        db_server = st.secrets.get("DB_SERVER", os.getenv("DB_SERVER", ""))
+        db_name = st.secrets.get("DB_NAME", os.getenv("DB_NAME", ""))
+        db_user = st.secrets.get("DB_USER", os.getenv("DB_USER", ""))
+        db_password = st.secrets.get("DB_PASSWORD", os.getenv("DB_PASSWORD", ""))
+        openai_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
         settings = Settings(
-            DB_SERVER=st.secrets.get("DB_SERVER", os.getenv("DB_SERVER", "")),
-            DB_NAME=st.secrets.get("DB_NAME", os.getenv("DB_NAME", "")),
-            DB_USER=st.secrets.get("DB_USER", os.getenv("DB_USER", "")),
-            DB_PASSWORD=st.secrets.get("DB_PASSWORD", os.getenv("DB_PASSWORD", "")),
+            DB_SERVER=db_server,
+            DB_NAME=db_name,
+            DB_USER=db_user,
+            DB_PASSWORD=db_password,
             DB_DRIVER=st.secrets.get("DB_DRIVER", os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")),
             DB_TRUST_SERVER_CERTIFICATE=st.secrets.get("DB_TRUST_SERVER_CERTIFICATE", os.getenv("DB_TRUST_SERVER_CERTIFICATE", "yes")) == "yes",
-            OPENAI_API_KEY=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+            OPENAI_API_KEY=openai_key,
             LLM_MODEL_NAME=st.secrets.get("LLM_MODEL_NAME", os.getenv("LLM_MODEL_NAME", "gpt-4o"))
         )
         logging.info("✅ Settings carregadas do Streamlit secrets")
+        return settings
 
-    except Exception as inner_e:
-        logging.error(f"❌ Erro fatal ao carregar settings: {inner_e}")
-        raise inner_e
+    except Exception as e:
+        logging.error(f"❌ Erro ao carregar do Streamlit: {e}")
+
+        # Última tentativa: configurações mínimas
+        try:
+            settings = Settings(
+                DB_SERVER="localhost",
+                DB_NAME="temp",
+                DB_USER="temp",
+                DB_PASSWORD="temp",
+                OPENAI_API_KEY=os.getenv("OPENAI_API_KEY", ""),
+                LLM_MODEL_NAME="gpt-4o"
+            )
+            logging.warning("⚠️ Usando configurações temporárias")
+            return settings
+        except Exception as final_e:
+            logging.error(f"❌ Erro fatal: {final_e}")
+            raise final_e
+
+# Instância global das configurações
+settings = load_settings()
