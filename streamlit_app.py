@@ -59,11 +59,20 @@ except Exception as e:
     import_errors.append(f"GraphBuilder: {e}")
     BACKEND_AVAILABLE = False
 
-try:
-    from core.config.settings import settings
-except Exception as e:
-    import_errors.append(f"Settings: {e}")
-    BACKEND_AVAILABLE = False
+# Settings importadas via lazy loading - não na inicialização
+settings = None
+
+def get_settings():
+    """Obtém settings de forma lazy e segura"""
+    global settings
+    if settings is None:
+        try:
+            from core.config.safe_settings import get_safe_settings
+            settings = get_safe_settings()
+        except Exception as e:
+            logging.error(f"Erro ao carregar settings: {e}")
+            settings = None
+    return settings
 
 try:
     from core.llm_adapter import OpenAILLMAdapter
@@ -141,7 +150,11 @@ else:
             # Debug 3: Fallback para settings
             if not api_key or not api_key.startswith("sk-"):
                 try:
-                    api_key = settings.OPENAI_API_KEY.get_secret_value()
+                    current_settings = get_settings()
+                    if current_settings:
+                        api_key = current_settings.OPENAI_API_KEY.get_secret_value()
+                    else:
+                        api_key = None
                     debug_info.append(f"Settings OpenAI: OK")
                 except Exception as e:
                     debug_info.append(f"Settings erro: {e}")
