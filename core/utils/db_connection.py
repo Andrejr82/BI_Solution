@@ -12,8 +12,8 @@ def get_engine():
     global engine
     if engine is None:
         try:
-            from core.config.settings import get_settings
-            settings = get_settings()
+            from core.config.safe_settings import get_safe_settings
+            settings = get_safe_settings()
             DATABASE_URI = settings.SQL_SERVER_CONNECTION_STRING
             engine = create_engine(DATABASE_URI, pool_size=10, max_overflow=20)
             logger.info("✅ Engine de banco inicializado")
