@@ -37,3 +37,5 @@ psutil>=5.0.0
 
 # Scheduling (for data sync agent)
 schedule>=1.2.0
+
+# Cache clear trigger - Updated: 2025-09-21 20:52
