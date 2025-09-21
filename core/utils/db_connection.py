@@ -15,8 +15,12 @@ def get_engine():
             from core.config.safe_settings import get_safe_settings
             settings = get_safe_settings()
             DATABASE_URI = settings.SQL_SERVER_CONNECTION_STRING
-            engine = create_engine(DATABASE_URI, pool_size=10, max_overflow=20)
-            logger.info("✅ Engine de banco inicializado")
+            if DATABASE_URI:
+                engine = create_engine(DATABASE_URI, pool_size=10, max_overflow=20)
+                logger.info("✅ Engine de banco inicializado")
+            else:
+                logger.warning("⚠️ Database URI não disponível - modo sem banco")
+                engine = None
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar engine: {e}")
             engine = None
