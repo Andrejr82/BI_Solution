@@ -13,10 +13,18 @@ import schedule
 import time
 from pathlib import Path
 
-from core.config.settings import settings
+# Settings e conexão importadas com lazy loading
 from core.utils.db_connection import get_db_connection
 
 logger = logging.getLogger(__name__)
+
+def get_settings():
+    """Obtém settings de forma lazy"""
+    try:
+        from core.config.safe_settings import get_safe_settings
+        return get_safe_settings()
+    except Exception:
+        return None
 
 class DataSyncAgent:
     """

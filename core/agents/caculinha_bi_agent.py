@@ -13,9 +13,17 @@ from langchain_openai import ChatOpenAI
 from core.llm_adapter import OpenAILLMAdapter
 
 from core.connectivity.base import DatabaseAdapter
-from core.config.settings import settings # Import the settings instance
+# Settings importadas com lazy loading
 
 logger = logging.getLogger(__name__)
+
+def get_settings():
+    """Obtém settings de forma lazy"""
+    try:
+        from core.config.safe_settings import get_safe_settings
+        return get_safe_settings()
+    except Exception:
+        return None
 
 def create_caculinha_bi_agent(
     parquet_dir: str,
@@ -45,8 +53,8 @@ def create_caculinha_bi_agent(
 
     # --- LLM para Geração de SQL ---
     sql_gen_llm = ChatOpenAI(
-        model=settings.LLM_MODEL_NAME,
-        openai_api_key=settings.OPENAI_API_KEY.get_secret_value(),
+        model=get_settings().LLM_MODEL_NAME if get_settings() else "gpt-4o",
+        openai_api_key=get_settings().OPENAI_API_KEY if get_settings() else os.getenv("OPENAI_API_KEY"),
         temperature=0,
     )
 

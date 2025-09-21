@@ -8,11 +8,19 @@ import logging
 try:
     from sqlalchemy import create_engine
     from core.database import sql_server_auth_db as auth_db
-    from core.config.settings import settings
+    # Settings importadas com lazy loading
     DB_AVAILABLE = True
 except Exception as e:
     logging.warning(f"Database components não disponíveis: {e}")
     DB_AVAILABLE = False
+
+def get_settings():
+    """Obtém settings de forma lazy"""
+    try:
+        from core.config.safe_settings import get_safe_settings
+        return get_safe_settings()
+    except Exception:
+        return None
 
 st.markdown("<h1 class='main-header'>Monitoramento do Sistema</h1>", unsafe_allow_html=True)
 st.markdown("<div class='info-box'>Acompanhe os logs do sistema e o status dos principais serviços.</div>", unsafe_allow_html=True)
@@ -64,7 +72,11 @@ db_time = "-"
 if DB_AVAILABLE:
     try:
         start = time.time()
-        engine = create_engine(settings.SQL_SERVER_CONNECTION_STRING)
+        current_settings = get_settings()
+        if current_settings and hasattr(current_settings, 'get_sql_connection_string'):
+            conn_str = current_settings.get_sql_connection_string()
+            if conn_str:
+                engine = create_engine(conn_str)
         with engine.connect() as conn:
             conn.execute("SELECT 1")
         db_time = f"{(time.time() - start)*1000:.0f} ms"
@@ -83,7 +95,9 @@ try:
     # Usar configuração do settings se disponível
     api_key = None
     if DB_AVAILABLE:
-        api_key = settings.OPENAI_API_KEY.get_secret_value()
+        current_settings = get_settings()
+        if current_settings and hasattr(current_settings, 'OPENAI_API_KEY'):
+            api_key = current_settings.OPENAI_API_KEY
     else:
         # Tentar pegar do secrets do Streamlit
         api_key = st.secrets.get("OPENAI_API_KEY")

@@ -3,6 +3,7 @@ API Gateway (Backend) para o Agent_BI usando FastAPI.
 """
 import uvicorn
 import logging
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
@@ -10,7 +11,7 @@ from langchain_core.messages import HumanMessage
 
 # Importações dos componentes da nova arquitetura
 from core.graph.graph_builder import GraphBuilder
-from core.config.settings import settings
+# Settings importadas com lazy loading
 from core.config.logging_config import setup_logging
 from core.llm_adapter import OpenAILLMAdapter
 from core.connectivity.parquet_adapter import ParquetAdapter # CORRECTED IMPORT
@@ -34,11 +35,21 @@ app = FastAPI(
     version="3.0.0"
 )
 
+def get_settings():
+    """Obtém settings de forma lazy"""
+    try:
+        from core.config.safe_settings import get_safe_settings
+        return get_safe_settings()
+    except Exception:
+        return None
+
 @app.on_event("startup")
 def startup_event():
     """Inicializa as dependências na inicialização da aplicação."""
     logger.info("Inicializando dependências...")
-    app.state.llm_adapter = OpenAILLMAdapter(api_key=settings.OPENAI_API_KEY.get_secret_value())
+    current_settings = get_settings()
+    api_key = current_settings.OPENAI_API_KEY if current_settings else os.getenv("OPENAI_API_KEY")
+    app.state.llm_adapter = OpenAILLMAdapter(api_key=api_key)
     app.state.parquet_adapter = ParquetAdapter(file_path="data/parquet/admmat.parquet") # CLOUD-COMPATIBLE PATH - ARQUIVO UNIFICADO
     app.state.code_gen_agent = CodeGenAgent(llm_adapter=app.state.llm_adapter)
     graph_builder = GraphBuilder(
