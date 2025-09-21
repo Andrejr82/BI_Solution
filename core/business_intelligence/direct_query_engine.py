@@ -217,7 +217,7 @@ class DirectQueryEngine:
                 return result
 
             # ALTA PRIORIDADE: Detectar consultas de VENDAS TOTAIS DE CADA UNE
-            vendas_todas_unes_match = re.search(r'vendas\s*(totais|total).*(cada\s*une|todas\s*unes|por\s*une)', query_lower)
+            vendas_todas_unes_match = re.search(r'vendas?\s*(totais?|total).*(cada\s*unes?|todas?\s*(as\s*)?unes?|por\s*unes?|de\s*todas?\s*(as\s*)?unes?)', query_lower)
             if vendas_todas_unes_match:
                 result = ("ranking_vendas_unes", {})
                 logger.info(f"CLASSIFICADO COMO: ranking_vendas_unes")
