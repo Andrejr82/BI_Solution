@@ -123,5 +123,12 @@ def load_settings():
             logging.error(f"❌ Erro fatal: {final_e}")
             raise final_e
 
-# Instância global das configurações
-settings = load_settings()
+# Instância global das configurações (lazy loading)
+settings = None
+
+def get_settings():
+    """Obtém as configurações usando lazy loading"""
+    global settings
+    if settings is None:
+        settings = load_settings()
+    return settings

@@ -8,19 +8,31 @@ import logging
 
 audit_logger = logging.getLogger("audit")
 
-# Importação condicional do sistema de auth
-try:
-    from core.database import sql_server_auth_db as auth_db
-    SQL_AUTH_AVAILABLE = True
-except Exception as e:
-    logging.warning(f"SQL Server auth não disponível: {e}")
-    SQL_AUTH_AVAILABLE = False
+# Importação condicional do sistema de auth (lazy loading)
+SQL_AUTH_AVAILABLE = None
+auth_db = None
+
+def get_auth_db():
+    """Obtém o módulo de auth usando lazy loading"""
+    global SQL_AUTH_AVAILABLE, auth_db
+    if SQL_AUTH_AVAILABLE is None:
+        try:
+            from core.database import sql_server_auth_db as _auth_db
+            auth_db = _auth_db
+            SQL_AUTH_AVAILABLE = True
+            logging.info("✅ SQL Server auth carregado")
+        except Exception as e:
+            logging.warning(f"❌ SQL Server auth não disponível: {e}")
+            SQL_AUTH_AVAILABLE = False
+            auth_db = None
+    return auth_db if SQL_AUTH_AVAILABLE else None
 
 # Inicializar banco de usuários ao iniciar app
 if "db_inicializado" not in st.session_state:
-    if SQL_AUTH_AVAILABLE:
+    current_auth_db = get_auth_db()
+    if current_auth_db:
         try:
-            auth_db.init_db()
+            current_auth_db.init_db()
             st.session_state["db_inicializado"] = True
             st.session_state["auth_mode"] = "sql_server"
             logging.info("✅ Autenticação SQL Server inicializada")
@@ -84,9 +96,13 @@ def login():
                 # Verificar autenticação baseada no modo
                 auth_mode = st.session_state.get("auth_mode", "sql_server")
 
-                if auth_mode == "sql_server" and SQL_AUTH_AVAILABLE:
+                if auth_mode == "sql_server":
                     # Usar autenticação SQL Server original
-                    role, erro = auth_db.autenticar_usuario(username, password)
+                    current_auth_db = get_auth_db()
+                    if current_auth_db:
+                        role, erro = current_auth_db.autenticar_usuario(username, password)
+                    else:
+                        role, erro = None, "Banco de dados não disponível"
                     if role:
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username
@@ -129,8 +145,12 @@ def sessao_expirada():
 
     # Usar timeout baseado no modo de autenticação
     auth_mode = st.session_state.get("auth_mode", "sql_server")
-    if auth_mode == "sql_server" and SQL_AUTH_AVAILABLE:
-        timeout_minutes = auth_db.SESSAO_MINUTOS
+    if auth_mode == "sql_server":
+        current_auth_db = get_auth_db()
+        if current_auth_db:
+            timeout_minutes = current_auth_db.SESSAO_MINUTOS
+        else:
+            timeout_minutes = 30  # Fallback
     else:
         timeout_minutes = 240  # 4 horas para modo cloud
 
