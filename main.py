@@ -15,6 +15,7 @@ from core.config.logging_config import setup_logging
 from core.llm_adapter import OpenAILLMAdapter
 from core.connectivity.parquet_adapter import ParquetAdapter # CORRECTED IMPORT
 from core.agents.code_gen_agent import CodeGenAgent
+from core.utils.correlation import set_correlation_id, log_with_correlation
 
 # Configuração de logging
 setup_logging()
@@ -55,8 +56,11 @@ async def handle_query(request: QueryRequest):
     Endpoint principal que recebe a consulta do utilizador, invoca o grafo
     e retorna a resposta final.
     """
-    logger.info(f"📝 API REQUEST - Session: {request.session_id} | Query: '{request.user_query}'")
-    interaction_logger.info(f"USER_QUERY (session: {request.session_id}): {request.user_query}")
+    # Set correlation ID for request tracking
+    corr_id = set_correlation_id()
+
+    log_with_correlation(logger, 'info', f"API REQUEST - Session: {request.session_id} | Query: '{request.user_query}'")
+    log_with_correlation(interaction_logger, 'info', f"USER_QUERY (session: {request.session_id}): {request.user_query}")
 
     try:
         initial_state = {"messages": [HumanMessage(content=request.user_query)]}
