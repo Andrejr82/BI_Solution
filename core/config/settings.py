@@ -15,11 +15,11 @@ class Settings(BaseSettings):
         extra='ignore' # Ignora variáveis extras no .env
     )
 
-    # Variáveis de ambiente individuais para a base de dados (opcionais para Streamlit Cloud)
-    DB_SERVER: Optional[str] = None
-    DB_NAME: Optional[str] = None
-    DB_USER: Optional[str] = None
-    DB_PASSWORD: Optional[SecretStr] = None
+    # Variáveis de ambiente individuais para a base de dados
+    DB_SERVER: str
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: SecretStr
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server" # Valor padrão comum
     DB_TRUST_SERVER_CERTIFICATE: bool = True
 
@@ -31,14 +31,10 @@ class Settings(BaseSettings):
     
     @computed_field
     @property
-    def SQL_SERVER_CONNECTION_STRING(self) -> Optional[str]:
+    def SQL_SERVER_CONNECTION_STRING(self) -> str:
         """
         Gera a string de conexão para SQLAlchemy (mssql+pyodbc).
-        Retorna None se configurações de DB não estiverem disponíveis.
         """
-        if not all([self.DB_SERVER, self.DB_NAME, self.DB_USER, self.DB_PASSWORD]):
-            return None
-
         driver_formatted = self.DB_DRIVER.replace(' ', '+')
         password_quoted = urllib.parse.quote_plus(self.DB_PASSWORD.get_secret_value())
 
@@ -54,14 +50,10 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
-    def PYODBC_CONNECTION_STRING(self) -> Optional[str]:
+    def PYODBC_CONNECTION_STRING(self) -> str:
         """
         Gera a string de conexão ODBC para uso direto com pyodbc.
-        Retorna None se configurações de DB não estiverem disponíveis.
         """
-        if not all([self.DB_SERVER, self.DB_NAME, self.DB_USER, self.DB_PASSWORD]):
-            return None
-
         conn_str = (
             f"DRIVER={self.DB_DRIVER};"
             f"SERVER={self.DB_SERVER};"
@@ -75,4 +67,32 @@ class Settings(BaseSettings):
         return conn_str
 
 # Instância única das configurações para ser usada em toda a aplicação
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as e:
+    # Em caso de erro no Streamlit Cloud, tentar com secrets
+    import logging
+    import os
+
+    logging.warning(f"Erro ao carregar settings padrão: {e}")
+    logging.info("Tentando carregar do Streamlit secrets...")
+
+    try:
+        import streamlit as st
+
+        # Criar settings usando os secrets do Streamlit
+        settings = Settings(
+            DB_SERVER=st.secrets.get("DB_SERVER", os.getenv("DB_SERVER", "")),
+            DB_NAME=st.secrets.get("DB_NAME", os.getenv("DB_NAME", "")),
+            DB_USER=st.secrets.get("DB_USER", os.getenv("DB_USER", "")),
+            DB_PASSWORD=st.secrets.get("DB_PASSWORD", os.getenv("DB_PASSWORD", "")),
+            DB_DRIVER=st.secrets.get("DB_DRIVER", os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")),
+            DB_TRUST_SERVER_CERTIFICATE=st.secrets.get("DB_TRUST_SERVER_CERTIFICATE", os.getenv("DB_TRUST_SERVER_CERTIFICATE", "yes")) == "yes",
+            OPENAI_API_KEY=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+            LLM_MODEL_NAME=st.secrets.get("LLM_MODEL_NAME", os.getenv("LLM_MODEL_NAME", "gpt-4o"))
+        )
+        logging.info("✅ Settings carregadas do Streamlit secrets")
+
+    except Exception as inner_e:
+        logging.error(f"❌ Erro fatal ao carregar settings: {inner_e}")
+        raise inner_e

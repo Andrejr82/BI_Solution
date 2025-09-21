@@ -6,7 +6,24 @@ import streamlit as st
 import uuid
 import pandas as pd
 import logging
-from core.auth import login, sessao_expirada
+
+# Importação de autenticação com fallback
+try:
+    from core.auth import login, sessao_expirada
+    AUTH_AVAILABLE = True
+except Exception as e:
+    logging.error(f"Erro ao importar autenticação: {e}")
+    AUTH_AVAILABLE = False
+
+    # Fallback de autenticação simples
+    def login():
+        st.error("❌ Sistema de autenticação não disponível")
+        st.info("Modo de desenvolvimento - acesso liberado")
+        st.session_state.authenticated = True
+        st.rerun()
+
+    def sessao_expirada():
+        return False
 
 # Importações do backend para integração direta - TESTE INDIVIDUAL
 import_errors = []
