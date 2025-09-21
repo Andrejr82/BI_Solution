@@ -27,23 +27,24 @@ def get_auth_db():
             auth_db = None
     return auth_db if SQL_AUTH_AVAILABLE else None
 
-# Inicializar banco de usuários ao iniciar app
-if "db_inicializado" not in st.session_state:
-    current_auth_db = get_auth_db()
-    if current_auth_db:
-        try:
-            current_auth_db.init_db()
-            st.session_state["db_inicializado"] = True
-            st.session_state["auth_mode"] = "sql_server"
-            logging.info("✅ Autenticação SQL Server inicializada")
-        except Exception as e:
-            logging.warning(f"❌ Falha na inicialização SQL Server: {e}")
+def init_auth_system():
+    """Inicializa o sistema de autenticação de forma lazy"""
+    if "db_inicializado" not in st.session_state:
+        current_auth_db = get_auth_db()
+        if current_auth_db:
+            try:
+                current_auth_db.init_db()
+                st.session_state["db_inicializado"] = True
+                st.session_state["auth_mode"] = "sql_server"
+                logging.info("✅ Autenticação SQL Server inicializada")
+            except Exception as e:
+                logging.warning(f"❌ Falha na inicialização SQL Server: {e}")
+                st.session_state["db_inicializado"] = True
+                st.session_state["auth_mode"] = "cloud_fallback"
+        else:
             st.session_state["db_inicializado"] = True
             st.session_state["auth_mode"] = "cloud_fallback"
-    else:
-        st.session_state["db_inicializado"] = True
-        st.session_state["auth_mode"] = "cloud_fallback"
-        logging.info("🌤️ Usando autenticação cloud (SQL Server não disponível)")
+            logging.info("🌤️ Usando autenticação cloud (SQL Server não disponível)")
 
 
 # Usuários para modo cloud (quando SQL Server não estiver disponível)
@@ -61,6 +62,9 @@ def verify_cloud_user(username, password):
 
 # --- Login adaptativo (SQL Server ou Cloud) ---
 def login():
+    # Inicializar sistema de autenticação de forma lazy
+    init_auth_system()
+
     # Coloca o formulário de login em uma coluna centralizada para melhor apelo visual
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
