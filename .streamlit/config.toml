@@ -20,3 +20,5 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F0F2F6"
 textColor = "#262730"
 font = "sans serif"
+
+# Cache clearing trigger - Force redeploy timestamp: 2025-09-21 20:50
