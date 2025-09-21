@@ -74,9 +74,12 @@ def load_settings():
 
     # Primeiro, tentar carregar apenas do ambiente (.env)
     try:
+        from pydantic import ValidationError
         settings = Settings()
         logging.info("✅ Settings carregadas do ambiente")
         return settings
+    except ValidationError as e:
+        logging.warning(f"ValidationError - variáveis obrigatórias ausentes: {e}")
     except Exception as e:
         logging.warning(f"Erro ao carregar do ambiente: {e}")
 
