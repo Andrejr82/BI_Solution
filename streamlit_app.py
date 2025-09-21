@@ -7,22 +7,45 @@ import uuid
 import pandas as pd
 import logging
 
-# Importação de autenticação com fallback
-try:
-    from core.auth import login, sessao_expirada
-    AUTH_AVAILABLE = True
-except Exception as e:
-    logging.error(f"Erro ao importar autenticação: {e}")
-    AUTH_AVAILABLE = False
+# Funções de autenticação com lazy loading
+AUTH_AVAILABLE = None
+_auth_module = None
 
-    # Fallback de autenticação simples
-    def login():
+def get_auth_functions():
+    """Carrega funções de autenticação usando lazy loading"""
+    global AUTH_AVAILABLE, _auth_module
+
+    if AUTH_AVAILABLE is None:
+        try:
+            from core.auth import login as _login, sessao_expirada as _sessao_expirada
+            _auth_module = {"login": _login, "sessao_expirada": _sessao_expirada}
+            AUTH_AVAILABLE = True
+            logging.info("✅ Autenticação carregada")
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar autenticação: {e}")
+            AUTH_AVAILABLE = False
+            _auth_module = None
+
+    return _auth_module
+
+def login():
+    """Função de login com lazy loading"""
+    auth_funcs = get_auth_functions()
+    if auth_funcs:
+        return auth_funcs["login"]()
+    else:
+        # Fallback simples
         st.error("❌ Sistema de autenticação não disponível")
-        st.info("Modo de desenvolvimento - acesso liberado")
+        st.info("🌤️ Modo cloud - acesso liberado")
         st.session_state.authenticated = True
         st.rerun()
 
-    def sessao_expirada():
+def sessao_expirada():
+    """Função de sessão expirada com lazy loading"""
+    auth_funcs = get_auth_functions()
+    if auth_funcs:
+        return auth_funcs["sessao_expirada"]()
+    else:
         return False
 
 # Importações do backend para integração direta - TESTE INDIVIDUAL
