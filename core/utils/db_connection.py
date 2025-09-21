@@ -2,6 +2,8 @@ from sqlalchemy import create_engine
 from typing import Optional
 import logging
 
+# CORREÇÃO FINAL: Removido import settings antigo para evitar ValidationError
+
 logger = logging.getLogger(__name__)
 
 # Global engine variable (lazy loaded)
