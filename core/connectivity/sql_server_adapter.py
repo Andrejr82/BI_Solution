@@ -3,14 +3,14 @@ import logging
 from typing import Any, Dict, List
 import pyodbc
 from .base import DatabaseAdapter
-from core.config.settings import Settings # Importa a nova classe de config
+# Settings importadas com lazy loading
 
 logger = logging.getLogger(__name__)
 
 class SQLServerAdapter(DatabaseAdapter):
     """Concrete implementation of the adapter for Microsoft SQL Server."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Any):
         self._settings = settings
         self._connection = None
         self._cursor = None
