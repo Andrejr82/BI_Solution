@@ -67,3 +67,12 @@ Relatorio_integracao_1308.md
 Melhorias_Projeto.txt
 plano_de_melhorias.md
 .vercel
+
+# Streamlit Cloud específico
+.streamlit/secrets.toml
+
+# Backups de manutenção
+backup_limpeza_*.zip
+
+# Scripts de manutenção (não precisam ir para produção)
+maintenance/
