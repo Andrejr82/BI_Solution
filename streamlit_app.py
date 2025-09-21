@@ -1,6 +1,7 @@
 '''
 Interface de Usuário (Frontend) para o Agent_BI.
 Versão integrada que não depende de API externa.
+Cache clear trigger: 2025-09-21 20:52 - ValidationError fix applied
 '''
 import streamlit as st
 import uuid
