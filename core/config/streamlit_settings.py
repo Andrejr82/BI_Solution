@@ -139,5 +139,12 @@ class StreamlitSettings:
         logger.info(f"Modelo LLM: {self.LLM_MODEL_NAME}")
         logger.info(f"Banco de dados disponível: {'Sim' if self.is_database_available() else 'Não'}")
 
-# Instância global das configurações
-streamlit_settings = StreamlitSettings()
+# Instância global das configurações (lazy loading)
+streamlit_settings = None
+
+def get_streamlit_settings():
+    """Obtém as configurações do Streamlit de forma lazy"""
+    global streamlit_settings
+    if streamlit_settings is None:
+        streamlit_settings = StreamlitSettings()
+    return streamlit_settings
