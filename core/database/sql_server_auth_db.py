@@ -16,12 +16,7 @@ logger = logging.getLogger(__name__)
 # --- Inicialização do banco (Cria a tabela se não existir) ---
 def init_db():
     logger.info("Iniciando a inicialização do banco de dados de autenticação.")
-    conn = get_db_connection()
-    if conn is None:
-        logger.warning("Sem conexão de banco disponível - modo offline.")
-        return False
-
-    with conn:
+    with get_db_connection() as conn:
         conn.execute(
             text(
                 """
