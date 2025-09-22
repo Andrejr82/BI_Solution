@@ -24,7 +24,7 @@ def login():
             """
             <div style='text-align:center;'>
                 <img src='https://raw.githubusercontent.com/github/explore/main/topics/business-intelligence/business-intelligence.png' width='150'>
-                <h2>Caçulinha BI</h2>
+                <h2>Agent Business</h2>
                 <p style='color:#666;'>Acesse com seu usuário e senha para continuar.</p>
             </div>
             """,
