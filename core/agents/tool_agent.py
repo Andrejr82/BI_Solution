@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Dict, List # Import List for chat_history type hint
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent  # OpenAI-compatible tools format
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import BaseMessage # Import BaseMessage for type hinting chat_history
 from langchain_core.runnables import RunnableConfig
@@ -23,10 +23,10 @@ class ToolAgent:
         self.langchain_llm = CustomLangChainLLM(llm_adapter=self.llm_adapter)
         
         self.agent_executor = self._create_agent_executor()
-        self.logger.info("ToolAgent com OpenAI Tools Agent inicializado.")
+        self.logger.info("ToolAgent inicializado com LangChain Tools Agent.")
 
     def _create_agent_executor(self) -> AgentExecutor:
-        """Cria e retorna um AgentExecutor com o agente de ferramentas OpenAI."""
+        """Cria e retorna um AgentExecutor com agente de ferramentas (formato OpenAI-compatible)."""
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", "Você é um assistente de BI útil e eficiente. Use as ferramentas disponíveis para responder às perguntas do usuário de forma direta."),
@@ -48,7 +48,7 @@ class ToolAgent:
 
     def process_query(self, query: str, chat_history: List[BaseMessage] = None) -> Dict[str, Any]:
         """Processa a query do usuário usando o agente LangChain."""
-        self.logger.info(f"Processando query com o Agente OpenAI Tools: {query}")
+        self.logger.info(f"Processando query com LangChain Tools Agent: {query}")
         try:
             # Ensure chat_history is not None for invoke
             if chat_history is None:

@@ -78,7 +78,7 @@ def get_settings():
 try:
     from core.factory.component_factory import ComponentFactory
 except Exception as e:
-    import_errors.append(f"OpenAILLMAdapter: {e}")
+    import_errors.append(f"ComponentFactory: {e}")
     BACKEND_AVAILABLE = False
 
 try:

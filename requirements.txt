@@ -1,7 +1,7 @@
 # Requirements otimizados para Streamlit Cloud
 # Apenas dependências essenciais para o Agent_BI funcionar
 
-# Core AI/LLM (OpenAI library used for API compatibility with Gemini/DeepSeek)
+# Core AI/LLM (OpenAI SDK para compatibilidade com Gemini/DeepSeek APIs)
 openai>=1.0.0
 langchain-core>=0.1.0
 langgraph>=0.1.0
