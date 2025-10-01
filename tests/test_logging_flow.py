@@ -11,7 +11,7 @@ sys.path.insert(0, project_root)
 from core.config.logging_config import setup_logging
 from core.graph.graph_builder import GraphBuilder
 from core.config.settings import settings
-from core.llm_adapter import OpenAILLMAdapter
+from core.factory.component_factory import ComponentFactory
 from core.connectivity.parquet_adapter import ParquetAdapter
 
 from langchain_core.messages import HumanMessage
@@ -26,7 +26,7 @@ logger.info("--- Iniciando teste de fluxo de logging ---")
 # Build the graph
 try:
     logger.info("Construindo o grafo de agentes...")
-    llm_adapter = OpenAILLMAdapter(api_key=settings.OPENAI_API_KEY.get_secret_value())
+    llm_adapter = ComponentFactory.get_llm_adapter("gemini")
     parquet_adapter = ParquetAdapter(file_path=r"C:\Users\André\Documents\Agent_BI\data\parquet\admatao.parquet") # Corrected path and raw string
     mock_code_gen_agent = lambda: "mock" 
 

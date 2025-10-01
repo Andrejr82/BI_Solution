@@ -76,7 +76,7 @@ def get_settings():
     return settings
 
 try:
-    from core.llm_adapter import OpenAILLMAdapter
+    from core.factory.component_factory import ComponentFactory
 except Exception as e:
     import_errors.append(f"OpenAILLMAdapter: {e}")
     BACKEND_AVAILABLE = False
@@ -165,7 +165,7 @@ else:
 
             # Debug 4: Inicializar LLM
             debug_info.append("Inicializando LLM...")
-            llm_adapter = OpenAILLMAdapter(api_key=api_key)
+            llm_adapter = ComponentFactory.get_llm_adapter("gemini")
             debug_info.append("✅ LLM OK")
 
             # Debug 5: Inicializar Parquet
