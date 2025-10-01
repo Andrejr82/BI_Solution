@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from core.graph.graph_builder import GraphBuilder
 # Settings importadas com lazy loading
 from core.config.logging_config import setup_logging
-from core.llm_adapter import OpenAILLMAdapter
+from core.factory.component_factory import ComponentFactory
 from core.connectivity.parquet_adapter import ParquetAdapter # CORRECTED IMPORT
 from core.agents.code_gen_agent import CodeGenAgent
 from core.utils.correlation import set_correlation_id, log_with_correlation
@@ -49,7 +49,7 @@ def startup_event():
     logger.info("Inicializando dependências...")
     current_settings = get_settings()
     api_key = current_settings.OPENAI_API_KEY if current_settings else os.getenv("OPENAI_API_KEY")
-    app.state.llm_adapter = OpenAILLMAdapter(api_key=api_key)
+    app.state.llm_adapter = ComponentFactory.get_llm_adapter("gemini")
     app.state.parquet_adapter = ParquetAdapter(file_path="data/parquet/admmat.parquet") # CLOUD-COMPATIBLE PATH - ARQUIVO UNIFICADO
     app.state.code_gen_agent = CodeGenAgent(llm_adapter=app.state.llm_adapter)
     graph_builder = GraphBuilder(

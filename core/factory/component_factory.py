@@ -15,6 +15,13 @@ from typing import Any, Dict, Optional
 
 # Importa outros componentes conforme necessário
 try:
+    from core.llm_adapter import GeminiLLMAdapter, DeepSeekLLMAdapter, OpenAILLMAdapter
+    from core.config.config_central import ConfiguracaoCentral
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+
+try:
     from core.mcp.context7_adapter import Context7MCPAdapter
     from core.mcp.sqlserver_adapter import SQLServerMCPAdapter
 
@@ -215,6 +222,71 @@ class ComponentFactory:
                 return None
 
         return cls._components[adapter_key]
+
+    # Flag para controlar o fallback do Gemini
+    _gemini_unavailable = False
+
+    @classmethod
+    def get_llm_adapter(cls, adapter_type: str = "gemini") -> Optional[Any]:
+        """Obtém uma instância do adaptador de LLM com lógica de fallback.
+
+        Se 'gemini' for solicitado e estiver indisponível, retorna 'deepseek'.
+        """
+        if not LLM_AVAILABLE:
+            cls.logger.warning("Componentes de LLM não estão disponíveis.")
+            return None
+
+        # Lógica de fallback
+        if adapter_type == "gemini" and cls._gemini_unavailable:
+            cls.logger.warning("Gemini indisponível, usando DeepSeek como fallback.")
+            adapter_type = "deepseek"
+
+        adapter_key = f"llm_{adapter_type}"
+
+        if adapter_key not in cls._components:
+            cls.logger.info(f"Criando nova instância do adaptador LLM: {adapter_type}")
+            config = ConfiguracaoCentral()
+
+            if adapter_type == "gemini":
+                api_key = config.get_secret("GEMINI_API_KEY")
+                model_name = config.get_setting("GEMINI_MODEL_NAME", "gemini-1.5-flash-latest")
+                if not api_key:
+                    cls.logger.error("GEMINI_API_KEY não encontrada na configuração.")
+                    return None
+                cls._components[adapter_key] = GeminiLLMAdapter(api_key=api_key, model_name=model_name)
+            
+            elif adapter_type == "deepseek":
+                api_key = config.get_secret("DEEPSEEK_API_KEY")
+                model_name = config.get_setting("DEEPSEEK_MODEL_NAME", "deepseek-chat")
+                if not api_key:
+                    cls.logger.error("DEEPSEEK_API_KEY não encontrada na configuração.")
+                    return None
+                cls._components[adapter_key] = DeepSeekLLMAdapter(api_key=api_key, model_name=model_name)
+
+            elif adapter_type == "openai":
+                api_key = config.get_secret("OPENAI_API_KEY")
+                model_name = config.get_setting("OPENAI_MODEL_NAME", "gpt-4o-mini")
+                if not api_key:
+                    cls.logger.error("OPENAI_API_KEY não encontrada na configuração.")
+                    return None
+                cls._components[adapter_key] = OpenAILLMAdapter(api_key=api_key, model_name=model_name)
+
+
+            else:
+                cls.logger.error(f"Tipo de adaptador LLM desconhecido: {adapter_type}")
+                return None
+
+        return cls._components[adapter_key]
+
+    @classmethod
+    def set_gemini_unavailable(cls, status: bool = True):
+        """Atualiza o status de disponibilidade do Gemini."""
+        if cls._gemini_unavailable != status:
+            cls._gemini_unavailable = status
+            cls.logger.info(f"Status de disponibilidade do Gemini alterado para: {'Indisponível' if status else 'Disponível'}")
+            if status:
+                # Opcional: remove a instância do gemini para forçar a recriação se ele voltar
+                cls.reset_component("llm_gemini")
 
     @classmethod
     def get_product_agent(cls) -> Optional[Any]:

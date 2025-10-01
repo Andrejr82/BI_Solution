@@ -16,7 +16,7 @@ from typing import Dict, List, Any
 
 # Importações do sistema
 from core.connectivity.parquet_adapter import ParquetAdapter
-from core.llm_adapter import OpenAILLMAdapter
+from core.factory.component_factory import ComponentFactory
 from core.agents.code_gen_agent import CodeGenAgent
 from core.config.settings import settings
 
@@ -41,7 +41,7 @@ class BusinessQuestionsTest:
             self.parquet_adapter.connect()
 
             # LLM Adapter
-            self.llm_adapter = OpenAILLMAdapter(api_key=settings.OPENAI_API_KEY.get_secret_value())
+            self.llm_adapter = ComponentFactory.get_llm_adapter("gemini")
 
             # Code Gen Agent
             self.code_gen_agent = CodeGenAgent(llm_adapter=self.llm_adapter)
