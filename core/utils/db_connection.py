@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """
 Módulo de conexão com banco de dados SQL Server
 VERSÃO FINAL SEM PYDANTIC - 100% COMPATÍVEL COM STREAMLIT CLOUD
@@ -70,6 +69,15 @@ def get_db_connection():
         logger.error(f"❌ Erro ao obter conexão: {e}")
         return None
 
+def is_database_configured():
+    """Verifica se banco está configurado"""
+    try:
+        from core.config.safe_settings import get_safe_settings
+        settings = get_safe_settings()
+        return settings.is_database_available()
+    except Exception:
+        return False
+
 def reset_engine():
     """
     Reseta o engine cached - útil para testes
@@ -77,19 +85,3 @@ def reset_engine():
     global _cached_engine
     _cached_engine = None
     logger.info("🔄 Engine cache resetado")
-=======
-from sqlalchemy import create_engine
-from core.config.settings import settings # Import the new settings object
-
-# A URI da base de dados é agora obtida diretamente do objeto de configurações centralizado.
-DATABASE_URI = settings.SQL_SERVER_CONNECTION_STRING
-
-# Create the SQLAlchemy engine with connection pooling
-engine = create_engine(DATABASE_URI, pool_size=10, max_overflow=20)
-
-def get_db_connection():
-    """
-    Retorna uma conexão com o banco de dados SQL Server do pool de conexões do SQLAlchemy.
-    """
-    return engine.connect()
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
