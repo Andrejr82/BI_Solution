@@ -2,9 +2,8 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.utils.function_calling import convert_to_openai_tool
-from langchain_openai import ChatOpenAI
 
-from ..config import LLM_MODEL_NAME, OPENAI_API_KEY
+from ..factory.component_factory import ComponentFactory
 from ..tools.sql_server_tools import db_schema_info, sql_server_tools
 
 # Configuração de logging
@@ -22,15 +21,10 @@ class GraphAgent:
         Inicializa o agente.
 
         Args:
-            llm (ChatOpenAI, optional): O modelo de linguagem a ser usado.
+            llm (LLMAdapter, optional): O adaptador LLM a ser usado (Gemini/DeepSeek).
             tools (list, optional): A lista de ferramentas disponíveis.
         """
-        self.llm = llm or ChatOpenAI(
-            model=LLM_MODEL_NAME,
-            temperature=0,
-            api_key=OPENAI_API_KEY,
-            streaming=True,
-        )
+        self.llm = llm or ComponentFactory.get_llm_adapter("gemini")
         self.tools = tools or sql_server_tools
         self.agent_runnable = self._create_agent_runnable()
 
@@ -61,8 +55,27 @@ class GraphAgent:
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
-        openai_tools = [convert_to_openai_tool(t) for t in self.tools]
-        return prompt | self.llm.bind_tools(openai_tools)
+        # Nota: Este método precisa ser adaptado para usar os adaptadores LLM customizados
+        # Em vez de bind_tools, usaremos uma abordagem mais simples com get_completion
+        self.prompt = prompt
+        return self._process_with_custom_llm
+
+    def _process_with_custom_llm(self, data):
+        """Processa usando o adaptador LLM customizado."""
+        messages = data.get("messages", [])
+        # Converte mensagens para formato simples
+        formatted_messages = []
+        for msg in messages:
+            if hasattr(msg, 'content'):
+                formatted_messages.append({"role": "user", "content": msg.content})
+
+        # Adiciona prompt do sistema
+        system_prompt = self._get_system_prompt_template()
+        all_messages = [{"role": "system", "content": system_prompt}] + formatted_messages
+
+        # Chama o LLM
+        response = self.llm.get_completion(all_messages)
+        return response
 
     def process(self, messages):
         """
@@ -75,7 +88,7 @@ class GraphAgent:
             A resposta do agente.
         """
         logger.info("Processando mensagem com o GraphAgent...")
-        return self.agent_runnable.invoke({"messages": messages})
+        return self.agent_runnable({"messages": messages})
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 import logging
 from openai import OpenAI, RateLimitError
 from core.utils.response_cache import ResponseCache
-from core.factory.component_factory import ComponentFactory
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +62,12 @@ class GeminiLLMAdapter:
 
         except RateLimitError as e:
             logger.error(f"Limite de taxa da API Gemini atingido: {e}", exc_info=True)
-            # ATIVA O FALLBACK!
-            ComponentFactory.set_gemini_unavailable(True)
+            # ATIVA O FALLBACK! (usando import local para evitar circular import)
+            try:
+                from core.factory.component_factory import ComponentFactory
+                ComponentFactory.set_gemini_unavailable(True)
+            except ImportError:
+                pass
             return {"error": "Rate limit exceeded", "fallback_activated": True}
         except Exception as e:
             logger.error(f"Erro ao chamar a API do Gemini: {e}", exc_info=True)
