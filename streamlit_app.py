@@ -184,20 +184,37 @@ else:
             debug_info.append("Inicializando Parquet...")
             import os
             parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
+
             if not os.path.exists(parquet_path):
-                # Criar dados mock para cloud se arquivo não existir
-                import pandas as pd
-                mock_data = pd.DataFrame({
-                    'codigo': [59294, 12345, 67890],
-                    'descricao': ['Produto Exemplo 1', 'Produto Exemplo 2', 'Produto Exemplo 3'],
-                    'preco': [99.90, 149.50, 79.30],
-                    'categoria': ['Categoria A', 'Categoria B', 'Categoria A']
-                })
-                os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-                mock_data.to_parquet(parquet_path)
-                debug_info.append("⚠️ Arquivo parquet não encontrado - criado dados mock")
+                # ❌ ERRO CRÍTICO: Arquivo de dados não encontrado
+                debug_info.append("❌ ERRO: Arquivo admmat.parquet não encontrado")
+                raise FileNotFoundError(
+                    f"Arquivo de dados não encontrado: {parquet_path}\n\n"
+                    "AÇÃO NECESSÁRIA:\n"
+                    "1. Verifique se o arquivo 'data/parquet/admmat.parquet' existe no repositório\n"
+                    "2. Para Streamlit Cloud: configure o arquivo via Git ou external storage\n"
+                    "3. Para desenvolvimento local: copie o arquivo para a pasta correta"
+                )
+
+            # Validar estrutura do arquivo
+            import pandas as pd
+            df_test = pd.read_parquet(parquet_path)
+            required_columns = ['une', 'une_nome', 'codigo', 'nome_produto', 'mes_01']
+            missing_columns = [col for col in required_columns if col not in df_test.columns]
+
+            if missing_columns:
+                debug_info.append(f"❌ ERRO: Colunas obrigatórias ausentes: {missing_columns}")
+                raise ValueError(
+                    f"Arquivo de dados inválido - faltam colunas: {missing_columns}\n"
+                    f"Colunas esperadas: {required_columns}\n"
+                    f"Colunas encontradas: {list(df_test.columns[:10])}"
+                )
+
+            if len(df_test) < 1000:
+                debug_info.append(f"⚠️ AVISO: Dataset muito pequeno ({len(df_test)} linhas)")
+
             parquet_adapter = ParquetAdapter(file_path=parquet_path)
-            debug_info.append("✅ Parquet OK")
+            debug_info.append(f"✅ Parquet OK ({len(df_test):,} produtos, {df_test['une_nome'].nunique()} UNEs)")
 
             # Debug 6: Inicializar CodeGen
             debug_info.append("Inicializando CodeGen...")
@@ -341,7 +358,23 @@ else:
                 direct_result = engine.process_query(user_input)
 
                 # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
-                if direct_result and direct_result.get("type") != "fallback":
+                result_type = direct_result.get("type") if direct_result else None
+
+                # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
+                if result_type == "error":
+                    # Mostrar erro do DirectQueryEngine ao usuário
+                    error_msg = direct_result.get("error", "Erro desconhecido")
+                    suggestion = direct_result.get("suggestion", "")
+
+                    agent_response = {
+                        "type": "error",
+                        "content": f"❌ {error_msg}\n\n💡 {suggestion}" if suggestion else f"❌ {error_msg}",
+                        "user_query": user_input,
+                        "method": "direct_query"
+                    }
+                    st.write("⚠️ DirectQueryEngine retornou erro de validação")
+
+                elif direct_result and result_type not in ["fallback", None]:
                     # SUCESSO: Usar o resultado do DirectQueryEngine
                     st.write("✅ Usando resultado do DirectQueryEngine")
                     agent_response = {
