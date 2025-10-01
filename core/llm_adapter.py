@@ -1,3 +1,10 @@
+"""
+Adaptadores LLM para Gemini e DeepSeek usando SDK OpenAI.
+
+Ambos os LLMs suportam a API compatível com OpenAI:
+- Gemini: Via Google AI Studio (https://ai.google.dev/gemini-api/docs/openai)
+- DeepSeek: Via API nativa compatível (https://api.deepseek.com)
+"""
 import logging
 from openai import OpenAI, RateLimitError
 from core.utils.response_cache import ResponseCache
@@ -7,17 +14,18 @@ logger = logging.getLogger(__name__)
 class GeminiLLMAdapter:
     def __init__(self, api_key: str, model_name: str, enable_cache: bool = True):
         """
-        Inicializa o cliente para um modelo compatível com a API OpenAI (como o Gemini via proxy/serviço compatível).
+        Inicializa o cliente para o Google Gemini usando SDK OpenAI para compatibilidade.
+        O Gemini suporta a API compatível com OpenAI via Google AI Studio.
         """
         if not api_key:
             raise ValueError("A chave da API do Gemini não foi fornecida.")
-        
-        # A URL base pode precisar ser ajustada dependendo de como você acessa a API do Gemini
-        # Exemplo para um proxy local ou serviço como litellm: "http://localhost:8000"
-        # Para APIs que mimetizam a OpenAI, você pode precisar de uma base_url.
-        # Se a biblioteca do Gemini for usada diretamente, a inicialização será diferente.
-        # Por simplicidade, vamos assumir uma interface compatível com OpenAI.
-        self.client = OpenAI(api_key=api_key) 
+
+        # Gemini API via OpenAI-compatible endpoint (Google AI Studio)
+        # https://ai.google.dev/gemini-api/docs/openai
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        ) 
         self.model_name = model_name
 
         self.cache_enabled = enable_cache

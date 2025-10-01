@@ -1,6 +1,6 @@
 """
-Sistema de cache inteligente para respostas da OpenAI
-Economiza créditos evitando chamadas repetidas
+Sistema de cache inteligente para respostas LLM (Gemini/DeepSeek)
+Economiza créditos evitando chamadas repetidas à API
 """
 import hashlib
 import json
@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 class ResponseCache:
-    """Cache inteligente para respostas da OpenAI"""
+    """Cache inteligente para respostas LLM (Gemini/DeepSeek)"""
 
     def __init__(self, cache_dir: str = "data/cache", ttl_hours: int = 24):
         self.cache_dir = cache_dir
