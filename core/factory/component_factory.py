@@ -184,6 +184,7 @@ class WebServer:
 
 # --- FIM: WebServer ---
 
+# Forçando o redeploy em 2025-10-01
 
 class ComponentFactory:
     """Fábrica para criar e gerenciar componentes do sistema"""
