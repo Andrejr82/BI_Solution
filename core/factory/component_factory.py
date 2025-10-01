@@ -15,8 +15,8 @@ from typing import Any, Dict, Optional
 
 # Importa outros componentes conforme necessário
 try:
-    from core.llm_adapter import GeminiLLMAdapter, DeepSeekLLMAdapter, OpenAILLMAdapter
-    from core.config.config_central import ConfiguracaoCentral
+    from core.llm_adapter import GeminiLLMAdapter, DeepSeekLLMAdapter
+    from core.config.safe_settings import get_safe_settings
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
@@ -245,31 +245,25 @@ class ComponentFactory:
 
         if adapter_key not in cls._components:
             cls.logger.info(f"Criando nova instância do adaptador LLM: {adapter_type}")
-            config = ConfiguracaoCentral()
+            config = get_safe_settings()
 
             if adapter_type == "gemini":
-                api_key = config.get_secret("GEMINI_API_KEY")
-                model_name = config.get_setting("GEMINI_MODEL_NAME", "gemini-1.5-flash-latest")
+                api_key = config.GEMINI_API_KEY
+                model_name = config.LLM_MODEL_NAME or "gemini-1.5-flash-latest"
                 if not api_key:
                     cls.logger.error("GEMINI_API_KEY não encontrada na configuração.")
                     return None
                 cls._components[adapter_key] = GeminiLLMAdapter(api_key=api_key, model_name=model_name)
             
             elif adapter_type == "deepseek":
-                api_key = config.get_secret("DEEPSEEK_API_KEY")
-                model_name = config.get_setting("DEEPSEEK_MODEL_NAME", "deepseek-chat")
+                api_key = config.DEEPSEEK_API_KEY
+                model_name = config.LLM_MODEL_NAME or "deepseek-chat"
                 if not api_key:
                     cls.logger.error("DEEPSEEK_API_KEY não encontrada na configuração.")
                     return None
                 cls._components[adapter_key] = DeepSeekLLMAdapter(api_key=api_key, model_name=model_name)
 
-            elif adapter_type == "openai":
-                api_key = config.get_secret("OPENAI_API_KEY")
-                model_name = config.get_setting("OPENAI_MODEL_NAME", "gpt-4o-mini")
-                if not api_key:
-                    cls.logger.error("OPENAI_API_KEY não encontrada na configuração.")
-                    return None
-                cls._components[adapter_key] = OpenAILLMAdapter(api_key=api_key, model_name=model_name)
+
 
 
             else:
