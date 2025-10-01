@@ -21,16 +21,12 @@ class ParquetAdapter(DatabaseAdapter):
     def _load_dataframe(self):
         """
         Loads the parquet file into a pandas DataFrame if not already loaded.
-<<<<<<< HEAD
         Optimized for Streamlit Cloud memory limits.
-=======
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         """
         if self._dataframe is None:
             MemoryOptimizer.log_memory_usage("Before loading Parquet")
             logger.info(f"Loading Parquet file from {self.file_path}...")
 
-<<<<<<< HEAD
             # OTIMIZAÇÃO STREAMLIT CLOUD: Carregar apenas colunas essenciais
             essential_cols = ['codigo', 'nome_produto', 'preco_38_percent', 'nomesegmento',
                             'nome_categoria', 'nome_fabricante', 'mes_01', 'mes_02', 'mes_03',
@@ -56,11 +52,6 @@ class ParquetAdapter(DatabaseAdapter):
             else:
                 logger.warning("Nenhuma coluna de vendas mensal encontrada!")
 
-=======
-            self._dataframe = pd.read_parquet(self.file_path)
-            logger.info(f"Parquet file loaded. Shape: {self._dataframe.shape}")
-
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             # Otimizar uso de memória
             self._dataframe = MemoryOptimizer.optimize_dataframe_memory(self._dataframe)
             MemoryOptimizer.log_memory_usage("After loading and optimizing Parquet")
@@ -144,14 +135,10 @@ class ParquetAdapter(DatabaseAdapter):
                         # Default to equality if operator not recognized or simple string
                         filtered_df = filtered_df[filtered_df[column] == condition]
                 else:
-<<<<<<< HEAD
                     # Simple equality - with automatic type conversion
                     # Se a coluna é numérica e a condição é string numérica, converta
                     if pd.api.types.is_numeric_dtype(filtered_df[column]) and isinstance(condition, str) and condition.isdigit():
                         condition = pd.to_numeric(condition)
-=======
-                    # Simple equality
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                     filtered_df = filtered_df[filtered_df[column] == condition]
 
             # ✅ OTIMIZAÇÃO: Limitar resultados para evitar problemas de memória
