@@ -2,14 +2,8 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.utils.function_calling import convert_to_openai_tool
-<<<<<<< HEAD
 
 from ..factory.component_factory import ComponentFactory
-=======
-from langchain_openai import ChatOpenAI
-
-from ..config import LLM_MODEL_NAME, OPENAI_API_KEY
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 from ..tools.sql_server_tools import db_schema_info, sql_server_tools
 
 # Configuração de logging
@@ -27,22 +21,10 @@ class GraphAgent:
         Inicializa o agente.
 
         Args:
-<<<<<<< HEAD
             llm (LLMAdapter, optional): O adaptador LLM a ser usado (Gemini/DeepSeek).
             tools (list, optional): A lista de ferramentas disponíveis.
         """
         self.llm = llm or ComponentFactory.get_llm_adapter("gemini")
-=======
-            llm (ChatOpenAI, optional): O modelo de linguagem a ser usado.
-            tools (list, optional): A lista de ferramentas disponíveis.
-        """
-        self.llm = llm or ChatOpenAI(
-            model=LLM_MODEL_NAME,
-            temperature=0,
-            api_key=OPENAI_API_KEY,
-            streaming=True,
-        )
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         self.tools = tools or sql_server_tools
         self.agent_runnable = self._create_agent_runnable()
 
@@ -73,7 +55,6 @@ class GraphAgent:
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
-<<<<<<< HEAD
         # Nota: Este método precisa ser adaptado para usar os adaptadores LLM customizados
         # Em vez de bind_tools, usaremos uma abordagem mais simples com get_completion
         self.prompt = prompt
@@ -95,10 +76,6 @@ class GraphAgent:
         # Chama o LLM
         response = self.llm.get_completion(all_messages)
         return response
-=======
-        openai_tools = [convert_to_openai_tool(t) for t in self.tools]
-        return prompt | self.llm.bind_tools(openai_tools)
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     def process(self, messages):
         """
@@ -111,11 +88,7 @@ class GraphAgent:
             A resposta do agente.
         """
         logger.info("Processando mensagem com o GraphAgent...")
-<<<<<<< HEAD
         return self.agent_runnable({"messages": messages})
-=======
-        return self.agent_runnable.invoke({"messages": messages})
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 
 if __name__ == "__main__":

@@ -113,8 +113,4 @@ class MemoryOptimizer:
         sampled_data = data[::step][:max_size]
 
         logger.info(f"🔽 DATASET SAMPLING - Final sample size: {len(sampled_data)}")
-<<<<<<< HEAD
         return sampled_data
-=======
-        return sampled_data
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

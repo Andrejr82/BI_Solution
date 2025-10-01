@@ -3,22 +3,14 @@ import logging
 from typing import Any, Dict, List
 import pyodbc
 from .base import DatabaseAdapter
-<<<<<<< HEAD
 # Settings importadas com lazy loading
-=======
-from core.config.settings import Settings # Importa a nova classe de config
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 logger = logging.getLogger(__name__)
 
 class SQLServerAdapter(DatabaseAdapter):
     """Concrete implementation of the adapter for Microsoft SQL Server."""
 
-<<<<<<< HEAD
     def __init__(self, settings: Any):
-=======
-    def __init__(self, settings: Settings):
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         self._settings = settings
         self._connection = None
         self._cursor = None
@@ -97,8 +89,4 @@ class SQLServerAdapter(DatabaseAdapter):
             
         schema_string = "\n\n".join(ddl_final)
         logger.info(f"Esquema DDL gerado com sucesso:\n{schema_string}")
-<<<<<<< HEAD
         return schema_string
-=======
-        return schema_string
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

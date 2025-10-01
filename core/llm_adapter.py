@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-"""
-Adaptadores LLM para Gemini e DeepSeek usando SDK OpenAI.
-
-Ambos os LLMs suportam a API compatível com OpenAI:
-- Gemini: Via Google AI Studio (https://ai.google.dev/gemini-api/docs/openai)
-- DeepSeek: Via API nativa compatível (https://api.deepseek.com)
-"""
 import logging
 from openai import OpenAI, RateLimitError
 from core.utils.response_cache import ResponseCache
@@ -15,18 +7,17 @@ logger = logging.getLogger(__name__)
 class GeminiLLMAdapter:
     def __init__(self, api_key: str, model_name: str, enable_cache: bool = True):
         """
-        Inicializa o cliente para o Google Gemini usando SDK OpenAI para compatibilidade.
-        O Gemini suporta a API compatível com OpenAI via Google AI Studio.
+        Inicializa o cliente para um modelo compatível com a API OpenAI (como o Gemini via proxy/serviço compatível).
         """
         if not api_key:
             raise ValueError("A chave da API do Gemini não foi fornecida.")
-
-        # Gemini API via OpenAI-compatible endpoint (Google AI Studio)
-        # https://ai.google.dev/gemini-api/docs/openai
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-        ) 
+        
+        # A URL base pode precisar ser ajustada dependendo de como você acessa a API do Gemini
+        # Exemplo para um proxy local ou serviço como litellm: "http://localhost:8000"
+        # Para APIs que mimetizam a OpenAI, você pode precisar de uma base_url.
+        # Se a biblioteca do Gemini for usada diretamente, a inicialização será diferente.
+        # Por simplicidade, vamos assumir uma interface compatível com OpenAI.
+        self.client = OpenAI(api_key=api_key) 
         self.model_name = model_name
 
         self.cache_enabled = enable_cache
@@ -51,32 +42,6 @@ class GeminiLLMAdapter:
 
             params = {
                 "model": model_to_use,
-=======
-import logging
-from openai import OpenAI
-# CORREÇÃO: A importação de 'Config' foi removida, pois era da arquitetura antiga.
-# A classe agora receberá a chave da API diretamente no seu construtor.
-
-logger = logging.getLogger(__name__)
-
-class OpenAILLMAdapter:
-    def __init__(self, api_key: str):
-        """
-        Inicializa o cliente da OpenAI com a chave da API fornecida.
-        """
-        if not api_key:
-            raise ValueError("A chave da API da OpenAI não foi fornecida.")
-        self.client = OpenAI(api_key=api_key)
-        logger.info("Adaptador da OpenAI inicializado com sucesso.")
-
-    def get_completion(self, messages, model="gpt-4-turbo", temperature=0, max_tokens=2048, json_mode=False):
-        """
-        Obtém uma conclusão do modelo da OpenAI.
-        """
-        try:
-            params = {
-                "model": model,
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -84,7 +49,6 @@ class OpenAILLMAdapter:
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
 
-<<<<<<< HEAD
             logger.info(f"💰 Chamada API Gemini: {model_to_use} - tokens: {max_tokens}")
             response = self.client.chat.completions.create(**params)
 
@@ -198,12 +162,3 @@ class DeepSeekLLMAdapter:
         return stats
 
 
-=======
-            response = self.client.chat.completions.create(**params)
-            
-            content = response.choices[0].message.content
-            return {"content": content}
-        except Exception as e:
-            logger.error(f"Erro ao chamar a API da OpenAI: {e}", exc_info=True)
-            return {"error": str(e)}
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
