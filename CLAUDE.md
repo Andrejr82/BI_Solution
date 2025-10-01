@@ -94,7 +94,7 @@ api/                # Endpoints FastAPI
 # Configuração LLM (uma destas)
 GEMINI_API_KEY=sua_chave_gemini        # LLM principal
 DEEPSEEK_API_KEY=sua_chave_deepseek    # LLM de fallback
-LLM_MODEL_NAME=gemini-1.5-flash-latest
+LLM_MODEL_NAME=gemini-2.5-flash-lite  # Modelo mais rápido e barato
 
 # Banco de dados (opcional)
 DB_SERVER=seu_servidor_sql
@@ -120,10 +120,11 @@ DB_DRIVER=ODBC Driver 17 for SQL Server
 - Preservar padrões de autenticação existentes em `core/auth.py`
 
 ### Integração LLM
-- LLM principal: Gemini (via `GeminiLLMAdapter`)
-- LLM de fallback: DeepSeek (fallback automático em rate limits)
+- **LLM principal**: Gemini 2.5 Flash-Lite (887 tok/s, $0.10/$0.40 por 1M tokens)
+- **LLM de fallback**: DeepSeek (fallback automático em rate limits/quota)
+- **Fallback inteligente**: Detecção automática de rate limit → troca para DeepSeek
 - Sempre usar `ComponentFactory.get_llm_adapter()` para obter instâncias LLM
-- Fazer cache de respostas quando possível para reduzir custos de API
+- Cache de respostas ativo para reduzir custos de API
 
 ### Padrões de Acesso a Dados
 - Usar `ParquetAdapter` para arquivos de dados locais

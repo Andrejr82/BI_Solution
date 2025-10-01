@@ -55,7 +55,7 @@ class SafeSettings:
         except:
             pass
 
-        return os.getenv("LLM_MODEL_NAME", "gpt-4o")
+        return os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
 
     def get_sql_connection_string(self):
         """Gera string de conexão SQL se disponível"""
