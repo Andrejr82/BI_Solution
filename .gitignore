@@ -60,11 +60,16 @@ tmp/
 generated_charts/
 
 # Parquet files
+<<<<<<< HEAD
+=======
+data/parquet/
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 data/parquet_cleaned/
 
 # Specific project files to ignore
 Relatorio_integracao_1308.md
 Melhorias_Projeto.txt
+<<<<<<< HEAD
 plano_de_melhorias.md
 .vercel
 
@@ -76,3 +81,6 @@ backup_limpeza_*.zip
 
 # Scripts de manutenção (não precisam ir para produção)
 maintenance/
+=======
+plano_de_melhorias.md
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

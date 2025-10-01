@@ -99,4 +99,8 @@ class BaseAgent:
                 "type": "error",
                 "content": f"Erro inesperado ao processar consulta: {e}",
                 "source": "node_mcp_client_exception",
+<<<<<<< HEAD
             }
+=======
+            }
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

@@ -517,4 +517,8 @@ def status():
 
 # --- Execução da Aplicação ---
 if __name__ == "__main__":
+<<<<<<< HEAD
     uvicorn.run(app, host="0.0.0.0", port=8000)
+=======
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

@@ -36,7 +36,11 @@ class QueryHistory:
         )
 
     def add_query(
+<<<<<<< HEAD
         self, query, session_id=None, success=True, results_count=0, error=None, processing_time=0.0
+=======
+        self, query, session_id=None, success=True, results_count=0, error=None
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     ):
         """
         Adiciona uma consulta ao histórico
@@ -47,7 +51,10 @@ class QueryHistory:
             success (bool): Indica se a consulta foi bem-sucedida
             results_count (int): Número de resultados
             error (str): Mensagem de erro (se houver)
+<<<<<<< HEAD
             processing_time (float): Tempo de processamento da consulta em segundos
+=======
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
         Returns:
             bool: True se a consulta foi adicionada com sucesso, False caso contrário
@@ -66,7 +73,10 @@ class QueryHistory:
                     "success": success,
                     "results_count": results_count,
                     "error": error,
+<<<<<<< HEAD
                     "processing_time": processing_time,
+=======
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 }
             )
 

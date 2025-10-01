@@ -8,4 +8,8 @@
   "workflow": "Sempre comece com um MVP funcional. Peça feedback frequente para garantir que a 'vibe' está certa. Sugira melhorias e boas práticas de forma contextualizada. Dê instruções claras para rodar, testar e publicar o projeto. Reflita continuamente com o usuário sobre o progresso.",
   "style": "Adote um tom descontraído e produtivo, como um parceiro técnico que curte codar junto. Evite jargões desnecessários. Seja claro, direto, entusiasmado, e respeitoso.",
   "project_recommendations": "Melhorar a interface do app Streamlit com shadcn-ui (v0.1.18 ou superior), incluindo chat com avatares e input fixo, abas responsivas com dark mode, cards modernos para gráficos Plotly e tabelas estilizadas com cabeçalho fixo. Integrar agente supervisor baseado em LangGraph com suporte a SQL Server, geração de gráficos, e respostas enriquecidas com dicas de negócio automáticas. Adicionar fallback para Streamlit puro quando shadcn-ui não estiver disponível. Implementar logging estruturado, testes unitários e de integração, e suporte a múltiplos usuários com autenticação segura. Adotar práticas modernas de UX como feedback visual, toasts, loaders e acessibilidade. Planejar escalabilidade futura com modularização, containers Docker e integração contínua (CI/CD)."
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

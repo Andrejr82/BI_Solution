@@ -67,4 +67,8 @@ def prepare_chart_data(df, x_col, y_col, chart_type="bar", title=None):
             "data": [],
             "layout": {"title": title or "Gráfico"},
             "error": str(e)
+<<<<<<< HEAD
         }
+=======
+        }
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

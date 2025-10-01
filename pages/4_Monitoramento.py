@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import time
 import pandas as pd
+<<<<<<< HEAD
 import logging
 
 # Importação condicional para funcionar no cloud
@@ -21,6 +22,12 @@ def get_settings():
         return get_safe_settings()
     except Exception:
         return None
+=======
+import requests
+from sqlalchemy import create_engine
+
+from core.database import sql_server_auth_db as auth_db
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 st.markdown("<h1 class='main-header'>Monitoramento do Sistema</h1>", unsafe_allow_html=True)
 st.markdown("<div class='info-box'>Acompanhe os logs do sistema e o status dos principais serviços.</div>", unsafe_allow_html=True)
@@ -53,6 +60,7 @@ else:
 # --- STATUS DOS SERVIÇOS ---
 st.markdown("### Status dos Serviços")
 status_data = []
+<<<<<<< HEAD
 # Checagem do Backend Integrado (não mais API externa)
 backend_status = "-"
 backend_time = "-"
@@ -206,6 +214,83 @@ def painel_aprovacao_redefinicao():
     except Exception as e:
         st.error(f"Erro ao acessar painel de aprovação: {e}")
         logging.error(f"Erro no painel_aprovacao_redefinicao: {e}")
+=======
+# Checagem da API
+api_url = "http://localhost:5000/api/chat"  # ajuste se necessário
+api_status = "-"
+api_time = "-"
+try:
+    start = time.time()
+    resp = requests.post(api_url, json={"message": "ping"}, timeout=3)
+    api_time = f"{(time.time() - start)*1000:.0f} ms"
+    if resp.status_code == 200:
+        api_status = "OK"
+    else:
+        api_status = f"FALHA ({resp.status_code})"
+except Exception as e:
+    api_status = f"FALHA ({str(e)[:30]})"
+status_data.append({"Serviço": "API", "Status": api_status, "Tempo": api_time})
+# Checagem do Banco de Dados
+db_status = "-"
+db_time = "-"
+try:
+    from core.config.config import DB_CONNECTION_STRING
+
+    start = time.time()
+    engine = create_engine(DB_CONNECTION_STRING)
+    with engine.connect() as conn:
+        conn.execute("SELECT 1")
+    db_time = f"{(time.time() - start)*1000:.0f} ms"
+    db_status = "OK"
+except Exception as e:
+    db_status = f"FALHA ({str(e)[:30]})"
+status_data.append({"Serviço": "Banco de Dados", "Status": db_status, "Tempo": db_time})
+# Checagem do LLM (OpenAI)
+llm_status = "-"
+llm_time = "-"
+try:
+    import openai
+
+    from core.utils.openai_config import OPENAI_API_KEY
+
+    openai.api_key = OPENAI_API_KEY
+    start = time.time()
+    openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": "ping"}],
+        max_tokens=1,
+        request_timeout=3,
+    )
+    llm_time = f"{(time.time() - start)*1000:.0f} ms"
+    llm_status = "OK"
+except Exception as e:
+    llm_status = f"FALHA ({str(e)[:30]})"
+status_data.append({"Serviço": "LLM (OpenAI)", "Status": llm_status, "Tempo": llm_time})
+st.dataframe(pd.DataFrame(status_data), use_container_width=True)
+
+# --- Função para admins aprovarem redefinição de senha ---
+def painel_aprovacao_redefinicao():
+    st.markdown("<h3>Solicitações de Redefinição de Senha</h3>", unsafe_allow_html=True)
+    import sqlite3
+
+    conn = sqlite3.connect(auth_db.DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT username FROM usuarios WHERE redefinir_solicitado=1 AND redefinir_aprovado=0")
+    pendentes = [row[0] for row in c.fetchall()]
+    if not pendentes:
+        st.info("Nenhuma solicitação pendente.")
+    else:
+        for user in pendentes:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"Usuário: {user}")
+            with col2:
+                if st.button(f"Aprovar {user}"):
+                    auth_db.aprovar_redefinicao(user)
+                    st.success(f"Solicitação de {user} aprovada!")
+                    st.rerun()
+    conn.close()
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 # --- Função para usuário redefinir senha após aprovação ---
 def tela_redefinir_senha():
@@ -223,11 +308,15 @@ def tela_redefinir_senha():
             st.warning("A senha deve ter pelo menos 6 caracteres.")
         else:
             try:
+<<<<<<< HEAD
                 if DB_AVAILABLE and hasattr(auth_db, 'redefinir_senha'):
                     auth_db.redefinir_senha(username, nova)
                 else:
                     st.error("Sistema de redefinição não disponível no Streamlit Cloud")
                     return
+=======
+                auth_db.redefinir_senha(username, nova)
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 st.success("Senha redefinida com sucesso! Você será redirecionado para o login.")
                 time.sleep(2)
                 for k in ["authenticated", "username", "role", "ultimo_login"]:
@@ -239,13 +328,18 @@ def tela_redefinir_senha():
 
 # --- Checagem para exibir tela de redefinição após aprovação ---
 def checar_redefinicao_aprovada():
+<<<<<<< HEAD
     """Verifica se usuário deve redefinir senha - com fallback seguro"""
     if not DB_AVAILABLE:
         return False
+=======
+    import sqlite3
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     username = st.session_state.get("username")
     if not username:
         return False
+<<<<<<< HEAD
 
     try:
         import sqlite3
@@ -263,6 +357,14 @@ def checar_redefinicao_aprovada():
     except Exception as e:
         logging.error(f"Erro ao verificar redefinição aprovada: {e}")
         return False
+=======
+    conn = sqlite3.connect(auth_db.DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT redefinir_aprovado FROM usuarios WHERE username=?", (username,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row and row[0])
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 # --- Após login, checar se usuário deve redefinir senha ---
 if st.session_state.get("authenticated") and checar_redefinicao_aprovada():
@@ -271,4 +373,8 @@ if st.session_state.get("authenticated") and checar_redefinicao_aprovada():
 
 # --- Aba Monitoramento: admins podem aprovar redefinições ---
 elif st.session_state.get("role") == "admin":
+<<<<<<< HEAD
     painel_aprovacao_redefinicao()
+=======
+    painel_aprovacao_redefinicao()
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

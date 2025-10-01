@@ -3008,4 +3008,8 @@ Após as intervenções detalhadas acima, a nova arquitetura do Agent_BI encontr
 
 Para garantir a qualidade contínua do projeto, recomendo fortemente a criação de uma **suíte de testes automatizados**. Testes de unidade para os nós dos agentes e testes de integração para o fluxo completo do `langgraph` ajudariam a prevenir regressões e a validar futuras alterações na arquitetura de forma eficiente.
 5. FORMATO DE SAÍDA DESEJADO
+<<<<<<< HEAD
 Gere a sua resposta como um único documento Markdown. Primeiro, apresente o Plano de Limpeza e Reorganização com as suas três categorias. No final, inclua um bloco de código PowerShell com o Script de Automação para as tarefas de movimentação.
+=======
+Gere a sua resposta como um único documento Markdown. Primeiro, apresente o Plano de Limpeza e Reorganização com as suas três categorias. No final, inclua um bloco de código PowerShell com o Script de Automação para as tarefas de movimentação.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

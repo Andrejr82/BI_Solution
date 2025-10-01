@@ -34,11 +34,16 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     Responda APENAS com um objeto JSON válido contendo as chaves 'intent' e 'entities'.
     Intenções possíveis: 'gerar_grafico', 'consulta_sql_complexa', 'resposta_simples'.
 
+<<<<<<< HEAD
     **ATENÇÃO ESPECIAL PARA ANÁLISES VISUAIS:**
+=======
+    **ATENÇÃO ESPECIAL PARA ANÁLISES TEMPORAIS:**
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     Se a consulta mencionar:
     - "evolução", "tendência", "ao longo do tempo", "histórico"
     - "últimos X meses", "mensais", "meses"
     - "crescimento", "declínio", "variação temporal"
+<<<<<<< HEAD
     - "TOP", "melhores", "maiores", "principais", "ranking"
     - "mais vendidos", "menos vendidos", "top 10", "top 5"
     - "gráfico", "gráficos", "visualização", "mostre"
@@ -46,6 +51,13 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     SEMPRE classifique como 'gerar_grafico' e inclua nas entities:
     - Para temporal: "temporal": true, "periodo": "mensal", "tipo_analise": "evolucao"
     - Para ranking: "ranking": true, "limite": N, "metrica": "vendas"
+=======
+
+    SEMPRE classifique como 'gerar_grafico' e inclua nas entities:
+    - "temporal": true
+    - "periodo": "mensal" ou "multiplos_meses"
+    - "tipo_analise": "evolucao" ou "tendencia"
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     **Exemplos:**
     - "Gere um gráfico de vendas do produto 369947" → intent: "gerar_grafico", entities: {{"produto": 369947, "metrica": "vendas"}}
@@ -125,20 +137,33 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
         return {"parquet_filters": {}, "final_response": {"type": "error", "content": "Não foi possível aceder ao schema do arquivo Parquet para gerar a consulta."}}
 
     # Load the cleaned catalog
+<<<<<<< HEAD
     catalog_file_path = "data/catalog_cleaned.json"
+=======
+    catalog_file_path = "C:\\Users\\André\\Documents\\Agent_BI\\data\\catalog_cleaned.json"
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     try:
         with open(catalog_file_path, 'r', encoding='utf-8') as f:
             catalog_data = json.load(f)
         
+<<<<<<< HEAD
         # Find the entry for admmat.parquet
         admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admmat.parquet"), None)
+=======
+        # Find the entry for admatao.parquet
+        admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admatao.parquet"), None)
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         
         if admatao_catalog and "column_descriptions" in admatao_catalog:
             column_descriptions = admatao_catalog["column_descriptions"]
             column_descriptions_str = json.dumps(column_descriptions, indent=2, ensure_ascii=False)
         else:
             column_descriptions_str = "Nenhuma descrição de coluna disponível."
+<<<<<<< HEAD
             logger.warning("Descrições de coluna para admmat.parquet não encontradas no catálogo.")
+=======
+            logger.warning("Descrições de coluna para admatao.parquet não encontradas no catálogo.")
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     except FileNotFoundError:
         column_descriptions_str = "Erro: Arquivo de catálogo não encontrado."
@@ -312,6 +337,7 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
         logger.info(f"📋 CodeGenAgent response output length: {len(str(code_gen_response.get('output', '')))}")
 
         if code_gen_response.get("type") == "chart":
+<<<<<<< HEAD
             # Se o CodeGenAgent retornou um gráfico, usa diretamente o objeto
             plotly_fig = code_gen_response.get("output")
             # Se for string JSON, parse; se for objeto, usa direto
@@ -319,6 +345,10 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
                 plotly_spec = json.loads(plotly_fig)
             else:
                 plotly_spec = plotly_fig
+=======
+            # Se o CodeGenAgent retornou um gráfico, extrai o JSON do Plotly
+            plotly_spec = json.loads(code_gen_response.get("output"))
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             return {"plotly_spec": plotly_spec}
         elif code_gen_response.get("type") == "error":
             return {"final_response": {"type": "text", "content": code_gen_response.get("output")}}
@@ -344,6 +374,7 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
         response = {"type": "clarification", "content": state.get("clarification_options")}
         logger.info(f"💬 CLARIFICATION RESPONSE for query: '{user_query}'")
     elif state.get("plotly_spec"):
+<<<<<<< HEAD
         plotly_obj = state.get("plotly_spec")
         # Se for objeto Plotly, converter para JSON para serialização
         if hasattr(plotly_obj, 'to_dict'):
@@ -351,6 +382,9 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
         else:
             chart_content = plotly_obj
         response = {"type": "chart", "content": chart_content}
+=======
+        response = {"type": "chart", "content": state.get("plotly_spec")}
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         logger.info(f"📈 CHART RESPONSE for query: '{user_query}'")
     elif state.get("retrieved_data"):
         response = {"type": "data", "content": _clean_json_values(state.get("retrieved_data"))}

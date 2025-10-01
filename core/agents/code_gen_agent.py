@@ -77,7 +77,11 @@ class CodeGenAgent:
         system_message = {
             "role": "system",
             "content": """
+<<<<<<< HEAD
                         Você deve usar o arquivo 'admmat.parquet' para todas as consultas de dados.
+=======
+                        Você deve usar o arquivo 'admatao.parquet' para todas as consultas de dados.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                         CRÍTICO: Use EXATAMENTE os nomes de colunas fornecidos, respeitando maiúsculas/minúsculas.
             """
         }
@@ -90,11 +94,23 @@ class CodeGenAgent:
 COLUNAS PRINCIPAIS DISPONÍVEIS (use exatamente como mostrado):
 - nomesegmento (texto - segmento do produto)
 - nome_categoria (texto - categoria do produto)
+<<<<<<< HEAD
 - nome_produto (texto - nome do produto)
 - nome_fabricante (texto - fabricante)
 - mes_01, mes_02, mes_03, mes_04, mes_05, mes_06, mes_07, mes_08, mes_09, mes_10, mes_11, mes_12 (numérico - vendas mensais)
 - preco_38_percent (numérico - preço)
 - une (numérico - código da unidade)
+=======
+- nomegrupo (texto - grupo do produto)
+- nome_produto (texto - nome do produto)
+- nome_fabricante (texto - fabricante)
+- mes_01, mes_02, mes_03, mes_04, mes_05, mes_06, mes_07, mes_08, mes_09, mes_10, mes_11, mes_12 (numérico - vendas mensais)
+- mes_parcial (numérico - vendas do mês parcial atual)
+- estoque_atual (numérico - estoque atual)
+- estoque_cd (numérico - estoque CD)
+- preco_38_percent (numérico - preço)
+- une_nome (texto - nome da unidade)
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 - codigo (numérico - código do produto)
 
 IMPORTANTE PARA ANÁLISES TEMPORAIS:
@@ -114,11 +130,19 @@ IMPORTANTE PARA ANÁLISES TEMPORAIS:
                 **ATENÇÃO CRÍTICA:** Use EXATAMENTE os nomes de colunas conforme estão no DataFrame. Principais colunas disponíveis:
                 - Segmento: 'nomesegmento' (minúsculas)
                 - Categoria: 'nome_categoria' (com underline)
+<<<<<<< HEAD
                 - Produto: 'nome_produto' (com underline)
                 - Vendas mensais: 'mes_01', 'mes_02', ..., 'mes_12' (minúsculas com underline)
                 - Fabricante: 'nome_fabricante' (com underline)
                 - Preço: 'preco_38_percent'
                 - UNE: 'une' (código numérico da unidade)
+=======
+                - Grupo: 'nomegrupo' (minúsculas)
+                - Produto: 'nome_produto' (com underline)
+                - Vendas mensais: 'mes_01', 'mes_02', ..., 'mes_12' (minúsculas com underline)
+                - Estoque: 'estoque_atual', 'estoque_cd', 'estoque_lv'
+                - Fabricante: 'nome_fabricante' (com underline)
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 - Código: 'codigo' (sem acento)
 
                 **EXEMPLOS DE USO CORRETO:**
@@ -128,7 +152,11 @@ IMPORTANTE PARA ANÁLISES TEMPORAIS:
                 **PARA ANÁLISES TEMPORAIS:**
                 - Evolução de vendas: `vendas_cols = ['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06', 'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12']`
                 - Transformar para formato longo: `df_melted = pd.melt(df, id_vars=['codigo', 'nome_produto'], value_vars=vendas_cols, var_name='mes', value_name='vendas')`
+<<<<<<< HEAD
                 - Gráfico temporal: `ordem_meses = ['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06', 'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12']; df_melted['mes'] = pd.Categorical(df_melted['mes'], categories=ordem_meses, ordered=True); df_melted = df_melted.sort_values('mes'); fig = px.line(df_melted, x='mes', y='vendas', title='Evolução de Vendas')`
+=======
+                - Gráfico temporal: `fig = px.line(df_melted, x='mes', y='vendas', title='Evolução de Vendas')`
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             3.  **Contexto de Colunas Relevantes:**
                 ```
                 {context}
@@ -147,6 +175,7 @@ IMPORTANTE PARA ANÁLISES TEMPORAIS:
                     - Se o usuário pedir "evolução", "tendência", "ao longo do tempo", "mensais", "últimos meses":
                     - Use pd.melt() para transformar mes_01-mes_12 em formato longo
                     - Exemplo: `df_melted = pd.melt(df_filtered, id_vars=['codigo', 'nome_produto'], value_vars=['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06', 'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12'], var_name='mes', value_name='vendas')`
+<<<<<<< HEAD
                     - **ORDENAÇÃO TEMPORAL CRÍTICA:** Após o melt, SEMPRE ordene corretamente:
                       ```python
                       # Criar ordem cronológica correta dos meses
@@ -167,6 +196,15 @@ IMPORTANTE PARA ANÁLISES TEMPORAIS:
                 - **NÃO retorne produtos duplicados de UNEs diferentes**
             10. **Verifique a Disponibilidade dos Dados:** Se o `df_raw_data` estiver vazio ou não contiver dados suficientes para a análise/gráfico solicitado, armazene na variável `result` uma mensagem clara e amigável informando o usuário que não há dados disponíveis para a consulta específica (ex: 'Não foram encontrados dados para a sua consulta.').
             11. **NÃO chame .show() ou print()** no seu código. Apenas armazene o objeto final (DataFrame, figura Plotly, ou texto) na variável `result`.
+=======
+                    - Use px.line() para mostrar tendência temporal
+                    - Para "últimos X meses": filtre apenas as colunas relevantes antes do melt
+                *   **SEMPRE ORDENE** o DataFrame pela coluna do eixo X antes de criar o gráfico, se a ordem for importante (como tempo ou categorias sequenciais). Ex: `df_grafico = df_grafico.sort_values(by='coluna_do_eixo_x')`.
+                *   Adicione um título significativo ao gráfico.
+            8.  **O seu código deve ser um script Python completo e executável.** Não inclua explicações ou texto adicional fora do código.
+            9.  **Verifique a Disponibilidade dos Dados:** Se o `df_raw_data` estiver vazio ou não contiver dados suficientes para a análise/gráfico solicitado, armazene na variável `result` uma mensagem clara e amigável informando o usuário que não há dados disponíveis para a consulta específica (ex: 'Não foram encontrados dados para a sua consulta.').
+            10. **NÃO chame .show() ou print()** no seu código. Apenas armazene o objeto final (DataFrame, figura Plotly, ou texto) na variável `result`.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
             **Exemplo de Script Python para Gráfico de Barras:**
             ```python
@@ -204,6 +242,11 @@ IMPORTANTE PARA ANÁLISES TEMPORAIS:
             'NOMEGRUPO': 'nomegrupo',
             'NOME_PRODUTO': 'nome_produto',
             'NOME_FABRICANTE': 'nome_fabricante',
+<<<<<<< HEAD
+=======
+            'ESTOQUE_UNE': 'estoque_atual',
+            'ESTOQUE_CD': 'estoque_cd',
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             'NOME': 'nome_produto',
             'UNE_NOME': 'une_nome',
             'PRODUTO': 'nome_produto',
@@ -334,8 +377,14 @@ Código gerado pelo LLM (após correções):
                 return {"type": "dataframe", "output": result}
             elif 'plotly' in str(type(result)):
                 self.logger.info(f"Resultado do código gerado (Chart): {type(result)}")
+<<<<<<< HEAD
                 # Retornar o objeto Plotly diretamente para preservar funcionalidade
                 return {"type": "chart", "output": result}
+=======
+                # Serializar o objeto Plotly Figure para JSON
+                chart_json = pio.to_json(result)
+                return {"type": "chart", "output": chart_json}
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             else:
                 self.logger.info(f"Resultado do código gerado (Texto): {result}")
                 return {"type": "text", "output": str(result)}

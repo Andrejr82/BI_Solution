@@ -19,4 +19,8 @@
         "get_product_data": "sp_mcp_get_product_data",
         "get_category_data": "sp_mcp_get_category_data"
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

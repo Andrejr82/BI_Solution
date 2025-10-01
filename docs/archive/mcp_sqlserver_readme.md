@@ -158,4 +158,8 @@ Para obter o melhor desempenho do MCP com SQL Server:
 ## Segurança
 - Nunca versionar credenciais reais
 - Use variáveis de ambiente para segredos
+<<<<<<< HEAD
 - Restrinja acesso ao banco por IP
+=======
+- Restrinja acesso ao banco por IP
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
