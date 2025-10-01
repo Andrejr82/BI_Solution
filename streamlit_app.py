@@ -99,6 +99,12 @@ except Exception as e:
     import_errors.append(f"LangChain: {e}")
     BACKEND_AVAILABLE = False
 
+try:
+    from core.utils.query_history import QueryHistory
+except Exception as e:
+    import_errors.append(f"QueryHistory: {e}")
+    BACKEND_AVAILABLE = False
+
 if import_errors:
     logging.warning(f"Erros de import detectados: {import_errors}")
 else:
@@ -192,7 +198,13 @@ else:
             code_gen_agent = CodeGenAgent(llm_adapter=llm_adapter)
             debug_info.append("✅ CodeGen OK")
 
-            # Debug 7: Construir Grafo
+            # Debug 7: Inicializar QueryHistory
+            debug_info.append("Inicializando QueryHistory...")
+            history_path = os.path.join(os.getcwd(), "data", "query_history")
+            query_history = QueryHistory(history_dir=history_path)
+            debug_info.append("✅ QueryHistory OK")
+
+            # Debug 8: Construir Grafo
             debug_info.append("Construindo grafo...")
             graph_builder = GraphBuilder(
                 llm_adapter=llm_adapter,
@@ -204,11 +216,27 @@ else:
 
             debug_info.append("🎉 Backend inicializado com sucesso!")
 
+            # Mostrar painel de diagnóstico para admins
+            user_role = st.session_state.get('role', '')
+            if user_role == 'admin':
+                with st.sidebar.expander("⚙️ Painel de Diagnóstico do Backend (Admin)", expanded=False):
+                    st.write("**Debug Log:**")
+                    for info in debug_info:
+                        if "✅" in info:
+                            st.success(info)
+                        elif "⚠️" in info:
+                            st.warning(info)
+                        elif "❌" in info:
+                            st.error(info)
+                        else:
+                            st.info(info)
+
             return {
                 "llm_adapter": llm_adapter,
                 "parquet_adapter": parquet_adapter,
                 "code_gen_agent": code_gen_agent,
-                "agent_graph": agent_graph
+                "agent_graph": agent_graph,
+                "query_history": query_history
             }
 
         except Exception as e:
@@ -330,10 +358,16 @@ else:
                             "user_query": user_input
                         }
                     else:
-                        # Chamar o agent_graph principal
+                        # Chamar o agent_graph principal com medição de tempo
+                        import time
+                        start_time = time.time()
                         initial_state = {"messages": [HumanMessage(content=user_input)]}
                         final_state = backend_components["agent_graph"].invoke(initial_state)
+                        end_time = time.time()
+
                         agent_response = final_state.get("final_response", {})
+                        agent_response["method"] = "agent_graph"
+                        agent_response["processing_time"] = end_time - start_time
 
                         # Garantir que a resposta inclui informações da pergunta
                         if "user_query" not in agent_response:
@@ -343,16 +377,52 @@ else:
                 assistant_message = {"role": "assistant", "content": agent_response}
                 st.session_state.messages.append(assistant_message)
 
-                # 🔍 LOG da resposta (removido print para evitar problemas de encoding)
-                # print(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')} - Total messages: {len(st.session_state.messages)}")
+                # 🔍 LOG da resposta
+                logging.info(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')}")
 
             except Exception as e:
                 # Tratamento de erro local
+                logging.exception("Ocorreu um erro grave ao processar a consulta do usuário.")
                 error_content = {
                     "type": "error",
-                    "content": f"❌ Erro ao processar consulta: {str(e)}\n\nVerifique se a chave OPENAI_API_KEY está configurada corretamente nos secrets."
+                    "content": f"❌ Erro ao processar consulta: {str(e)}\n\nUm erro inesperado ocorreu. A equipe de desenvolvimento foi notificada."
                 }
                 st.session_state.messages.append({"role": "assistant", "content": error_content})
+
+        # Log the query and its outcome
+        if st.session_state.backend_components and st.session_state.backend_components.get("query_history"):
+            query_history = st.session_state.backend_components["query_history"]
+            
+            # Default agent_response to an empty dict if it's not a dict
+            if not isinstance(agent_response, dict):
+                agent_response = {}
+
+            # Safely determine if the main operation was successful
+            is_success = agent_response.get("type") != "error"
+            
+            # Safely get result count from chart data if it exists
+            results_count = 0
+            if is_success and isinstance(agent_response.get("result"), dict):
+                chart_data = agent_response["result"].get("chart_data", {})
+                if isinstance(chart_data, dict):
+                    results_count = len(chart_data.get("x", []))
+            
+            # Safely get error message
+            error_message = None
+            if not is_success:
+                error_message = agent_response.get("content")
+            
+            # Get processing time from the response if available
+            processing_time = agent_response.get("processing_time", 0.0)
+
+            query_history.add_query(
+                query=user_input,
+                session_id=st.session_state.session_id,
+                success=is_success,
+                results_count=results_count,
+                error=error_message,
+                processing_time=processing_time
+            )
 
         st.rerun()
 
