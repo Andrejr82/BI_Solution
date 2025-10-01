@@ -25,8 +25,4 @@ def fetch_data_from_query(query_filters: Dict[str, Any], parquet_adapter: Parque
         return results
     except Exception as e:
         logger.error(f"Erro ao executar a consulta na ferramenta: {e}", exc_info=True)
-<<<<<<< HEAD
         return [{"error": "Falha ao executar a consulta no arquivo Parquet.", "details": str(e)}]
-=======
-        return [{"error": "Falha ao executar a consulta no arquivo Parquet.", "details": str(e)}]
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

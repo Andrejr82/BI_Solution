@@ -9,7 +9,6 @@ from langchain_core.tools import tool
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
 from langchain_core.prompts import ChatPromptTemplate
-<<<<<<< HEAD
 from core.factory.component_factory import ComponentFactory
 
 from core.connectivity.base import DatabaseAdapter
@@ -25,16 +24,6 @@ def get_settings():
     except Exception:
         return None
 
-=======
-from langchain_openai import ChatOpenAI
-from core.llm_langchain_adapter import CustomLangChainLLM
-
-from core.connectivity.base import DatabaseAdapter
-from core.config.settings import settings # Import the settings instance
-
-logger = logging.getLogger(__name__)
-
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 def create_caculinha_bi_agent(
     parquet_dir: str,
     code_gen_agent: Any, # Use Any for now to avoid circular imports
@@ -62,15 +51,7 @@ def create_caculinha_bi_agent(
     bi_tools = [query_product_data, list_table_columns, generate_and_execute_python_code]
 
     # --- LLM para Geração de SQL ---
-<<<<<<< HEAD
     sql_gen_llm = ComponentFactory.get_llm_adapter("gemini")
-=======
-    sql_gen_llm = ChatOpenAI(
-        model=settings.LLM_MODEL_NAME,
-        openai_api_key=settings.OPENAI_API_KEY.get_secret_value(),
-        temperature=0,
-    )
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     # Get parquet schema
     # This is a simplified way to get schema from parquet.
@@ -155,7 +136,6 @@ JSON:
         ]
     )
 
-<<<<<<< HEAD
     def sql_generator_chain_func(data):
         """Gera SQL usando o adaptador LLM customizado"""
         formatted_prompt = sql_gen_prompt.format_messages(**data)
@@ -167,9 +147,6 @@ JSON:
 
     # Preparar schema como string
     schema_str = "\n".join([f"{col}: {dtype}" for col, dtype in parquet_schema.items()])
-=======
-    sql_generator_chain = sql_gen_prompt | sql_gen_llm
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     def agent_runnable_logic(state: Dict[str, Any]) -> Dict[str, Any]:
         last_message = state["messages"][-1]
@@ -179,11 +156,7 @@ JSON:
             logger.info(f"Agente de BI recebeu a consulta: {user_query}")
 
             # LLM para decisão de ferramenta
-<<<<<<< HEAD
             tool_selection_llm = llm_adapter
-=======
-            tool_selection_llm = CustomLangChainLLM(llm_adapter=llm_adapter)
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
             tool_selection_prompt = ChatPromptTemplate.from_messages(
                 [
@@ -199,7 +172,6 @@ JSON:
                 ]
             )
 
-<<<<<<< HEAD
             def tool_selection_chain_func(data):
                 """Seleciona ferramenta usando o adaptador LLM customizado"""
                 formatted_prompt = tool_selection_prompt.format_messages(**data)
@@ -211,22 +183,12 @@ JSON:
             
             # Decide qual ferramenta usar
             tool_decision_message = tool_selection_chain({"query": user_query})
-=======
-            tool_selection_chain = tool_selection_prompt | tool_selection_llm
-            
-            # Decide qual ferramenta usar
-            tool_decision_message = tool_selection_chain.invoke({"query": user_query})
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
             tool_decision = tool_decision_message.content.strip()
             logger.info(f"Decisão da ferramenta: {tool_decision}")
 
             if "query_product_data" in tool_decision:
                 # Gerar JSON de filtros e retornar ToolCall
-<<<<<<< HEAD
                 generated_json_message = sql_generator_chain({"query": user_query, "tables": schema_str})
-=======
-                generated_json_message = sql_generator_chain.invoke({"query": user_query, "tables": schema_str})
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 generated_json_content = generated_json_message.content.strip()
                 
                 json_match = re.search(r"```json\n(.*?)```", generated_json_content, re.DOTALL)

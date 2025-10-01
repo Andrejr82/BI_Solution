@@ -2,11 +2,7 @@ import logging
 import os
 import sys
 
-<<<<<<< HEAD
 from core.config.safe_settings import get_safe_settings
-=======
-from core.config import OPENAI_API_KEY, SQLALCHEMY_DATABASE_URI
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 """
 Script para depurar o servidor e identificar erros.
@@ -33,7 +29,6 @@ try:
     # Verifica a configuração
     logging.info("Verificando configuração...")
 
-<<<<<<< HEAD
     settings = get_safe_settings()
 
     if not settings.GEMINI_API_KEY and not settings.DEEPSEEK_API_KEY:
@@ -48,17 +43,6 @@ try:
         logging.warning("SQL_SERVER_CONNECTION_STRING não está configurada - modo sem banco")
     else:
         logging.info("SQL_SERVER_CONNECTION_STRING configurada")
-=======
-    if not OPENAI_API_KEY:
-        logging.error("OPENAI_API_KEY não está configurada")
-    else:
-        logging.info("OPENAI_API_KEY configurada")
-
-    if not SQLALCHEMY_DATABASE_URI:
-        logging.error("SQLALCHEMY_DATABASE_URI não está configurada")
-    else:
-        logging.info("SQLALCHEMY_DATABASE_URI configurada")
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     # Verifica as ferramentas SQL
     logging.info("Verificando ferramentas SQL...")

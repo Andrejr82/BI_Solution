@@ -1,7 +1,6 @@
 import streamlit as st
 from datetime import datetime
 import logging
-<<<<<<< HEAD
 
 # Importação condicional para funcionar no cloud
 try:
@@ -10,9 +9,6 @@ try:
 except Exception as e:
     logging.warning(f"Database components não disponíveis: {e}")
     DB_AVAILABLE = False
-=======
-from core.database import sql_server_auth_db as auth_db
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 audit_logger = logging.getLogger("audit")
 
@@ -46,7 +42,6 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
             add_user_submitted = st.form_submit_button("Adicionar Usuário")
 
             if add_user_submitted:
-<<<<<<< HEAD
                 if not DB_AVAILABLE:
                     st.warning("⚠️ Funcionalidade não disponível no modo cloud. Use autenticação local.")
                 else:
@@ -59,22 +54,10 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                         st.error(f"Erro ao adicionar usuário: {e}")
                     except Exception as e:
                         st.error(f"Ocorreu um erro inesperado: {e}")
-=======
-                try:
-                    auth_db.criar_usuario(new_username, new_password, new_role)
-                    st.success(f"Usuário '{new_username}' adicionado com sucesso!")
-                    audit_logger.info(f"Admin {st.session_state.get('username')} adicionou o usuário {new_username} com papel {new_role}.")
-                    st.rerun()
-                except ValueError as e:
-                    st.error(f"Erro ao adicionar usuário: {e}")
-                except Exception as e:
-                    st.error(f"Ocorreu um erro inesperado: {e}")
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     # Listar e Gerenciar Usuários Existentes
     st.markdown("---")
     st.subheader("Lista de Usuários")
-<<<<<<< HEAD
 
     if not DB_AVAILABLE:
         st.info("🌤️ Modo Cloud: Usuários disponíveis: admin, user, cacula")
@@ -82,9 +65,6 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
     else:
         users = auth_db.get_all_users()
 
-=======
-    users = auth_db.get_all_users()
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     if users:
         df_users = st.dataframe(users, use_container_width=True)
 
@@ -154,8 +134,4 @@ elif st.session_state.get("authenticated"):
 # Se não estiver logado, redireciona para o login
 else:
     st.error("Acesso negado. Por favor, faça o login na página principal para acessar esta área.")
-<<<<<<< HEAD
     st.stop()
-=======
-    st.stop()
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

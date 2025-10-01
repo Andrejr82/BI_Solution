@@ -25,8 +25,4 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def get_schema(self) -> Dict[str, Any]:
         """Returns the database schema information."""
-<<<<<<< HEAD
         pass
-=======
-        pass
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
