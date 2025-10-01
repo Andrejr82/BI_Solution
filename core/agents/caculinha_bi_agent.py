@@ -9,8 +9,7 @@ from langchain_core.tools import tool
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from core.llm_adapter import OpenAILLMAdapter
+from core.factory.component_factory import ComponentFactory
 
 from core.connectivity.base import DatabaseAdapter
 # Settings importadas com lazy loading
@@ -52,11 +51,7 @@ def create_caculinha_bi_agent(
     bi_tools = [query_product_data, list_table_columns, generate_and_execute_python_code]
 
     # --- LLM para Geração de SQL ---
-    sql_gen_llm = ChatOpenAI(
-        model=get_settings().LLM_MODEL_NAME if get_settings() else "gpt-4o",
-        openai_api_key=get_settings().OPENAI_API_KEY if get_settings() else os.getenv("OPENAI_API_KEY"),
-        temperature=0,
-    )
+    sql_gen_llm = ComponentFactory.get_llm_adapter("gemini")
 
     # Get parquet schema
     # This is a simplified way to get schema from parquet.
@@ -141,7 +136,17 @@ JSON:
         ]
     )
 
-    sql_generator_chain = sql_gen_prompt | sql_gen_llm
+    def sql_generator_chain_func(data):
+        """Gera SQL usando o adaptador LLM customizado"""
+        formatted_prompt = sql_gen_prompt.format_messages(**data)
+        messages = [{"role": "system" if msg.type == "system" else "user", "content": msg.content} for msg in formatted_prompt]
+        response = sql_gen_llm.get_completion(messages)
+        return type('obj', (object,), {'content': response.get('content', '')})()
+
+    sql_generator_chain = sql_generator_chain_func
+
+    # Preparar schema como string
+    schema_str = "\n".join([f"{col}: {dtype}" for col, dtype in parquet_schema.items()])
 
     def agent_runnable_logic(state: Dict[str, Any]) -> Dict[str, Any]:
         last_message = state["messages"][-1]
@@ -151,7 +156,7 @@ JSON:
             logger.info(f"Agente de BI recebeu a consulta: {user_query}")
 
             # LLM para decisão de ferramenta
-            tool_selection_llm = CustomLangChainLLM(llm_adapter=llm_adapter)
+            tool_selection_llm = llm_adapter
 
             tool_selection_prompt = ChatPromptTemplate.from_messages(
                 [
@@ -167,16 +172,23 @@ JSON:
                 ]
             )
 
-            tool_selection_chain = tool_selection_prompt | tool_selection_llm
+            def tool_selection_chain_func(data):
+                """Seleciona ferramenta usando o adaptador LLM customizado"""
+                formatted_prompt = tool_selection_prompt.format_messages(**data)
+                messages = [{"role": "system" if msg.type == "system" else "user", "content": msg.content} for msg in formatted_prompt]
+                response = tool_selection_llm.get_completion(messages)
+                return type('obj', (object,), {'content': response.get('content', '')})()
+
+            tool_selection_chain = tool_selection_chain_func
             
             # Decide qual ferramenta usar
-            tool_decision_message = tool_selection_chain.invoke({"query": user_query})
+            tool_decision_message = tool_selection_chain({"query": user_query})
             tool_decision = tool_decision_message.content.strip()
             logger.info(f"Decisão da ferramenta: {tool_decision}")
 
             if "query_product_data" in tool_decision:
                 # Gerar JSON de filtros e retornar ToolCall
-                generated_json_message = sql_generator_chain.invoke({"query": user_query, "tables": schema_str})
+                generated_json_message = sql_generator_chain({"query": user_query, "tables": schema_str})
                 generated_json_content = generated_json_message.content.strip()
                 
                 json_match = re.search(r"```json\n(.*?)```", generated_json_content, re.DOTALL)

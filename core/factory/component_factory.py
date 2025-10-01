@@ -18,7 +18,11 @@ try:
     from core.llm_adapter import GeminiLLMAdapter, DeepSeekLLMAdapter
     from core.config.safe_settings import get_safe_settings
     LLM_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"LLM Import Error: {e}")
+    LLM_AVAILABLE = False
+except Exception as e:
+    print(f"LLM General Error: {e}")
     LLM_AVAILABLE = False
 
 try:

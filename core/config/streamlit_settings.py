@@ -21,7 +21,8 @@ class StreamlitSettings:
         self.is_streamlit_cloud = self._detect_streamlit_cloud()
 
         # Configurações essenciais
-        self.OPENAI_API_KEY = self._get_openai_key()
+        self.GEMINI_API_KEY = self._get_gemini_key()
+        self.DEEPSEEK_API_KEY = self._get_deepseek_key()
         self.LLM_MODEL_NAME = self._get_llm_model()
 
         # Configurações de banco (opcionais)
@@ -51,17 +52,29 @@ class StreamlitSettings:
         ]
         return any(indicators)
 
-    def _get_openai_key(self) -> str:
-        """Obtém a chave da OpenAI de forma segura"""
+    def _get_gemini_key(self) -> str:
+        """Obtém a chave do Gemini de forma segura"""
         # Tentar obter do Streamlit secrets primeiro
         try:
-            if hasattr(st, 'secrets') and "OPENAI_API_KEY" in st.secrets:
-                return st.secrets["OPENAI_API_KEY"]
+            if hasattr(st, 'secrets') and "GEMINI_API_KEY" in st.secrets:
+                return st.secrets["GEMINI_API_KEY"]
         except Exception:
             pass
 
         # Fallback para variável de ambiente
-        return os.getenv("OPENAI_API_KEY", "")
+        return os.getenv("GEMINI_API_KEY", "")
+
+    def _get_deepseek_key(self) -> str:
+        """Obtém a chave do DeepSeek de forma segura"""
+        # Tentar obter do Streamlit secrets primeiro
+        try:
+            if hasattr(st, 'secrets') and "DEEPSEEK_API_KEY" in st.secrets:
+                return st.secrets["DEEPSEEK_API_KEY"]
+        except Exception:
+            pass
+
+        # Fallback para variável de ambiente
+        return os.getenv("DEEPSEEK_API_KEY", "")
 
     def _get_llm_model(self) -> str:
         """Obtém o modelo LLM configurado"""
@@ -73,7 +86,7 @@ class StreamlitSettings:
             pass
 
         # Fallback para variável de ambiente
-        return os.getenv("LLM_MODEL_NAME", "gpt-4o")
+        return os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash-latest")
 
     def get_sql_connection_string(self) -> Optional[str]:
         """
@@ -135,7 +148,8 @@ class StreamlitSettings:
     def log_config_status(self):
         """Log do status das configurações"""
         logger.info(f"Streamlit Cloud: {self.is_streamlit_cloud}")
-        logger.info(f"OpenAI API configurada: {'Sim' if self.OPENAI_API_KEY else 'Não'}")
+        logger.info(f"Gemini API configurada: {'Sim' if self.GEMINI_API_KEY else 'Não'}")
+        logger.info(f"DeepSeek API configurada: {'Sim' if self.DEEPSEEK_API_KEY else 'Não'}")
         logger.info(f"Modelo LLM: {self.LLM_MODEL_NAME}")
         logger.info(f"Banco de dados disponível: {'Sim' if self.is_database_available() else 'Não'}")
 

@@ -1,0 +1,289 @@
+
+[     UTC     ] Logs for agentapplutionbi-zixdtt8jva6lqbf5zxvsz4.streamlit.app/
+────────────────────────────────────────────────────────────────────────────────────────
+[18:07:39] 🖥 Provisioning machine...
+[18:07:39] 🎛 Preparing system...
+[18:07:39] ⛓ Spinning up manager process...
+[18:07:40] 🚀 Starting up repository: 'agents_solution_bi', branch: 'backup/cleanup-20251001113232', main module: 'streamlit_app.py'
+[18:07:40] 🐙 Cloning repository...
+[18:07:45] 🐙 Cloning into '/mount/src/agents_solution_bi'...
+
+[18:07:45] 🐙 Cloned repository!
+[18:07:45] 🐙 Pulling code changes from Github...
+[18:07:46] 📦 Processing dependencies...
+
+──────────────────────────────────────── uv ───────────────────────────────────────────
+
+Using uv pip install.
+Using Python 3.11.13 environment at /home/adminuser/venv
+Resolved 166 packages in 1.74s
+Prepared 165 packages in 40.86s
+Installed 165 packages in 709ms
+ + aiohappyeyeballs==2.6.1
+ + aiohttp==3.12.15
+ [2025-10-01 18:08:29.975583] + aiosignal==1.4.0
+ + alembic==1.16.4
+ + altair==5.5.0
+ + annotated-types==0.7.0
+ + anyio==4.10.0
+ +[2025-10-01 18:08:29.975787]  attrs==25.3.0
+ + bcrypt==4.3.0
+ + blinker==1.9.0
+ + cachetools==6.1.0[2025-10-01 18:08:29.976012] 
+ + certifi==2025.8.3
+ + cffi==1.17.1
+ + charset-normalizer==3.4.3[2025-10-01 18:08:29.976235] 
+ + choreographer==1.0.9
+ + click==8.2.1
+ + colorama==0.4.6
+ + contourpy==1.3.3
+ + [2025-10-01 18:08:29.976443] coverage==7.10.3
+ + cryptography==45.0.6
+ + cycler==0.12.1
+ + dataclasses-json==0.6.7
+ + distro==[2025-10-01 18:08:29.976649] 1.9.0
+ + ecdsa==0.19.1
+ + faiss-cpu==1.12.0
+ + fastapi==0.116.1
+ + filelock==[2025-10-01 18:08:29.976843] 3.19.1
+ + fonttools==4.59.0
+ + frozenlist==1.7.0
+ + fsspec==2025.7.0
+ + gitdb==4.0.12
+ + gitpython==[2025-10-01 18:08:29.977034] 3.1.45
+ + greenlet==3.2.4
+ + h11==0.16.0
+ + hf-xet==1.1.10
+ + httpcore==1.0.9[2025-10-01 18:08:29.977206] 
+ + httpx==0.28.1
+ + httpx-sse==0.4.1
+ + huggingface-hub==0.34.4
+ + idna==[2025-10-01 18:08:29.977403] 3.10
+ + iniconfig==2.1.0
+ + jinja2==3.1.6
+ + jiter==0.10.0
+ +[2025-10-01 18:08:29.977594]  joblib==1.5.2
+ + jsonpatch==1.33
+ + jsonpointer==3.0.0
+ + jsonschema==4.25.0
+ + jsonschema-specifications==2025.4.1
+ + kaleido[2025-10-01 18:08:29.977769] ==1.0.0
+ + kiwisolver==1.4.9
+ + langchain==0.3.27
+ + langchain-community==0.3.27
+ + langchain-core==0.3.74
+ + [2025-10-01 18:08:29.977974] langchain-openai==0.3.30
+ + langchain-text-splitters==0.3.9
+ + langgraph==0.6.4
+ + langgraph-checkpoint==2.1.1
+ +[2025-10-01 18:08:29.978152]  langgraph-prebuilt==0.6.4
+ + langgraph-sdk==0.2.0
+ + langsmith==0.4.14
+ + logistro==1.1.0
+ + mako==1.3.10
+ + markdown-it-py==4.0.0[2025-10-01 18:08:29.978349] 
+ + markupsafe==3.0.2
+ + marshmallow==3.26.1
+ + matplotlib==3.10.5
+ + mcp==1.12.4
+ +[2025-10-01 18:08:29.978515]  mdurl==0.1.2
+ + mpmath==1.3.0
+ + mssql-mcp-server==0.1.2
+ + multidict==6.6.4
+ + mypy-extensions==1.1.0
+ + narwhals[2025-10-01 18:08:29.978665] ==2.1.1
+ + networkx==3.5
+ + numpy==1.26.4
+ + nvidia-cublas-cu12==12.8.4.1
+ + nvidia-cuda-cupti-cu12==12.8.90[2025-10-01 18:08:29.978801] 
+ + nvidia-cuda-nvrtc-cu12==12.8.93
+ + nvidia-cuda-runtime-cu12==12.8.90
+ + nvidia-cudnn-cu12==9.10.2.21
+ + nvidia-cufft-cu12==11.3.3.83
+ + nvidia-cufile-cu12[2025-10-01 18:08:29.979048] ==1.13.1.3
+ + nvidia-curand-cu12==10.3.9.90
+ + nvidia-cusolver-cu12==11.7.3.90
+ + nvidia-cusparse-cu12==12.5.8.93
+ + nvidia-cusparselt-cu12==0.7.1
+ [2025-10-01 18:08:29.979228] + nvidia-nccl-cu12==2.27.3
+ + nvidia-nvjitlink-cu12==12.8.93
+ + nvidia-nvtx-cu12==12.8.90
+ + openai==1.99.9
+ + orjson==3.11.2
+ + ormsgpack[2025-10-01 18:08:29.979351] ==1.10.0
+ + packaging==25.0
+ + pandas==2.3.1
+ + passlib==1.7.4
+ + pillow==11.3.0[2025-10-01 18:08:29.979460] 
+ + plotly==6.3.0
+ + pluggy==1.6.0
+ + propcache==0.3.2
+ + protobuf==6.31.1
+ + psutil==7.0.0
+ + pyarrow==21.0.0[2025-10-01 18:08:29.979561] 
+ + pyasn1==0.6.1
+ + pycparser==2.22
+ + pydantic==2.11.7
+ + pydantic-core==2.33.2
+ + pydantic-settings==2.10.1
+ + pydeck==[2025-10-01 18:08:29.979678] 0.9.1
+ + pygments==2.19.2
+ + pyngrok==7.3.0
+ + pyodbc==5.2.0
+ + pyparsing==3.2.3
+ + pytest==8.4.1
+ + pytest-cov==6.2.1
+ + python-dateutil==2.9.0.post0
+ + python-decouple==3.8
+ + python-dotenv==1.1.1
+ + python-jose==3.5.0
+ + python-multipart==0.0.20[2025-10-01 18:08:29.979973] 
+ + pytz==2025.2
+ + pyyaml==6.0.2
+ + referencing==0.36.2
+ + regex==2025.7.34
+ + requests==2.32.4
+ + requests-toolbelt==[2025-10-01 18:08:29.980114] 1.0.0
+ + rich==14.1.0
+ + rpds-py==0.27.0
+ + rsa==4.9.1
+ + safetensors==0.6.2
+ + scikit-learn==1.7.1
+ + [2025-10-01 18:08:29.980230] scipy==1.16.1
+ + seaborn==0.13.2
+ + sentence-transformers==5.1.0
+ + sentry-sdk==2.35.0
+ + shellingham==1.5.4
+ + simplejson==[2025-10-01 18:08:29.980377] 3.20.1
+ + six==1.17.0
+ + smmap==5.0.2
+ + sniffio==1.3.1
+ + sqlalchemy==2.0.43
+ + sse-starlette==3.0.2
+ + starlette[2025-10-01 18:08:29.980522] ==0.47.2
+ + streamlit==1.48.0
+ + sympy==1.14.0
+ + tenacity==9.1.2
+ + threadpoolctl==3.6.0
+ + tiktoken==0.11.0
+ +[2025-10-01 18:08:29.980630]  tokenizers==0.21.4
+ + toml==0.10.2
+ + torch==2.8.0
+ + tornado==6.5.2
+ + tqdm==4.67.1
+ + transformers==4.55.4[2025-10-01 18:08:29.980736] 
+ + triton==3.4.0
+ + typer==0.16.0
+ + typing-extensions==4.14.1
+ + typing-inspect==0.9.0
+ + typing-inspection==0.4.1
+ + tzdata==[2025-10-01 18:08:29.980885] 2025.2
+ + urllib3==2.5.0
+ + uvicorn==0.35.0
+ + watchdog==6.0.0
+ + xxhash==3.5.0
+ + yarl==1.20.1
+ [2025-10-01 18:08:29.981001] + zstandard==0.23.0
+Checking if Streamlit is installed
+Found Streamlit version 1.48.0 in the environment
+Installing rich for an improved exception logging
+Using uv pip install.
+Using Python 3.11.13 environment at /home/adminuser/venv
+Audited 1 package in 12ms
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+[18:08:32] 🐍 Python dependencies were installed from /mount/src/agents_solution_bi/requirements.txt using uv.
+Check if streamlit is installed
+Streamlit is already installed
+[18:08:33] 📦 Processed dependencies!
+
+
+
+────────────────────── Traceback (most recent call last) ───────────────────────
+  /home/adminuser/venv/lib/python3.11/site-packages/streamlit/runtime/scriptru  
+  nner/exec_code.py:128 in exec_func_with_error_handling                        
+                                                                                
+  /home/adminuser/venv/lib/python3.11/site-packages/streamlit/runtime/scriptru  
+  nner/script_runner.py:667 in code_to_exec                                     
+                                                                                
+  /home/adminuser/venv/lib/python3.11/site-packages/streamlit/runtime/scriptru  
+  nner/script_runner.py:165 in _mpa_v1                                          
+                                                                                
+  /home/adminuser/venv/lib/python3.11/site-packages/streamlit/navigation/page.  
+  py:300 in run                                                                 
+                                                                                
+  /mount/src/agents_solution_bi/streamlit_app.py:8 in <module>                  
+                                                                                
+      5 import requests                                                         
+      6 import uuid                                                             
+      7 import pandas as pd                                                     
+  ❱   8 from core.auth import login, sessao_expirada                            
+      9                                                                         
+     10 # --- Autenticação ---                                                  
+     11 if "authenticated" not in st.session_state:                             
+                                                                                
+  /mount/src/agents_solution_bi/core/auth.py:8 in <module>                      
+                                                                                
+     5 import streamlit as st                                                   
+     6 import time                                                              
+     7 import logging                                                           
+  ❱  8 from core.database import sql_server_auth_db as auth_db                  
+     9                                                                          
+    10 audit_logger = logging.getLogger("audit")                                
+    11                                                                          
+                                                                                
+  /mount/src/agents_solution_bi/core/database/sql_server_auth_db.py:6 in        
+  <module>                                                                      
+                                                                                
+      3 from sqlalchemy import text                                             
+      4 import logging                                                          
+      5                                                                         
+  ❱   6 from core.utils.db_connection import get_db_connection                  
+      7 from core.utils.security_utils import get_password_hash, verify_passwo  
+      8                                                                         
+      9 # --- Constantes de Autenticação ---                                    
+                                                                                
+  /mount/src/agents_solution_bi/core/utils/db_connection.py:2 in <module>       
+                                                                                
+     1 from sqlalchemy import create_engine                                     
+  ❱  2 from core.config.settings import settings # Import the new settings obj  
+     3                                                                          
+     4 # A URI da base de dados é agora obtida diretamente do objeto de config  
+     5 DATABASE_URI = settings.SQL_SERVER_CONNECTION_STRING                     
+                                                                                
+  /mount/src/agents_solution_bi/core/config/settings.py:66 in <module>          
+                                                                                
+    63 │   │   return conn_str                                                  
+    64                                                                          
+    65 # Instância única das configurações para ser usada em toda a aplicação   
+  ❱ 66 settings = Settings()                                                    
+    67                                                                          
+                                                                                
+  /home/adminuser/venv/lib/python3.11/site-packages/pydantic_settings/main.py:  
+  188 in __init__                                                               
+                                                                                
+    185 │   │   _secrets_dir: PathType | None = None,                           
+    186 │   │   **values: Any,                                                  
+    187 │   ) -> None:                                                          
+  ❱ 188 │   │   super().__init__(                                               
+    189 │   │   │   **__pydantic_self__._settings_build_values(                 
+    190 │   │   │   │   values,                                                 
+    191 │   │   │   │   _case_sensitive=_case_sensitive,                        
+                                                                                
+  /home/adminuser/venv/lib/python3.11/site-packages/pydantic/main.py:253 in     
+  __init__                                                                      
+                                                                                
+     250 │   │   """                                                            
+     251 │   │   # `__tracebackhide__` tells pytest and some other tools to om  
+     252 │   │   __tracebackhide__ = True                                       
+  ❱  253 │   │   validated_self = self.__pydantic_validator__.validate_python(  
+     254 │   │   if self is not validated_self:                                 
+     255 │   │   │   warnings.warn(                                             
+     256 │   │   │   │   'A custom validator is returning a value other than `  
+────────────────────────────────────────────────────────────────────────────────
+ValidationError: 1 validation error for Settings
+OPENAI_API_KEY
+  Field required [type=missing, input_value={'DB_SERVER': 'seu_servid...iver 17 
+for SQL Server'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing

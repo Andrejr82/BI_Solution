@@ -86,43 +86,59 @@ if DB_AVAILABLE:
 else:
     db_status = "Cloud Mode (SQLite local)"
 status_data.append({"Serviço": "Banco de Dados", "Status": db_status, "Tempo": db_time})
-# Checagem do LLM (OpenAI)
-llm_status = "-"
-llm_time = "-"
+# Checagem dos LLMs (Gemini/DeepSeek)
 try:
-    from openai import OpenAI
+    from core.factory.component_factory import ComponentFactory
 
-    # Usar configuração do settings se disponível
-    api_key = None
-    if DB_AVAILABLE:
+    # Verificar Gemini
+    gemini_status = "-"
+    gemini_time = "-"
+    try:
         current_settings = get_settings()
-        if current_settings and hasattr(current_settings, 'OPENAI_API_KEY'):
-            api_key = current_settings.OPENAI_API_KEY
-    else:
-        # Tentar pegar do secrets do Streamlit
-        api_key = st.secrets.get("OPENAI_API_KEY")
+        if current_settings and current_settings.GEMINI_API_KEY:
+            gemini_adapter = ComponentFactory.get_llm_adapter("gemini")
+            if gemini_adapter:
+                start = time.time()
+                response = gemini_adapter.get_completion([{"role": "user", "content": "ping"}], max_tokens=1)
+                gemini_time = f"{(time.time() - start)*1000:.0f} ms"
+                gemini_status = "OK" if response and not response.get('error') else "ERRO"
+            else:
+                gemini_status = "Adaptador não disponível"
+        else:
+            gemini_status = "Chave API não configurada"
+    except Exception as e:
+        gemini_status = f"FALHA ({str(e)[:30]})"
 
-    if api_key and not api_key.startswith("sk-sua-chave"):
-        client = OpenAI(api_key=api_key)
-        start = time.time()
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=1,
-            timeout=3,
-        )
-        llm_time = f"{(time.time() - start)*1000:.0f} ms"
-        llm_status = "OK"
-    else:
-        llm_status = "Chave API não configurada"
+    # Verificar DeepSeek
+    deepseek_status = "-"
+    deepseek_time = "-"
+    try:
+        current_settings = get_settings()
+        if current_settings and current_settings.DEEPSEEK_API_KEY:
+            deepseek_adapter = ComponentFactory.get_llm_adapter("deepseek")
+            if deepseek_adapter:
+                start = time.time()
+                response = deepseek_adapter.get_completion([{"role": "user", "content": "ping"}], max_tokens=1)
+                deepseek_time = f"{(time.time() - start)*1000:.0f} ms"
+                deepseek_status = "OK" if response and not response.get('error') else "ERRO"
+            else:
+                deepseek_status = "Adaptador não disponível"
+        else:
+            deepseek_status = "Chave API não configurada"
+    except Exception as e:
+        deepseek_status = f"FALHA ({str(e)[:30]})"
+
 except Exception as e:
-    llm_status = f"FALHA ({str(e)[:30]})"
-status_data.append({"Serviço": "LLM (OpenAI)", "Status": llm_status, "Tempo": llm_time})
+    gemini_status = f"FALHA ({str(e)[:30]})"
+    deepseek_status = f"FALHA ({str(e)[:30]})"
+
+status_data.append({"Serviço": "LLM (Gemini)", "Status": gemini_status, "Tempo": gemini_time})
+status_data.append({"Serviço": "LLM (DeepSeek)", "Status": deepseek_status, "Tempo": deepseek_time})
 st.dataframe(pd.DataFrame(status_data), use_container_width=True)
 
-# --- ECONOMIA DE CRÉDITOS OPENAI ---
+# --- ECONOMIA DE CRÉDITOS LLM ---
 st.markdown("---")
-st.markdown("### 💰 Economia de Créditos OpenAI")
+st.markdown("### 💰 Economia de Créditos LLM (Gemini/DeepSeek)")
 
 # Tentar acessar estatísticas do cache se backend disponível
 try:
@@ -139,7 +155,7 @@ try:
             with col3:
                 st.metric("Espaço Cache (MB)", cache_stats.get("total_size_mb", 0))
 
-            st.info(f"💡 **Economia:** Cada hit no cache evita 1 chamada à OpenAI. "
+            st.info(f"💡 **Economia:** Cada hit no cache evita 1 chamada ao LLM. "
                    f"TTL: {cache_stats.get('ttl_hours', 48)}h")
         else:
             st.info("Cache não disponível - backend não inicializado")
