@@ -61,15 +61,28 @@ class GeminiLLMAdapter:
             return result
 
         except RateLimitError as e:
-            logger.error(f"Limite de taxa da API Gemini atingido: {e}", exc_info=True)
-            # ATIVA O FALLBACK! (usando import local para evitar circular import)
+            logger.error(f"🚨 Rate limit Gemini 2.5 Flash-Lite atingido: {e}", exc_info=True)
+            # ATIVA O FALLBACK AUTOMÁTICO PARA DEEPSEEK!
             try:
                 from core.factory.component_factory import ComponentFactory
                 ComponentFactory.set_gemini_unavailable(True)
+                logger.warning("🔄 Fallback ativado: Gemini → DeepSeek")
             except ImportError:
                 pass
-            return {"error": "Rate limit exceeded", "fallback_activated": True}
+            return {"error": "Rate limit exceeded", "fallback_activated": True, "retry_with": "deepseek"}
         except Exception as e:
+            error_msg = str(e).lower()
+            # Detectar outros tipos de rate limit/quota exceeded
+            if any(term in error_msg for term in ["quota", "limit", "429", "rate", "exceeded"]):
+                logger.error(f"🚨 Quota/Rate limit detectado no Gemini: {e}")
+                try:
+                    from core.factory.component_factory import ComponentFactory
+                    ComponentFactory.set_gemini_unavailable(True)
+                    logger.warning("🔄 Fallback ativado por quota: Gemini → DeepSeek")
+                except ImportError:
+                    pass
+                return {"error": "Quota exceeded", "fallback_activated": True, "retry_with": "deepseek"}
+
             logger.error(f"Erro ao chamar a API do Gemini: {e}", exc_info=True)
             return {"error": str(e)}
 

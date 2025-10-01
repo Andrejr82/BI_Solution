@@ -241,9 +241,9 @@ class ComponentFactory:
             cls.logger.warning("Componentes de LLM não estão disponíveis.")
             return None
 
-        # Lógica de fallback
+        # 🔄 LÓGICA DE FALLBACK AUTOMÁTICO GEMINI → DEEPSEEK
         if adapter_type == "gemini" and cls._gemini_unavailable:
-            cls.logger.warning("Gemini indisponível, usando DeepSeek como fallback.")
+            cls.logger.warning("🔄 Gemini 2.5 Flash-Lite indisponível (rate limit), usando DeepSeek como fallback automático.")
             adapter_type = "deepseek"
 
         adapter_key = f"llm_{adapter_type}"
@@ -254,7 +254,7 @@ class ComponentFactory:
 
             if adapter_type == "gemini":
                 api_key = config.GEMINI_API_KEY
-                model_name = config.LLM_MODEL_NAME or "gemini-1.5-flash-latest"
+                model_name = config.LLM_MODEL_NAME or "gemini-2.5-flash-lite"
                 if not api_key:
                     cls.logger.error("GEMINI_API_KEY não encontrada na configuração.")
                     return None
@@ -282,10 +282,23 @@ class ComponentFactory:
         """Atualiza o status de disponibilidade do Gemini."""
         if cls._gemini_unavailable != status:
             cls._gemini_unavailable = status
-            cls.logger.info(f"Status de disponibilidade do Gemini alterado para: {'Indisponível' if status else 'Disponível'}")
+            status_msg = "🚨 INDISPONÍVEL (rate limit)" if status else "✅ DISPONÍVEL novamente"
+            cls.logger.info(f"Status Gemini 2.5 Flash-Lite alterado para: {status_msg}")
             if status:
-                # Opcional: remove a instância do gemini para forçar a recriação se ele voltar
+                # Remove a instância do gemini para forçar a recriação quando voltar
                 cls.reset_component("llm_gemini")
+                cls.logger.info("🔄 Próximas chamadas usarão DeepSeek automaticamente")
+            else:
+                cls.logger.info("🔄 Próximas chamadas tentarão Gemini novamente")
+
+    @classmethod
+    def try_restore_gemini(cls):
+        """Tenta restaurar o Gemini após um período de indisponibilidade."""
+        if cls._gemini_unavailable:
+            cls.logger.info("🔄 Tentando restaurar Gemini 2.5 Flash-Lite...")
+            cls.set_gemini_unavailable(False)
+            return True
+        return False
 
     @classmethod
     def get_product_agent(cls) -> Optional[Any]:
