@@ -1,6 +1,5 @@
 '''
 Interface de Usuário (Frontend) para o Agent_BI.
-<<<<<<< HEAD
 Versão integrada que não depende de API externa.
 Cache clear trigger: 2025-09-21 20:52 - ValidationError fix applied
 '''
@@ -79,7 +78,7 @@ def get_settings():
 try:
     from core.factory.component_factory import ComponentFactory
 except Exception as e:
-    import_errors.append(f"ComponentFactory: {e}")
+    import_errors.append(f"OpenAILLMAdapter: {e}")
     BACKEND_AVAILABLE = False
 
 try:
@@ -110,14 +109,6 @@ if import_errors:
     logging.warning(f"Erros de import detectados: {import_errors}")
 else:
     logging.info("Todos os imports do backend foram bem-sucedidos")
-=======
-'''
-import streamlit as st
-import requests
-import uuid
-import pandas as pd
-from core.auth import login, sessao_expirada
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 # --- Autenticação ---
 if "authenticated" not in st.session_state:
@@ -131,7 +122,6 @@ else:
     st.set_page_config(page_title="Agent_BI", page_icon="📊", layout="wide")
     st.title("📊 Agent_BI - Assistente Inteligente")
 
-<<<<<<< HEAD
     # --- Inicialização do Backend Integrado ---
     @st.cache_resource
     def initialize_backend():
@@ -151,22 +141,23 @@ else:
             return None
 
         try:
-            # Debug 2: Verificar secrets Gemini/DeepSeek
+            # Debug 2: Verificar secrets de LLM (Gemini ou DeepSeek)
             gemini_key = None
             deepseek_key = None
+            secrets_status = "❌ Falhou"
+
             try:
                 gemini_key = st.secrets.get("GEMINI_API_KEY")
                 deepseek_key = st.secrets.get("DEEPSEEK_API_KEY")
 
                 if gemini_key:
+                    secrets_status = "✅ Gemini OK"
                     debug_info.append(f"Secrets Gemini: OK ({gemini_key[:10]}...)")
-                else:
-                    debug_info.append("Secrets Gemini: Não encontrada")
-
-                if deepseek_key:
+                elif deepseek_key:
+                    secrets_status = "✅ DeepSeek OK"
                     debug_info.append(f"Secrets DeepSeek: OK ({deepseek_key[:10]}...)")
                 else:
-                    debug_info.append("Secrets DeepSeek: Não encontrada")
+                    debug_info.append(f"Secrets: Nenhuma chave LLM encontrada")
             except Exception as e:
                 debug_info.append(f"Secrets erro: {e}")
 
@@ -175,14 +166,14 @@ else:
                 try:
                     current_settings = get_settings()
                     if current_settings:
-                        gemini_key = current_settings.GEMINI_API_KEY
-                        deepseek_key = current_settings.DEEPSEEK_API_KEY
-                        debug_info.append("Settings: Carregadas com sucesso")
+                        gemini_key = getattr(current_settings, 'GEMINI_API_KEY', None)
+                        deepseek_key = getattr(current_settings, 'DEEPSEEK_API_KEY', None)
+                    debug_info.append(f"Settings LLM: OK")
                 except Exception as e:
                     debug_info.append(f"Settings erro: {e}")
 
             if not gemini_key and not deepseek_key:
-                raise ValueError("Nenhuma chave LLM (Gemini/DeepSeek) encontrada em secrets ou settings")
+                raise ValueError("Nenhuma chave LLM (GEMINI_API_KEY ou DEEPSEEK_API_KEY) encontrada em secrets nem settings")
 
             # Debug 4: Inicializar LLM
             debug_info.append("Inicializando LLM...")
@@ -296,8 +287,6 @@ else:
             with st.sidebar:
                 st.error("❌ Backend falhou")
 
-=======
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     # --- Logout Button ---
     with st.sidebar:
         st.write(f"Bem-vindo, {st.session_state.get('username', '')}!")
@@ -318,12 +307,7 @@ else:
             st.rerun()
 
 
-<<<<<<< HEAD
     # --- Estado da Sessão ---
-=======
-    # --- Constantes e Estado da Sessão ---
-    API_URL = "http://127.0.0.1:8000/api/v1/query"
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     if 'session_id' not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
@@ -340,16 +324,11 @@ else:
 
     # --- Funções de Interação ---
     def query_backend(user_input: str):
-<<<<<<< HEAD
         '''Processa a query diretamente usando o backend integrado.'''
-=======
-        '''Envia a query para a API e lida com a resposta.'''
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
         # 📝 GARANTIR que a pergunta do usuário seja sempre preservada
         user_message = {"role": "user", "content": {"type": "text", "content": user_input}}
         st.session_state.messages.append(user_message)
 
-<<<<<<< HEAD
         with st.spinner("O agente está a pensar..."):
             try:
                 # 🚀 PRIORIDADE: Tentar DirectQueryEngine primeiro (mais rápido e eficiente)
@@ -399,23 +378,11 @@ else:
                         # Garantir que a resposta inclui informações da pergunta
                         if "user_query" not in agent_response:
                             agent_response["user_query"] = user_input
-=======
-        # 🔍 LOG da pergunta (removido print para evitar problemas de encoding)
-        # print(f"USER QUESTION ADDED: '{user_input}' - Total messages: {len(st.session_state.messages)}")
-
-        with st.spinner("O agente está a pensar..."):
-            try:
-                payload = {"user_query": user_input, "session_id": st.session_state.session_id}
-                response = requests.post(API_URL, json=payload, timeout=120)
-                response.raise_for_status()
-                agent_response = response.json()
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
                 # ✅ GARANTIR estrutura correta da resposta
                 assistant_message = {"role": "assistant", "content": agent_response}
                 st.session_state.messages.append(assistant_message)
 
-<<<<<<< HEAD
                 # 🔍 LOG da resposta
                 logging.info(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')}")
 
@@ -462,20 +429,6 @@ else:
                 error=error_message,
                 processing_time=processing_time
             )
-=======
-                # 🔍 LOG da resposta (removido print para evitar problemas de encoding)
-                # print(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')} - Total messages: {len(st.session_state.messages)}")
-
-            except requests.exceptions.Timeout:
-                error_content = {"type": "error", "content": "Tempo limite esgotado. O servidor pode estar sobrecarregado. Tente novamente."}
-                st.session_state.messages.append({"role": "assistant", "content": error_content})
-            except requests.exceptions.ConnectionError:
-                error_content = {"type": "error", "content": "Não foi possível conectar ao servidor. Verifique se o backend está rodando."}
-                st.session_state.messages.append({"role": "assistant", "content": error_content})
-            except requests.exceptions.RequestException as e:
-                error_content = {"type": "error", "content": f"Erro na comunicação com o servidor: {str(e)}"}
-                st.session_state.messages.append({"role": "assistant", "content": error_content})
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
         st.rerun()
 
@@ -519,7 +472,6 @@ else:
                     st.caption(f"📝 Pergunta: {user_query}")
 
                 try:
-<<<<<<< HEAD
                     # Verificar se chart_data está em result ou no content diretamente
                     if 'result' in response_data and 'chart_data' in response_data['result']:
                         # Nosso formato personalizado
@@ -609,18 +561,6 @@ else:
                         st.write("🔍 **Análise Detalhada por UNE:**")
                         st.info("💡 **Dica:** Para ver vendas mensais de uma UNE específica, pergunte: 'gráfico de barras do produto [código] na une [número]'")
 
-=======
-                    if isinstance(content, str):
-                        # Se content é string JSON, parse para objeto
-                        chart_data = json.loads(content)
-                    else:
-                        # Se content já é dict, usa diretamente
-                        chart_data = content
-
-                    # Cria figura Plotly a partir do JSON
-                    fig = go.Figure(chart_data)
-                    st.plotly_chart(fig, use_container_width=True)
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                     st.success("✅ Gráfico gerado com sucesso!")
                 except Exception as e:
                     st.error(f"Erro ao renderizar gráfico: {e}")
