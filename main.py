@@ -48,7 +48,9 @@ def startup_event():
     """Inicializa as dependências na inicialização da aplicação."""
     logger.info("Inicializando dependências...")
     current_settings = get_settings()
-    api_key = current_settings.OPENAI_API_KEY if current_settings else os.getenv("OPENAI_API_KEY")
+    # Validar que temos pelo menos uma chave LLM disponível
+    if current_settings and not (current_settings.GEMINI_API_KEY or current_settings.DEEPSEEK_API_KEY):
+        logger.warning("⚠️ Nenhuma chave LLM encontrada. ComponentFactory usará fallback.")
     app.state.llm_adapter = ComponentFactory.get_llm_adapter("gemini")
     app.state.parquet_adapter = ParquetAdapter(file_path="data/parquet/admmat.parquet") # CLOUD-COMPATIBLE PATH - ARQUIVO UNIFICADO
     app.state.code_gen_agent = CodeGenAgent(llm_adapter=app.state.llm_adapter)

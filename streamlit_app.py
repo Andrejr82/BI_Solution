@@ -141,33 +141,38 @@ else:
             return None
 
         try:
-            # Debug 2: Verificar secrets
-            api_key = None
-            secrets_status = "❌ Falhou"
+            # Debug 2: Verificar secrets Gemini/DeepSeek
+            gemini_key = None
+            deepseek_key = None
             try:
-                api_key = st.secrets.get("OPENAI_API_KEY")
-                if api_key and api_key.startswith("sk-"):
-                    secrets_status = "✅ OK"
-                    debug_info.append(f"Secrets OpenAI: OK ({api_key[:10]}...)")
+                gemini_key = st.secrets.get("GEMINI_API_KEY")
+                deepseek_key = st.secrets.get("DEEPSEEK_API_KEY")
+
+                if gemini_key:
+                    debug_info.append(f"Secrets Gemini: OK ({gemini_key[:10]}...)")
                 else:
-                    debug_info.append(f"Secrets OpenAI: Inválida")
+                    debug_info.append("Secrets Gemini: Não encontrada")
+
+                if deepseek_key:
+                    debug_info.append(f"Secrets DeepSeek: OK ({deepseek_key[:10]}...)")
+                else:
+                    debug_info.append("Secrets DeepSeek: Não encontrada")
             except Exception as e:
                 debug_info.append(f"Secrets erro: {e}")
 
             # Debug 3: Fallback para settings
-            if not api_key or not api_key.startswith("sk-"):
+            if not gemini_key and not deepseek_key:
                 try:
                     current_settings = get_settings()
                     if current_settings:
-                        api_key = current_settings.OPENAI_API_KEY.get_secret_value()
-                    else:
-                        api_key = None
-                    debug_info.append(f"Settings OpenAI: OK")
+                        gemini_key = current_settings.GEMINI_API_KEY
+                        deepseek_key = current_settings.DEEPSEEK_API_KEY
+                        debug_info.append("Settings: Carregadas com sucesso")
                 except Exception as e:
                     debug_info.append(f"Settings erro: {e}")
 
-            if not api_key or not api_key.startswith("sk-"):
-                raise ValueError("OPENAI_API_KEY não encontrada em secrets nem settings")
+            if not gemini_key and not deepseek_key:
+                raise ValueError("Nenhuma chave LLM (Gemini/DeepSeek) encontrada em secrets ou settings")
 
             # Debug 4: Inicializar LLM
             debug_info.append("Inicializando LLM...")
