@@ -15,7 +15,6 @@ from typing import Any, Dict, Optional
 
 # Importa outros componentes conforme necessário
 try:
-<<<<<<< HEAD
     from core.llm_adapter import GeminiLLMAdapter, DeepSeekLLMAdapter
     from core.config.safe_settings import get_safe_settings
     LLM_AVAILABLE = True
@@ -27,8 +26,6 @@ except Exception as e:
     LLM_AVAILABLE = False
 
 try:
-=======
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     from core.mcp.context7_adapter import Context7MCPAdapter
     from core.mcp.sqlserver_adapter import SQLServerMCPAdapter
 
@@ -191,10 +188,7 @@ class WebServer:
 
 # --- FIM: WebServer ---
 
-<<<<<<< HEAD
 # Forçando o redeploy em 2025-10-01
-=======
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 class ComponentFactory:
     """Fábrica para criar e gerenciar componentes do sistema"""
@@ -234,7 +228,6 @@ class ComponentFactory:
 
         return cls._components[adapter_key]
 
-<<<<<<< HEAD
     # Flag para controlar o fallback do Gemini
     _gemini_unavailable = False
 
@@ -307,8 +300,6 @@ class ComponentFactory:
             return True
         return False
 
-=======
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     @classmethod
     def get_product_agent(cls) -> Optional[Any]:
         """Obtém uma instância do agente de produtos

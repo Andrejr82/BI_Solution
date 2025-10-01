@@ -5,7 +5,6 @@
 import streamlit as st
 import time
 import logging
-<<<<<<< HEAD
 
 audit_logger = logging.getLogger("audit")
 
@@ -66,20 +65,6 @@ def login():
     # Inicializar sistema de autenticação de forma lazy
     init_auth_system()
 
-=======
-from core.database import sql_server_auth_db as auth_db
-
-audit_logger = logging.getLogger("audit")
-
-# Inicializar banco de usuários ao iniciar app
-if "db_inicializado" not in st.session_state:
-    auth_db.init_db()
-    st.session_state["db_inicializado"] = True
-
-
-# --- Login integrado ao backend SQLite ---
-def login():
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     # Coloca o formulário de login em uma coluna centralizada para melhor apelo visual
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
@@ -87,11 +72,7 @@ def login():
             """
             <div style='text-align:center;'>
                 <img src='https://raw.githubusercontent.com/github/explore/main/topics/business-intelligence/business-intelligence.png' width='150'>
-<<<<<<< HEAD
                 <h2>Caçulinha BI</h2>
-=======
-                <h2>Agent Business</h2>
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
                 <p style='color:#666;'>Acesse com seu usuário e senha para continuar.</p>
             </div>
             """,
@@ -116,7 +97,6 @@ def login():
                     st.rerun()
                     return
 
-<<<<<<< HEAD
                 # Verificar autenticação baseada no modo
                 auth_mode = st.session_state.get("auth_mode", "sql_server")
 
@@ -159,26 +139,6 @@ def login():
                     else:
                         audit_logger.warning(f"Tentativa de login falha para o usuário: {username} (Cloud)")
                         st.error("Usuário ou senha inválidos.")
-=======
-                role, erro = auth_db.autenticar_usuario(username, password)
-                if role:
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = username
-                    st.session_state["role"] = role
-                    st.session_state["ultimo_login"] = time.time()
-                    audit_logger.info(f"Usuário {username} logado com sucesso. Papel: {role}")
-                    st.success(f"Bem-vindo, {username}! Redirecionando...")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    audit_logger.warning(f"Tentativa de login falha para o usuário: {username}. Erro: {erro or 'Usuário ou senha inválidos.'}")
-                    if erro and "bloqueado" in erro:
-                        st.error(f"{erro} Contate o administrador.")
-                    elif erro and "Tentativas restantes" in erro:
-                        st.warning(erro)
-                    else:
-                        st.error(erro or "Usuário ou senha inválidos.")
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 
 # --- Expiração automática de sessão ---
@@ -186,7 +146,6 @@ def sessao_expirada():
     if not st.session_state.get("ultimo_login"):
         return True
     tempo = time.time() - st.session_state["ultimo_login"]
-<<<<<<< HEAD
 
     # Usar timeout baseado no modo de autenticação
     auth_mode = st.session_state.get("auth_mode", "sql_server")
@@ -200,6 +159,3 @@ def sessao_expirada():
         timeout_minutes = 240  # 4 horas para modo cloud
 
     return tempo > 60 * timeout_minutes
-=======
-    return tempo > 60 * auth_db.SESSAO_MINUTOS
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
