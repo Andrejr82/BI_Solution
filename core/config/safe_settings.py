@@ -14,8 +14,8 @@ class SafeSettings:
     """
 
     def __init__(self):
-        # Configurações básicas - sempre funcionam
-        self.OPENAI_API_KEY = self._get_openai_key()
+        self.GEMINI_API_KEY = self._get_gemini_key()
+        self.DEEPSEEK_API_KEY = self._get_deepseek_key()
         self.LLM_MODEL_NAME = self._get_llm_model()
 
         # Configurações de banco (opcionais)
@@ -26,18 +26,25 @@ class SafeSettings:
         self.DB_DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")
         self.DB_TRUST_SERVER_CERTIFICATE = os.getenv("DB_TRUST_SERVER_CERTIFICATE", "yes")
 
-    def _get_openai_key(self):
-        """Obtém chave OpenAI de forma segura"""
-        # Tentar Streamlit secrets primeiro
+    def _get_gemini_key(self):
+        """Obtém chave Gemini de forma segura"""
         try:
             import streamlit as st
-            if hasattr(st, 'secrets') and "OPENAI_API_KEY" in st.secrets:
-                return st.secrets["OPENAI_API_KEY"]
+            if hasattr(st, 'secrets') and "GEMINI_API_KEY" in st.secrets:
+                return st.secrets["GEMINI_API_KEY"]
         except:
             pass
+        return os.getenv("GEMINI_API_KEY", "")
 
-        # Fallback para env
-        return os.getenv("OPENAI_API_KEY", "")
+    def _get_deepseek_key(self):
+        """Obtém chave DeepSeek de forma segura"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and "DEEPSEEK_API_KEY" in st.secrets:
+                return st.secrets["DEEPSEEK_API_KEY"]
+        except:
+            pass
+        return os.getenv("DEEPSEEK_API_KEY", "")
 
     def _get_llm_model(self):
         """Obtém modelo LLM"""
