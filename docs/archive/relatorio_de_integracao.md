@@ -16,4 +16,8 @@ O sistema está agora mais coeso e com menos código redundante. A próxima etap
 1.  **Melhorar a extração de filtros:** Aprimorar o prompt enviado ao LLM para extrair filtros mais complexos (e.g., com operadores como '>', '<', '!=') e de múltiplas colunas simultaneamente.
 2.  **Expandir as capacidades de geração de gráficos:** Adicionar suporte para mais tipos de gráficos e permitir que o usuário especifique o tipo de gráfico desejado na consulta.
 3.  **Otimizar o carregamento de dados:** Implementar um cache para os DataFrames Parquet para acelerar consultas repetidas.
+<<<<<<< HEAD
 4.  **Adicionar testes de unidade:** Criar testes para os agentes e o processador de consultas para garantir a robustez e a qualidade do código.
+=======
+4.  **Adicionar testes de unidade:** Criar testes para os agentes e o processador de consultas para garantir a robustez e a qualidade do código.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

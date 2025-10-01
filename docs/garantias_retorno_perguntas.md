@@ -238,4 +238,8 @@ python tests/test_interface_flow.py
 4. **🧪 Testadas** automaticamente
 5. **🛡️ Recuperáveis** em caso de falhas
 
+<<<<<<< HEAD
 **O sistema agora garante 100% de preservação e exibição das perguntas dos usuários!**
+=======
+**O sistema agora garante 100% de preservação e exibição das perguntas dos usuários!**
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

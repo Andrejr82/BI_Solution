@@ -97,4 +97,8 @@ def show_catalog_manager():
         st.info("Adicione uma fonte de dados primeiro para poder editá-la.")
 
 # Call the function to display the page
+<<<<<<< HEAD
 show_catalog_manager()
+=======
+show_catalog_manager()
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

@@ -86,4 +86,8 @@
     - Modifique a classe existente em `core/llm_adapter.py` para que ela herde de `BaseLLMAdapter`.
     - Atualize o arquivo `core/query_processor.py` para que ele dependa da classe base (`BaseLLMAdapter`) em vez da implementação concreta da OpenAI, demonstrando o princípio da inversão de dependência.
 
+<<<<<<< HEAD
 Por favor, gere a estrutura de arquivos atualizada e o conteúdo dos arquivos modificados ou criados.
+=======
+Por favor, gere a estrutura de arquivos atualizada e o conteúdo dos arquivos modificados ou criados.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

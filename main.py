@@ -3,7 +3,10 @@ API Gateway (Backend) para o Agent_BI usando FastAPI.
 """
 import uvicorn
 import logging
+<<<<<<< HEAD
 import os
+=======
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
@@ -11,12 +14,20 @@ from langchain_core.messages import HumanMessage
 
 # Importações dos componentes da nova arquitetura
 from core.graph.graph_builder import GraphBuilder
+<<<<<<< HEAD
 # Settings importadas com lazy loading
 from core.config.logging_config import setup_logging
 from core.factory.component_factory import ComponentFactory
 from core.connectivity.parquet_adapter import ParquetAdapter # CORRECTED IMPORT
 from core.agents.code_gen_agent import CodeGenAgent
 from core.utils.correlation import set_correlation_id, log_with_correlation
+=======
+from core.config.settings import settings
+from core.config.logging_config import setup_logging
+from core.llm_adapter import OpenAILLMAdapter
+from core.connectivity.parquet_adapter import ParquetAdapter # CORRECTED IMPORT
+from core.agents.code_gen_agent import CodeGenAgent
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 # Configuração de logging
 setup_logging()
@@ -35,6 +46,7 @@ app = FastAPI(
     version="3.0.0"
 )
 
+<<<<<<< HEAD
 def get_settings():
     """Obtém settings de forma lazy"""
     try:
@@ -43,16 +55,23 @@ def get_settings():
     except Exception:
         return None
 
+=======
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 @app.on_event("startup")
 def startup_event():
     """Inicializa as dependências na inicialização da aplicação."""
     logger.info("Inicializando dependências...")
+<<<<<<< HEAD
     current_settings = get_settings()
     # Validar que temos pelo menos uma chave LLM disponível
     if current_settings and not (current_settings.GEMINI_API_KEY or current_settings.DEEPSEEK_API_KEY):
         logger.warning("⚠️ Nenhuma chave LLM encontrada. ComponentFactory usará fallback.")
     app.state.llm_adapter = ComponentFactory.get_llm_adapter("gemini")
     app.state.parquet_adapter = ParquetAdapter(file_path="data/parquet/admmat.parquet") # CLOUD-COMPATIBLE PATH - ARQUIVO UNIFICADO
+=======
+    app.state.llm_adapter = OpenAILLMAdapter(api_key=settings.OPENAI_API_KEY.get_secret_value())
+    app.state.parquet_adapter = ParquetAdapter(file_path="C:\\Users\\André\\Documents\\Agent_BI\\data\\parquet\\admatao.parquet") # CORRECTED INSTANTIATION
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
     app.state.code_gen_agent = CodeGenAgent(llm_adapter=app.state.llm_adapter)
     graph_builder = GraphBuilder(
         llm_adapter=app.state.llm_adapter,
@@ -69,11 +88,16 @@ async def handle_query(request: QueryRequest):
     Endpoint principal que recebe a consulta do utilizador, invoca o grafo
     e retorna a resposta final.
     """
+<<<<<<< HEAD
     # Set correlation ID for request tracking
     corr_id = set_correlation_id()
 
     log_with_correlation(logger, 'info', f"API REQUEST - Session: {request.session_id} | Query: '{request.user_query}'")
     log_with_correlation(interaction_logger, 'info', f"USER_QUERY (session: {request.session_id}): {request.user_query}")
+=======
+    logger.info(f"📝 API REQUEST - Session: {request.session_id} | Query: '{request.user_query}'")
+    interaction_logger.info(f"USER_QUERY (session: {request.session_id}): {request.user_query}")
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
     try:
         initial_state = {"messages": [HumanMessage(content=request.user_query)]}

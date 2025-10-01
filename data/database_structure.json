@@ -204,4 +204,8 @@
     "get_top_selling_products": "SELECT TOP 10 CÓDIGO as codigo, NOME as nome, [VEND# QTD 30D] as vendas_30d, [PREÇO 38%] as preco FROM dbo.Admat_OPCOM ORDER BY [VEND# QTD 30D] DESC",
     "get_product_sales_history": "SELECT CÓDIGO as codigo, NOME as nome, [mai-23] as mai23, [jun-23] as jun23, [jul-23] as jul23, [ago-23] as ago23, [set-23] as set23, [out-23] as out23, [nov-23] as nov23, [dez-23] as dez23, [jan-24] as jan24, [fev-24] as fev24, [mar-24] as mar24, [abr-24] as abr24, [mai/24] as mai24 FROM dbo.Admat_OPCOM WHERE CÓDIGO = ?"
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

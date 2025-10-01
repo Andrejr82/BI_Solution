@@ -56,4 +56,8 @@ Com base no `manifesto_arquitetura_alvo.md` fornecido abaixo, gere o conteúdo d
 ---
 
 ### 5. FORMATO DE SAÍDA DESEJADO
+<<<<<<< HEAD
 Gere um único bloco de código PowerShell contendo o script `cleanup_project.ps1` completo. Não inclua nenhum outro texto ou explicação fora do bloco de código.
+=======
+Gere um único bloco de código PowerShell contendo o script `cleanup_project.ps1` completo. Não inclua nenhum outro texto ou explicação fora do bloco de código.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

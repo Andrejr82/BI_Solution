@@ -2742,4 +2742,8 @@ def test_graph_routes_to_query_node(
 --- C:\Users\André\Documents\Agent_BI\ui\__init__.py ---
 
 5. FORMATO DE SAÍDA DESEJADO
+<<<<<<< HEAD
 Gere a sua resposta como um único documento Markdown, bem formatado, seguindo a estrutura de Zonas Funcionais definida na "Tarefa Específica". Use tabelas, títulos e listas para garantir a clareza e o profissionalismo do documento.
+=======
+Gere a sua resposta como um único documento Markdown, bem formatado, seguindo a estrutura de Zonas Funcionais definida na "Tarefa Específica". Use tabelas, títulos e listas para garantir a clareza e o profissionalismo do documento.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

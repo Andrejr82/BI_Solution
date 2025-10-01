@@ -6,8 +6,13 @@ from langchain_core.tools import tool
 import logging
 
 # Caminho para o arquivo Parquet agora aponta para a nova fonte de dados
+<<<<<<< HEAD
 PARQUET_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'parquet')
 ADMATAO_PATH = os.path.join(PARQUET_DIR, 'admmat.parquet')
+=======
+PARQUET_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'parquet_cleaned')
+ADMATAO_PATH = os.path.join(PARQUET_DIR, 'admatao.parquet')
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
 
 @tool
 def get_product_data(product_code: str) -> Dict[str, Any]:
@@ -138,4 +143,8 @@ sql_tools = [
     get_product_stock_rupture,
     list_product_categories,
     get_last_sale_date,
+<<<<<<< HEAD
 ]
+=======
+]
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

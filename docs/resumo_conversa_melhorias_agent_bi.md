@@ -384,4 +384,8 @@ Resultado: Gráfico temporal com 12 meses ✅
 - ✅ **Dados**: 1.113.822 registros, 95 colunas - Otimizados
 - ✅ **Queries**: Tempo médio <30s - Memória controlada
 
+<<<<<<< HEAD
 **🎉 O Agent_BI está agora totalmente operacional e pronto para análises avançadas de dados de negócios!**
+=======
+**🎉 O Agent_BI está agora totalmente operacional e pronto para análises avançadas de dados de negócios!**
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

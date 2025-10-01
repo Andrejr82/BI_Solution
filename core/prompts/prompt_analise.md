@@ -18,4 +18,8 @@ Tom: Manter um tom formal e técnico ao longo de toda a análise.
 
 Restrições: Garantir que a análise seja detalhada, mas concisa, idealmente entre 800 e 1000 palavras. Fornecer recomendações com base nas melhores práticas em desenvolvimento de software e design de experiência do usuário.
 
+<<<<<<< HEAD
 Exemplo: Ao se referir ao "Assistente de BI Conversacional", explicar como este recurso utiliza o processamento de linguagem natural para melhorar a acessibilidade dos dados para usuários sem conhecimentos técnicos.
+=======
+Exemplo: Ao se referir ao "Assistente de BI Conversacional", explicar como este recurso utiliza o processamento de linguagem natural para melhorar a acessibilidade dos dados para usuários sem conhecimentos técnicos.
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

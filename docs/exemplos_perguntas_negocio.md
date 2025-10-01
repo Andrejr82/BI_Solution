@@ -188,4 +188,8 @@
 
 ---
 
+<<<<<<< HEAD
 *Estes exemplos cobrem as principais necessidades de análise de negócios baseadas na estrutura rica de dados disponível no arquivo `admmatao.parquet`.*
+=======
+*Estes exemplos cobrem as principais necessidades de análise de negócios baseadas na estrutura rica de dados disponível no arquivo `admmatao.parquet`.*
+>>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399
