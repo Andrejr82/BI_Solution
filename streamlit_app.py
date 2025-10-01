@@ -216,6 +216,13 @@ else:
             parquet_adapter = ParquetAdapter(file_path=parquet_path)
             debug_info.append(f"✅ Parquet OK ({len(df_test):,} produtos, {df_test['une_nome'].nunique()} UNEs)")
 
+            # Mostrar UNEs disponíveis no sidebar para o usuário
+            with st.sidebar:
+                st.info(f"**📊 Dataset Carregado**\n\n"
+                       f"- {len(df_test):,} produtos\n"
+                       f"- {df_test['une_nome'].nunique()} UNEs\n\n"
+                       f"**UNEs disponíveis:** {', '.join(sorted(df_test['une_nome'].unique()))}")
+
             # Debug 6: Inicializar CodeGen
             debug_info.append("Inicializando CodeGen...")
             code_gen_agent = CodeGenAgent(llm_adapter=llm_adapter)
@@ -360,6 +367,16 @@ else:
                 # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
                 result_type = direct_result.get("type") if direct_result else None
 
+                # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine
+                with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
+                    st.write(f"**Result Type:** {result_type}")
+                    st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
+                    st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
+                    st.write(f"**Has Result:** {'result' in direct_result}")
+                    if 'result' in direct_result:
+                        result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
+                        st.write(f"**Result Keys:** {result_keys}")
+
                 # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
                 if result_type == "error":
                     # Mostrar erro do DirectQueryEngine ao usuário
@@ -389,6 +406,7 @@ else:
                 else:
                     # FALLBACK: Usar o agent_graph
                     st.write("🔄 DirectQueryEngine não processou, usando fallback agent_graph...")
+                    st.warning(f"⚠️ Motivo do fallback: result_type={result_type}")
                     if not backend_components or not backend_components.get("agent_graph"):
                         # Caso de fallback onde o grafo não está disponível
                         agent_response = {
