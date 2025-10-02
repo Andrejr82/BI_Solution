@@ -2,8 +2,6 @@ import streamlit as st
 import json
 import os
 import pandas as pd
-import pandas as pd
-from core.session_state import SESSION_STATE_KEYS
 
 CATALOG_PATH = "data/catalog_focused.json"
 
@@ -21,7 +19,7 @@ def show_catalog_manager():
     st.markdown("<h1>⚙️ Gerenciar Catálogo de Dados</h1>", unsafe_allow_html=True)
 
     # Admin check
-    if st.session_state.get(SESSION_STATE_KEYS["ROLE"]) != "admin":
+    if st.session_state.get("role") != "admin":
         st.warning("Você não tem permissão para acessar esta página.")
         st.stop()
 

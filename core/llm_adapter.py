@@ -7,17 +7,18 @@ logger = logging.getLogger(__name__)
 class GeminiLLMAdapter:
     def __init__(self, api_key: str, model_name: str, enable_cache: bool = True):
         """
-        Inicializa o cliente para um modelo compatível com a API OpenAI (como o Gemini via proxy/serviço compatível).
+        Inicializa o cliente Gemini usando OpenAI SDK com base_url customizada.
+        Gemini 2.5 Flash suporta interface compatível com OpenAI.
         """
         if not api_key:
             raise ValueError("A chave da API do Gemini não foi fornecida.")
-        
-        # A URL base pode precisar ser ajustada dependendo de como você acessa a API do Gemini
-        # Exemplo para um proxy local ou serviço como litellm: "http://localhost:8000"
-        # Para APIs que mimetizam a OpenAI, você pode precisar de uma base_url.
-        # Se a biblioteca do Gemini for usada diretamente, a inicialização será diferente.
-        # Por simplicidade, vamos assumir uma interface compatível com OpenAI.
-        self.client = OpenAI(api_key=api_key) 
+
+        # ✅ FIX CRÍTICO: Usar base_url do Gemini, não da OpenAI
+        # Gemini API endpoint compatível com OpenAI
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
         self.model_name = model_name
 
         self.cache_enabled = enable_cache

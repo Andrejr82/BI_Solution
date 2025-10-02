@@ -269,6 +269,52 @@ def redefinir_senha(username, nova_senha):
         logger.error(f"Erro ao redefinir senha: {e}")
         raise
 
+def get_all_users():
+    """Retorna lista de todos os usuários (admin only)"""
+    if not is_database_configured():
+        # Retornar usuários locais
+        return [
+            {
+                "username": username,
+                "role": user_data["role"],
+                "ativo": user_data["ativo"],
+                "ultimo_login": user_data["ultimo_login"]
+            }
+            for username, user_data in _local_users.items()
+        ]
+
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            logger.warning("⚠️ Banco indisponível - retornando usuários locais")
+            return [
+                {
+                    "username": username,
+                    "role": user_data["role"],
+                    "ativo": user_data["ativo"],
+                    "ultimo_login": user_data["ultimo_login"]
+                }
+                for username, user_data in _local_users.items()
+            ]
+
+        with conn:
+            result = conn.execute(
+                text("SELECT username, role, ativo, ultimo_login FROM usuarios ORDER BY username")
+            ).fetchall()
+
+            users = []
+            for row in result:
+                users.append({
+                    "username": row[0],
+                    "role": row[1],
+                    "ativo": bool(row[2]),
+                    "ultimo_login": row[3]
+                })
+            return users
+    except Exception as e:
+        logger.error(f"Erro ao buscar usuários: {e}")
+        return []
+
 def sessao_expirada(ultimo_login):
     if not ultimo_login:
         return True
