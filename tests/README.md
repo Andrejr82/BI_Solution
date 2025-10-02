@@ -6,9 +6,10 @@ Esta pasta contém todos os testes automatizados do Agent_Solution_BI.
 
 ```
 tests/
+├── pytest.ini                 # Configuração do pytest
 ├── test_llm_fix.py           # Testes de LLM adapters
 ├── test_une_query.py          # Testes de queries UNE
-├── unit/                      # Testes unitários (pytest)
+├── unit/                      # Testes unitários (pytest existentes)
 ├── integration/               # Testes de integração (futuro)
 └── fixtures/                  # Dados de teste (futuro)
 ```
@@ -72,12 +73,20 @@ python tests/test_une_query.py
 
 ### Testes Unitários (pytest)
 ```bash
-# Executar testes unitários
+# Executar da raiz do projeto
+pytest
+
+# Executar pasta específica
 pytest tests/unit/
 
 # Com cobertura
-pytest tests/unit/ --cov=core --cov-report=html
+pytest --cov=core --cov-report=html
+
+# Verbose
+pytest -v
 ```
+
+**NOTA:** `pytest.ini` está em `tests/pytest.ini` mas pytest encontra automaticamente.
 
 ---
 
