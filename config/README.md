@@ -2,6 +2,18 @@
 
 Esta pasta contém templates e arquivos de configuração para diferentes ambientes.
 
+## 📁 Estrutura
+
+```
+config/
+├── streamlit_secrets.toml  # Template de secrets
+├── runtime.txt             # Versão Python
+├── database/               # Configurações de banco de dados
+│   ├── alembic.ini        # Config Alembic (migrations)
+│   └── migrations/         # Database migrations
+└── README.md
+```
+
 ## 📄 Arquivos
 
 ### streamlit_secrets.toml
@@ -47,6 +59,33 @@ python-3.11.9
 - Compatibilidade com todas as dependências
 - Melhor performance que 3.10
 - Estável no Streamlit Cloud
+
+---
+
+### database/alembic.ini
+**Propósito:** Configuração do Alembic para migrations de banco de dados SQL Server.
+
+**Uso:** (Opcional - apenas se usar SQL Server)
+```bash
+cd config/database
+alembic upgrade head
+```
+
+⚠️ **NOTA:** O sistema funciona SEM SQL Server (modo local com usuários em memória).
+
+---
+
+### database/migrations/
+**Propósito:** Database migrations para criar tabelas de usuários no SQL Server.
+
+**Migrations disponíveis:**
+- `d4f68a172d44_create_user_table.py` - Cria tabela `usuarios`
+
+**Como aplicar:**
+```bash
+cd config/database
+alembic upgrade head
+```
 
 ---
 
