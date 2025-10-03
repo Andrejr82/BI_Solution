@@ -18,13 +18,13 @@ class SafeSettings:
         self.DEEPSEEK_API_KEY = self._get_deepseek_key()
         self.LLM_MODEL_NAME = self._get_llm_model()
 
-        # Configurações de banco (opcionais)
-        self.DB_SERVER = os.getenv("DB_SERVER", "")
-        self.DB_NAME = os.getenv("DB_NAME", "")
-        self.DB_USER = os.getenv("DB_USER", "")
-        self.DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-        self.DB_DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")
-        self.DB_TRUST_SERVER_CERTIFICATE = os.getenv("DB_TRUST_SERVER_CERTIFICATE", "yes")
+        # Configurações de banco (opcionais) - Streamlit Cloud ou .env
+        self.DB_SERVER = self._get_secret_or_env("DB_SERVER", "")
+        self.DB_NAME = self._get_secret_or_env("DB_NAME", "")
+        self.DB_USER = self._get_secret_or_env("DB_USER", "")
+        self.DB_PASSWORD = self._get_secret_or_env("DB_PASSWORD", "")
+        self.DB_DRIVER = self._get_secret_or_env("DB_DRIVER", "ODBC Driver 17 for SQL Server")
+        self.DB_TRUST_SERVER_CERTIFICATE = self._get_secret_or_env("DB_TRUST_SERVER_CERTIFICATE", "yes")
 
     def _get_gemini_key(self):
         """Obtém chave Gemini de forma segura"""
@@ -56,6 +56,19 @@ class SafeSettings:
             pass
 
         return os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
+
+    def _get_secret_or_env(self, key, default=""):
+        """Obtém valor de Streamlit secrets ou variável de ambiente"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and key in st.secrets:
+                value = st.secrets[key]
+                if value:  # Só retorna se não for vazio
+                    return value
+        except:
+            pass
+
+        return os.getenv(key, default)
 
     def get_sql_connection_string(self):
         """Gera string de conexão SQL se disponível"""

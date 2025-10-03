@@ -33,12 +33,13 @@ class DirectQueryEngine:
         self.query_cache = {}
         self.templates = self._load_query_templates()
         self.keywords_map = self._build_keywords_map()
+        self.patterns = self._load_query_patterns()  # 🆕 Carregar padrões treináveis
 
         # Cache de dados frequentes
         self._cached_data = {}
         self._cache_timestamp = None
 
-        logger.info("DirectQueryEngine inicializado - ZERO LLM tokens usados")
+        logger.info(f"DirectQueryEngine inicializado - {len(self.patterns)} padrões carregados - ZERO LLM tokens")
 
     def _load_query_templates(self) -> Dict[str, Any]:
         """Carrega templates de consultas pré-definidas."""
@@ -74,6 +75,20 @@ class DirectQueryEngine:
                 }
             }
         }
+
+    def _load_query_patterns(self) -> List[Dict[str, Any]]:
+        """Carrega padrões de perguntas do arquivo JSON."""
+        patterns_path = Path("data/query_patterns_training.json")
+
+        if patterns_path.exists():
+            try:
+                with open(patterns_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get("patterns", [])
+            except Exception as e:
+                logger.warning(f"Erro ao carregar padrões: {e}")
+
+        return []
 
     def _build_keywords_map(self) -> Dict[str, str]:
         """Mapeia palavras-chave para queries diretas - SEM LLM."""
@@ -188,6 +203,20 @@ class DirectQueryEngine:
 
         try:
             query_lower = user_query.lower()
+
+            # 🆕 PRIORIDADE MÁXIMA: Testar padrões treináveis primeiro
+            for pattern in self.patterns:
+                match = re.search(pattern["regex"], query_lower, re.IGNORECASE)
+                if match:
+                    params = {}
+                    # Extrair parâmetros do regex
+                    for key, group_expr in pattern.get("extract", {}).items():
+                        group_num = int(group_expr.replace("group(", "").replace(")", ""))
+                        params[key] = match.group(group_num)
+
+                    query_type = pattern["id"]
+                    logger.info(f"✅ PADRÃO MATCH: {pattern['name']} → {query_type} com params: {params}")
+                    return (query_type, params)
 
             # ALTA PRIORIDADE: Detectar consultas de PREÇO de produto em UNE específica
             preco_produto_une_match = re.search(r'(pre[çc]o|valor|custo).*produto\s*(\d{5,7}).*une\s*([A-Za-z0-9]+)', query_lower)

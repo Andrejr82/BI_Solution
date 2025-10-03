@@ -7,6 +7,7 @@ import streamlit as st
 import uuid
 import pandas as pd
 import logging
+from datetime import datetime
 
 # Funções de autenticação com lazy loading
 AUTH_AVAILABLE = None
@@ -49,18 +50,42 @@ def sessao_expirada():
     else:
         return False
 
-# Importações do backend para integração direta - TESTE INDIVIDUAL
+# ⚡ LAZY LOADING: Importações do backend só quando necessário
+BACKEND_MODULES = {}
 import_errors = []
-BACKEND_AVAILABLE = True
 
-# Teste cada import individualmente para melhor diagnóstico
-try:
-    from core.graph.graph_builder import GraphBuilder
-except Exception as e:
-    import_errors.append(f"GraphBuilder: {e}")
-    BACKEND_AVAILABLE = False
+def get_backend_module(module_name):
+    """Carrega módulos do backend sob demanda (lazy loading)"""
+    if module_name in BACKEND_MODULES:
+        return BACKEND_MODULES[module_name]
 
-# Settings importadas via lazy loading - não na inicialização
+    try:
+        if module_name == "GraphBuilder":
+            from core.graph.graph_builder import GraphBuilder
+            BACKEND_MODULES[module_name] = GraphBuilder
+        elif module_name == "ComponentFactory":
+            from core.factory.component_factory import ComponentFactory
+            BACKEND_MODULES[module_name] = ComponentFactory
+        elif module_name == "ParquetAdapter":
+            from core.connectivity.parquet_adapter import ParquetAdapter
+            BACKEND_MODULES[module_name] = ParquetAdapter
+        elif module_name == "CodeGenAgent":
+            from core.agents.code_gen_agent import CodeGenAgent
+            BACKEND_MODULES[module_name] = CodeGenAgent
+        elif module_name == "HumanMessage":
+            from langchain_core.messages import HumanMessage
+            BACKEND_MODULES[module_name] = HumanMessage
+        elif module_name == "QueryHistory":
+            from core.utils.query_history import QueryHistory
+            BACKEND_MODULES[module_name] = QueryHistory
+
+        return BACKEND_MODULES[module_name]
+    except Exception as e:
+        import_errors.append(f"{module_name}: {e}")
+        logging.error(f"Erro ao carregar {module_name}: {e}")
+        return None
+
+# Settings com lazy loading
 settings = None
 
 def get_settings():
@@ -75,41 +100,6 @@ def get_settings():
             settings = None
     return settings
 
-try:
-    from core.factory.component_factory import ComponentFactory
-except Exception as e:
-    import_errors.append(f"OpenAILLMAdapter: {e}")
-    BACKEND_AVAILABLE = False
-
-try:
-    from core.connectivity.parquet_adapter import ParquetAdapter
-except Exception as e:
-    import_errors.append(f"ParquetAdapter: {e}")
-    BACKEND_AVAILABLE = False
-
-try:
-    from core.agents.code_gen_agent import CodeGenAgent
-except Exception as e:
-    import_errors.append(f"CodeGenAgent: {e}")
-    BACKEND_AVAILABLE = False
-
-try:
-    from langchain_core.messages import HumanMessage
-except Exception as e:
-    import_errors.append(f"LangChain: {e}")
-    BACKEND_AVAILABLE = False
-
-try:
-    from core.utils.query_history import QueryHistory
-except Exception as e:
-    import_errors.append(f"QueryHistory: {e}")
-    BACKEND_AVAILABLE = False
-
-if import_errors:
-    logging.warning(f"Erros de import detectados: {import_errors}")
-else:
-    logging.info("Todos os imports do backend foram bem-sucedidos")
-
 # --- Autenticação ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -123,24 +113,31 @@ else:
     st.title("📊 Agent_BI - Assistente Inteligente")
 
     # --- Inicialização do Backend Integrado ---
-    @st.cache_resource
+    @st.cache_resource(show_spinner="🚀 Inicializando backend...")
     def initialize_backend():
         """Inicializa os componentes do backend uma única vez"""
         debug_info = []
 
-        # Debug 1: Verificar imports
-        debug_info.append(f"BACKEND_AVAILABLE: {BACKEND_AVAILABLE}")
-        if not BACKEND_AVAILABLE:
-            with st.sidebar:
-                st.error("❌ Imports do backend falharam")
-                st.write("**Erros específicos:**")
-                for error in import_errors:
-                    st.code(error)
-                st.write("**Possíveis soluções:**")
-                st.info("1. Verificar requirements.txt\n2. Reinstalar dependências\n3. Verificar Python path")
-            return None
-
         try:
+            # ⚡ Carregar módulos sob demanda
+            GraphBuilder = get_backend_module("GraphBuilder")
+            ComponentFactory = get_backend_module("ComponentFactory")
+            ParquetAdapter = get_backend_module("ParquetAdapter")
+            CodeGenAgent = get_backend_module("CodeGenAgent")
+            HumanMessage = get_backend_module("HumanMessage")
+            QueryHistory = get_backend_module("QueryHistory")
+
+            # Verificar se módulos críticos foram carregados
+            if not all([GraphBuilder, ComponentFactory, ParquetAdapter]):
+                with st.sidebar:
+                    st.error("❌ Módulos críticos do backend não disponíveis")
+                    if import_errors:
+                        st.write("**Erros:**")
+                        for error in import_errors:
+                            st.code(error)
+                return None
+
+            debug_info.append("✅ Módulos carregados com lazy loading")
             # Debug 2: Verificar secrets de LLM (Gemini ou DeepSeek)
             gemini_key = None
             deepseek_key = None
@@ -216,12 +213,14 @@ else:
             parquet_adapter = ParquetAdapter(file_path=parquet_path)
             debug_info.append(f"✅ Parquet OK ({len(df_test):,} produtos, {df_test['une_nome'].nunique()} UNEs)")
 
-            # Mostrar UNEs disponíveis no sidebar para o usuário
-            with st.sidebar:
-                st.info(f"**📊 Dataset Carregado**\n\n"
-                       f"- {len(df_test):,} produtos\n"
-                       f"- {df_test['une_nome'].nunique()} UNEs\n\n"
-                       f"**UNEs disponíveis:** {', '.join(sorted(df_test['une_nome'].unique()))}")
+            # Mostrar UNEs disponíveis no sidebar APENAS para admins
+            user_role = st.session_state.get('role', '')
+            if user_role == 'admin':
+                with st.sidebar:
+                    st.info(f"**📊 Dataset Carregado**\n\n"
+                           f"- {len(df_test):,} produtos\n"
+                           f"- {df_test['une_nome'].nunique()} UNEs\n\n"
+                           f"**UNEs disponíveis:** {', '.join(sorted(df_test['une_nome'].unique()))}")
 
             # Debug 6: Inicializar CodeGen
             debug_info.append("Inicializando CodeGen...")
@@ -356,9 +355,12 @@ else:
         with st.spinner("O agente está a pensar..."):
             try:
                 # 🚀 PRIORIDADE: Tentar DirectQueryEngine primeiro (mais rápido e eficiente)
-                # Tentar usar o DirectQueryEngine primeiro
-                from core.business_intelligence.direct_query_engine import DirectQueryEngine
-                from core.connectivity.parquet_adapter import ParquetAdapter
+                # ⚡ Importações sob demanda
+                DirectQueryEngine = get_backend_module("DirectQueryEngine")
+                if not DirectQueryEngine:
+                    from core.business_intelligence.direct_query_engine import DirectQueryEngine
+
+                ParquetAdapter = get_backend_module("ParquetAdapter")
 
                 adapter = ParquetAdapter('data/parquet/admmat.parquet')
                 engine = DirectQueryEngine(adapter)
@@ -367,15 +369,17 @@ else:
                 # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
                 result_type = direct_result.get("type") if direct_result else None
 
-                # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine
-                with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
-                    st.write(f"**Result Type:** {result_type}")
-                    st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
-                    st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
-                    st.write(f"**Has Result:** {'result' in direct_result}")
-                    if 'result' in direct_result:
-                        result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
-                        st.write(f"**Result Keys:** {result_keys}")
+                # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine (apenas para admins)
+                user_role = st.session_state.get('role', '')
+                if user_role == 'admin':
+                    with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
+                        st.write(f"**Result Type:** {result_type}")
+                        st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
+                        st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
+                        st.write(f"**Has Result:** {'result' in direct_result}")
+                        if 'result' in direct_result:
+                            result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
+                            st.write(f"**Result Keys:** {result_keys}")
 
                 # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
                 if result_type == "error":
@@ -418,6 +422,7 @@ else:
                         # Chamar o agent_graph principal com medição de tempo
                         import time
                         start_time = time.time()
+                        HumanMessage = get_backend_module("HumanMessage")
                         initial_state = {"messages": [HumanMessage(content=user_input)]}
                         final_state = backend_components["agent_graph"].invoke(initial_state)
                         end_time = time.time()
@@ -484,14 +489,16 @@ else:
         st.rerun()
 
     # --- Renderização da Interface ---
-    # 🔍 DEBUG: Mostrar histórico de mensagens na sidebar (apenas para desenvolvimento)
-    with st.sidebar:
-        st.write(f"**Total de mensagens:** {len(st.session_state.messages)}")
-        if st.checkbox("Mostrar histórico debug"):
-            for i, msg in enumerate(st.session_state.messages):
-                st.write(f"**{i+1}. {msg['role'].title()}:**")
-                content_preview = str(msg.get('content', {}))[:100] + "..." if len(str(msg.get('content', {}))) > 100 else str(msg.get('content', {}))
-                st.write(f"{content_preview}")
+    # 🔍 DEBUG: Mostrar histórico de mensagens na sidebar (apenas para admins)
+    user_role = st.session_state.get('role', '')
+    if user_role == 'admin':
+        with st.sidebar:
+            st.write(f"**Total de mensagens:** {len(st.session_state.messages)}")
+            if st.checkbox("Mostrar histórico debug"):
+                for i, msg in enumerate(st.session_state.messages):
+                    st.write(f"**{i+1}. {msg['role'].title()}:**")
+                    content_preview = str(msg.get('content', {}))[:100] + "..." if len(str(msg.get('content', {}))) > 100 else str(msg.get('content', {}))
+                    st.write(f"{content_preview}")
 
     # 💬 RENDERIZAR histórico de conversas
     for i, msg in enumerate(st.session_state.messages):
@@ -514,7 +521,7 @@ else:
             
             # 📈 RENDERIZAR GRÁFICOS
             if response_type == "chart":
-                import json
+                # ⚡ Imports sob demanda apenas quando necessário
                 import plotly.graph_objects as go
 
                 # 📝 Mostrar contexto da pergunta que gerou o gráfico
@@ -579,6 +586,7 @@ else:
                     else:
                         # Formato Plotly padrão (já completo)
                         if isinstance(content, str):
+                            import json
                             chart_data = json.loads(content)
                         else:
                             chart_data = content
@@ -595,6 +603,21 @@ else:
                     chart_key = hashlib.md5(f"{user_query}_{time.time()}".encode()).hexdigest()[:8]
 
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True}, key=f"chart_{chart_key}")
+
+                    # Botão para salvar gráfico
+                    if st.button("💾 Salvar Gráfico", key=f"save_chart_{chart_key}"):
+                        if "dashboard_charts" not in st.session_state:
+                            st.session_state.dashboard_charts = []
+
+                        chart_data = {
+                            "title": response_data.get("title", "Gráfico"),
+                            "type": "chart",
+                            "output": fig,
+                            "query": user_query,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        st.session_state.dashboard_charts.append(chart_data)
+                        st.success("✅ Gráfico salvo no Dashboard!")
 
                     # Mostrar informações adicionais
                     result_info = response_data.get("result", {})

@@ -22,6 +22,11 @@ def get_settings():
     except Exception:
         return None
 
+# Verificar se é admin
+if st.session_state.get("role") != "admin":
+    st.error("❌ Acesso negado. Esta página é restrita a administradores.")
+    st.stop()
+
 st.markdown("<h1 class='main-header'>Monitoramento do Sistema</h1>", unsafe_allow_html=True)
 st.markdown("<div class='info-box'>Acompanhe os logs do sistema e o status dos principais serviços.</div>", unsafe_allow_html=True)
 
@@ -53,21 +58,26 @@ else:
 # --- STATUS DOS SERVIÇOS ---
 st.markdown("### Status dos Serviços")
 status_data = []
-# Checagem do Backend Integrado (não mais API externa)
-backend_status = "-"
+
+# Checagem do Backend Integrado
+backend_status = "❌ Não inicializado"
 backend_time = "-"
 try:
     start = time.time()
     if 'backend_components' in st.session_state and st.session_state.backend_components:
-        backend_time = f"{(time.time() - start)*1000:.0f} ms"
-        backend_status = "✅ Integrado (LangGraph)"
+        components = st.session_state.backend_components
+        if components.get("agent_graph"):
+            backend_time = f"{(time.time() - start)*1000:.0f} ms"
+            backend_status = "✅ Operacional (LangGraph)"
+        else:
+            backend_status = "⚠️ Parcialmente inicializado"
     else:
-        backend_status = "❌ Não inicializado"
+        backend_status = "❌ Não disponível"
 except Exception as e:
-    backend_status = f"FALHA ({str(e)[:30]})"
-status_data.append({"Serviço": "Backend", "Status": backend_status, "Tempo": backend_time})
+    backend_status = f"❌ Erro: {str(e)[:30]}"
+status_data.append({"Serviço": "Backend LangGraph", "Status": backend_status, "Tempo": backend_time})
 # Checagem do Banco de Dados
-db_status = "-"
+db_status = "❌ Não configurado"
 db_time = "-"
 if DB_AVAILABLE:
     try:
@@ -77,15 +87,17 @@ if DB_AVAILABLE:
             conn_str = current_settings.get_sql_connection_string()
             if conn_str:
                 engine = create_engine(conn_str)
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        db_time = f"{(time.time() - start)*1000:.0f} ms"
-        db_status = "OK"
+                with engine.connect() as conn:
+                    conn.execute("SELECT 1")
+                db_time = f"{(time.time() - start)*1000:.0f} ms"
+                db_status = "✅ Conectado (SQL Server)"
+        else:
+            db_status = "⚠️ Configuração ausente"
     except Exception as e:
-        db_status = f"FALHA ({str(e)[:30]})"
+        db_status = f"❌ Erro: {str(e)[:30]}"
 else:
-    db_status = "Cloud Mode (SQLite local)"
-status_data.append({"Serviço": "Banco de Dados", "Status": db_status, "Tempo": db_time})
+    db_status = "🌤️ Modo Cloud (sem DB)"
+status_data.append({"Serviço": "Banco de Dados SQL", "Status": db_status, "Tempo": db_time})
 # Checagem dos LLMs (Gemini/DeepSeek)
 try:
     from core.factory.component_factory import ComponentFactory
@@ -140,30 +152,61 @@ st.dataframe(pd.DataFrame(status_data), use_container_width=True)
 st.markdown("---")
 st.markdown("### 💰 Economia de Créditos LLM (Gemini/DeepSeek)")
 
-# Tentar acessar estatísticas do cache se backend disponível
+# Estatísticas do cache
+cache_enabled = False
+cache_files = 0
+cache_size = 0
+cache_ttl = 48
+
 try:
     if 'backend_components' in st.session_state and st.session_state.backend_components:
         llm_adapter = st.session_state.backend_components.get("llm_adapter")
-        if llm_adapter and hasattr(llm_adapter, 'get_cache_stats'):
-            cache_stats = llm_adapter.get_cache_stats()
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Cache Ativo", "✅" if cache_stats.get("cache_enabled") else "❌")
-            with col2:
-                st.metric("Respostas Cacheadas", cache_stats.get("total_files", 0))
-            with col3:
-                st.metric("Espaço Cache (MB)", cache_stats.get("total_size_mb", 0))
+        if llm_adapter:
+            # Verificar se tem método get_cache_stats
+            if hasattr(llm_adapter, 'get_cache_stats'):
+                cache_stats = llm_adapter.get_cache_stats()
+                cache_enabled = cache_stats.get("cache_enabled", False)
+                cache_files = cache_stats.get("total_files", 0)
+                cache_size = cache_stats.get("total_size_mb", 0)
+                cache_ttl = cache_stats.get("ttl_hours", 48)
+            else:
+                # Fallback: verificar atributos diretamente
+                cache_enabled = getattr(llm_adapter, 'cache_enabled', False)
+                if hasattr(llm_adapter, 'cache_dir'):
+                    import os
+                    cache_dir = llm_adapter.cache_dir
+                    if os.path.exists(cache_dir):
+                        cache_files = len([f for f in os.listdir(cache_dir) if f.endswith('.json')])
+                        total_bytes = sum(os.path.getsize(os.path.join(cache_dir, f))
+                                        for f in os.listdir(cache_dir) if f.endswith('.json'))
+                        cache_size = round(total_bytes / (1024 * 1024), 2)
 
-            st.info(f"💡 **Economia:** Cada hit no cache evita 1 chamada ao LLM. "
-                   f"TTL: {cache_stats.get('ttl_hours', 48)}h")
-        else:
-            st.info("Cache não disponível - backend não inicializado")
+    # Exibir métricas
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Cache Ativo", "✅ Sim" if cache_enabled else "❌ Não")
+    with col2:
+        st.metric("Respostas Cacheadas", cache_files)
+    with col3:
+        st.metric("Tamanho Cache", f"{cache_size} MB")
+    with col4:
+        st.metric("TTL Cache", f"{cache_ttl}h")
+
+    # Informações adicionais
+    if cache_enabled:
+        st.success(f"💡 **Cache Ativo:** Cada hit no cache economiza 1 chamada ao LLM e reduz custos significativamente!")
+
+        # Estimativa de economia (baseado em preços Gemini 2.5 Flash-Lite)
+        if cache_files > 0:
+            estimated_savings = cache_files * 0.0001  # $0.10 por 1M tokens ≈ $0.0001 por request média
+            st.info(f"💰 **Economia Estimada:** ~${estimated_savings:.2f} USD em chamadas de API")
     else:
-        st.info("📊 Estatísticas de cache disponíveis após primeira consulta")
+        st.warning("⚠️ Cache desativado. Ative o cache para reduzir custos de LLM.")
 
 except Exception as e:
-    st.warning(f"Erro ao acessar estatísticas do cache: {e}")
+    st.error(f"❌ Erro ao carregar estatísticas de cache: {e}")
+    logging.error(f"Erro em economia LLM: {e}")
 
 # --- Função para admins aprovarem redefinição de senha ---
 def painel_aprovacao_redefinicao():
@@ -171,7 +214,7 @@ def painel_aprovacao_redefinicao():
     st.markdown("<h3>Solicitações de Redefinição de Senha</h3>", unsafe_allow_html=True)
 
     if not DB_AVAILABLE:
-        st.warning("⚠️ Sistema de autenticação não disponível no Streamlit Cloud")
+        st.info("🌤️ **Modo Cloud:** Sistema de redefinição de senha não disponível.\n\nPara gerenciar usuários em modo cloud, use o Painel de Administração.")
         return
 
     try:
@@ -179,23 +222,37 @@ def painel_aprovacao_redefinicao():
 
         # Verificar se auth_db tem DB_PATH
         if not hasattr(auth_db, 'DB_PATH'):
-            st.warning("⚠️ Caminho do banco de dados não disponível")
+            st.info("ℹ️ **Banco de dados não configurado**\n\nEm modo cloud, use autenticação hardcoded via `core/auth.py`")
+            return
+
+        # Verificar se o arquivo do banco existe
+        if not os.path.exists(auth_db.DB_PATH):
+            st.warning("⚠️ Arquivo de banco de dados não encontrado. Sistema rodando em modo cloud.")
             return
 
         conn = sqlite3.connect(auth_db.DB_PATH)
         c = conn.cursor()
+
+        # Verificar se a tabela existe
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='usuarios'")
+        if not c.fetchone():
+            st.warning("⚠️ Tabela de usuários não encontrada. Inicialize o banco de dados primeiro.")
+            conn.close()
+            return
+
         c.execute("SELECT username FROM usuarios WHERE redefinir_solicitado=1 AND redefinir_aprovado=0")
         pendentes = [row[0] for row in c.fetchall()]
 
         if not pendentes:
-            st.info("Nenhuma solicitação pendente.")
+            st.success("✅ Nenhuma solicitação pendente de redefinição de senha.")
         else:
+            st.info(f"📋 {len(pendentes)} solicitação(ões) pendente(s)")
             for user in pendentes:
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.write(f"Usuário: {user}")
+                    st.write(f"**Usuário:** {user}")
                 with col2:
-                    if st.button(f"Aprovar {user}"):
+                    if st.button(f"✅ Aprovar", key=f"approve_{user}"):
                         if hasattr(auth_db, 'aprovar_redefinicao'):
                             auth_db.aprovar_redefinicao(user)
                             st.success(f"Solicitação de {user} aprovada!")
@@ -204,7 +261,7 @@ def painel_aprovacao_redefinicao():
                             st.error("Função de aprovação não disponível")
         conn.close()
     except Exception as e:
-        st.error(f"Erro ao acessar painel de aprovação: {e}")
+        st.error(f"❌ Erro ao acessar solicitações: {str(e)}")
         logging.error(f"Erro no painel_aprovacao_redefinicao: {e}")
 
 # --- Função para usuário redefinir senha após aprovação ---
