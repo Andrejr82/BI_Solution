@@ -246,7 +246,22 @@ class DirectQueryEngine:
             user_query = self._normalize_query(user_query)
             query_lower = user_query.lower()
 
-            # 🆕 PRIORIDADE MÁXIMA: Testar padrões treináveis primeiro
+            # 🔥 PRIORIDADE MÁXIMA: Detectar "RANKING DE VENDAS NA UNE X" antes de tudo
+            ranking_vendas_une_match = re.search(r'ranking\s*(de\s*vendas|vendas).*(na|da)\s*une\s+([A-Za-z0-9]+)', query_lower)
+            if ranking_vendas_une_match:
+                une_nome = ranking_vendas_une_match.group(3).upper()
+                result = ("top_produtos_une_especifica", {"limite": 10, "une_nome": une_nome})
+                logger.info(f"[OK] CLASSIFICADO COMO: top_produtos_une_especifica (ranking de vendas na une: '{une_nome}')")
+                return result
+
+            # 🔥 PRIORIDADE MÁXIMA: Detectar "RANKING DE PRODUTOS" genérico (sem UNE)
+            ranking_produtos_match = re.search(r'^ranking\s*(de\s*)?(produtos|vendas)\s*$', query_lower)
+            if ranking_produtos_match:
+                result = ("top_produtos_por_segmento", {"segmento": "todos", "limit": 10})
+                logger.info(f"[OK] CLASSIFICADO COMO: top_produtos_por_segmento (ranking geral de produtos)")
+                return result
+
+            # 🆕 PRIORIDADE ALTA: Testar padrões treináveis
             for pattern in self.patterns:
                 match = re.search(pattern["regex"], query_lower, re.IGNORECASE)
                 if match:
@@ -343,6 +358,16 @@ class DirectQueryEngine:
                 segmento_nome = segmento_match.group(3) or segmento_match.group(4)
                 result = ("top_produtos_por_segmento", {"segmento": segmento_nome, "limit": 10})
                 logger.info(f"CLASSIFICADO COMO: top_produtos_por_segmento (segmento: {segmento_nome})")
+                return result
+
+            # PRIORIDADE MÉDIA: Detectar "RANKING" genérico de produtos (sem UNE específica)
+            ranking_produtos_match = re.search(r'(ranking|top)\s*(de\s*)?(produtos|vendas)', query_lower)
+            if ranking_produtos_match and "une" not in query_lower and "segmento" not in query_lower:
+                # Ranking geral de produtos
+                limite_match = re.search(r'(\d+)\s*produtos', query_lower)
+                limite = int(limite_match.group(1)) if limite_match else 10
+                result = ("top_produtos_por_segmento", {"segmento": "todos", "limit": limite})
+                logger.info(f"CLASSIFICADO COMO: top_produtos_por_segmento (ranking geral, limit: {limite})")
                 return result
 
             # Buscar correspondência direta por keywords

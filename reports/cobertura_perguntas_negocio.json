@@ -1,0 +1,429 @@
+{
+  "data_teste": "2025-10-03T13:06:11.143347",
+  "resultado": {
+    "total": 45,
+    "suportadas": 30,
+    "nao_suportadas": 15,
+    "percentual_geral": 66.66666666666666,
+    "por_categoria": {
+      "Vendas por Produto": {
+        "total": 6,
+        "suportadas": 5,
+        "nao_suportadas": 1,
+        "percentual": 83.33333333333334,
+        "detalhes": [
+          {
+            "pergunta": "Gere um gráfico de vendas do produto 369947 na UNE SCR",
+            "query_type": "vendas_produto_une",
+            "params": {
+              "produto": "369947",
+              "une": "scr"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Mostre a evolução de vendas mensais do produto 369947",
+            "query_type": "evolucao_mes_a_mes",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Compare as vendas do produto 369947 entre todas as UNEs",
+            "query_type": "evolucao_vendas_produto",
+            "params": {
+              "produto_codigo": "369947"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Quais são os 5 produtos mais vendidos na UNE SCR?",
+            "query_type": "top_produtos_une_especifica",
+            "params": {
+              "limite": "5",
+              "une_nome": "scr"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Top 10 produtos por margem de crescimento",
+            "query_type": "ranking_geral",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos com vendas acima da média no segmento TECIDOS",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          }
+        ]
+      },
+      "Análises por Segmento": {
+        "total": 5,
+        "suportadas": 4,
+        "nao_suportadas": 1,
+        "percentual": 80.0,
+        "detalhes": [
+          {
+            "pergunta": "Quais são os 10 produtos que mais vendem no segmento TECIDOS?",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Compare vendas entre segmentos ARMARINHO e TECIDOS",
+            "query_type": "comparacao_segmentos",
+            "params": {
+              "segmento1": "armarinho e t",
+              "segmento2": "cidos"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Ranking dos segmentos por volume de vendas",
+            "query_type": "ranking_geral",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Qual segmento teve maior crescimento?",
+            "query_type": "crescimento_segmento",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Segmentos com maior concentração de produtos ABC A",
+            "query_type": "analise_abc",
+            "params": {
+              "classe_abc": "a"
+            },
+            "status": "OK"
+          }
+        ]
+      },
+      "Análises por UNE/Loja": {
+        "total": 6,
+        "suportadas": 5,
+        "nao_suportadas": 1,
+        "percentual": 83.33333333333334,
+        "detalhes": [
+          {
+            "pergunta": "Ranking de vendas por UNE",
+            "query_type": "ranking_geral",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Qual UNE vende mais produtos do segmento PAPELARIA?",
+            "query_type": "top_produtos_segmento_une",
+            "params": {
+              "limite": null,
+              "segmento": "papelar",
+              "une_nome": "ia"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Compare performance da UNE SCR vs outras UNEs",
+            "query_type": "consulta_une_especifica",
+            "params": {
+              "une_nome": "DA"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "UNEs com maior diversidade de produtos",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Top 5 produtos da une 261",
+            "query_type": "top_produtos_une_especifica",
+            "params": {
+              "limite": "5",
+              "une_nome": "261"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Ranking de vendas na une scr",
+            "query_type": "top_produtos_une_especifica",
+            "params": {
+              "limite": 10,
+              "une_nome": "SCR"
+            },
+            "status": "OK"
+          }
+        ]
+      },
+      "Análises Temporais": {
+        "total": 5,
+        "suportadas": 3,
+        "nao_suportadas": 2,
+        "percentual": 60.0,
+        "detalhes": [
+          {
+            "pergunta": "Análise de sazonalidade no segmento FESTAS",
+            "query_type": "sazonalidade",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Tendência de vendas dos últimos 6 meses",
+            "query_type": "tendencia_vendas",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos com padrão de vendas decrescente",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Quais produtos tiveram pico no último mês?",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Evolução de vendas dos últimos 12 meses",
+            "query_type": "evolucao_mes_a_mes",
+            "params": {},
+            "status": "OK"
+          }
+        ]
+      },
+      "Performance e ABC": {
+        "total": 5,
+        "suportadas": 4,
+        "nao_suportadas": 1,
+        "percentual": 80.0,
+        "detalhes": [
+          {
+            "pergunta": "Produtos classificados como ABC A no segmento TECIDOS",
+            "query_type": "analise_abc",
+            "params": {
+              "classe_abc": "a"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Análise ABC: distribuição de produtos",
+            "query_type": "analise_abc",
+            "params": {
+              "classe_abc": null
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos ABC C com potencial para B",
+            "query_type": "analise_abc",
+            "params": {
+              "classe_abc": "c"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Top 10 produtos por média de vendas semanal",
+            "query_type": "ranking_geral",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos com vendas regulares vs esporádicas",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          }
+        ]
+      },
+      "Estoque e Logística": {
+        "total": 5,
+        "suportadas": 4,
+        "nao_suportadas": 1,
+        "percentual": 80.0,
+        "detalhes": [
+          {
+            "pergunta": "Produtos com estoque baixo vs alta demanda",
+            "query_type": "produtos_reposicao",
+            "params": {
+              "matched_keywords": "estoque baixo"
+            },
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos próximos ao ponto de pedido",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Identificar produtos com excesso de estoque",
+            "query_type": "estoque_alto",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos com maior rotação de estoque",
+            "query_type": "rotacao_estoque",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Produtos sem movimento",
+            "query_type": "produtos_sem_movimento",
+            "params": {},
+            "status": "OK"
+          }
+        ]
+      },
+      "Análises por Fabricante": {
+        "total": 3,
+        "suportadas": 3,
+        "nao_suportadas": 0,
+        "percentual": 100.0,
+        "detalhes": [
+          {
+            "pergunta": "Ranking de fabricantes por volume de vendas",
+            "query_type": "ranking_fabricantes",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Fabricantes com maior diversidade de produtos",
+            "query_type": "ranking_fabricantes",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Compare performance de fabricantes no segmento TECIDOS",
+            "query_type": "comparacao_segmentos",
+            "params": {
+              "segmento1": "t",
+              "segmento2": "cidos"
+            },
+            "status": "OK"
+          }
+        ]
+      },
+      "Categoria/Grupo": {
+        "total": 3,
+        "suportadas": 1,
+        "nao_suportadas": 2,
+        "percentual": 33.33333333333333,
+        "detalhes": [
+          {
+            "pergunta": "Performance por categoria no segmento ARMARINHO",
+            "query_type": "performance_categoria",
+            "params": {},
+            "status": "OK"
+          },
+          {
+            "pergunta": "Grupos de produtos com maior margem",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Categorias com menor penetração",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          }
+        ]
+      },
+      "Dashboards Executivos": {
+        "total": 4,
+        "suportadas": 1,
+        "nao_suportadas": 3,
+        "percentual": 25.0,
+        "detalhes": [
+          {
+            "pergunta": "Dashboard executivo: KPIs principais",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Relatório de performance mensal",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Scorecard de vendas",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Métricas de eficiência por UNE",
+            "query_type": "consulta_une_especifica",
+            "params": {
+              "une_nome": "POR"
+            },
+            "status": "OK"
+          }
+        ]
+      },
+      "Análises Específicas": {
+        "total": 3,
+        "suportadas": 0,
+        "nao_suportadas": 3,
+        "percentual": 0.0,
+        "detalhes": [
+          {
+            "pergunta": "Produtos com risco de ruptura",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Análise de canibalização entre produtos",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          },
+          {
+            "pergunta": "Oportunidades de bundle",
+            "query_type": "analise_geral",
+            "params": {
+              "tipo": "geral"
+            },
+            "status": "NAO_SUPORTADA"
+          }
+        ]
+      }
+    }
+  }
+}

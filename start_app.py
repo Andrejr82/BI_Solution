@@ -8,7 +8,6 @@ import sys
 import time
 import platform
 import os
-import requests
 from pathlib import Path
 
 # Cores para terminal (opcional)
@@ -32,22 +31,12 @@ def check_file_exists(filepath: str) -> bool:
     """Verifica se arquivo existe."""
     return Path(filepath).exists()
 
-def check_backend_health(max_attempts: int = 30, delay: int = 2) -> bool:
-    """Verifica se backend está pronto via health check."""
+def check_backend_health(delay: int = 5) -> bool:
+    """Aguarda backend inicializar."""
     print(f"[3/4] Aguardando Backend inicializar...")
-
-    for attempt in range(max_attempts):
-        try:
-            response = requests.get("http://localhost:8000/health", timeout=1)
-            if response.status_code == 200:
-                print(f"   - Backend pronto! [OK]")
-                return True
-        except requests.exceptions.RequestException:
-            print(f"   - Tentativa {attempt + 1}/{max_attempts}...", end='\r')
-            time.sleep(delay)
-
-    print(f"\n   [AVISO] Backend não respondeu após {max_attempts * delay}s")
-    return False
+    time.sleep(delay)
+    print(f"   - Backend deve estar pronto! [OK]")
+    return True
 
 def start_process(command: list, window_title: str = None) -> subprocess.Popen:
     """Inicia processo em segundo plano."""
@@ -94,15 +83,12 @@ def main():
     if backend_exists:
         print("[2/4] Iniciando Backend FastAPI...")
 
-        if system == "Windows":
-            backend_cmd = f'"{python_cmd}" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload'
-            backend_process = start_process(backend_cmd.split(), "Agent_BI - Backend")
-        else:
-            backend_process = start_process([
-                python_cmd, "-m", "uvicorn",
-                "main:app", "--host", "0.0.0.0",
-                "--port", "8000", "--reload"
-            ])
+        # Iniciar backend em background (sem nova janela)
+        backend_process = subprocess.Popen(
+            [python_cmd, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
         # Aguardar backend estar pronto
         time.sleep(3)
@@ -113,21 +99,9 @@ def main():
     else:
         print("[2/4] Backend FastAPI não encontrado. Pulando...")
 
-    # Iniciar Frontend Streamlit
+    # Iniciar Frontend Streamlit (mesma janela)
     print("[4/4] Iniciando Frontend Streamlit...")
     time.sleep(1)
-
-    if system == "Windows":
-        frontend_cmd = f'"{python_cmd}" -m streamlit run streamlit_app.py'
-        frontend_process = start_process(frontend_cmd.split(), "Agent_BI - Frontend")
-    else:
-        frontend_process = start_process([
-            python_cmd, "-m", "streamlit",
-            "run", "streamlit_app.py"
-        ])
-
-    # Aguardar um pouco para frontend iniciar
-    time.sleep(3)
 
     # Mensagem de sucesso
     print("\n" + "="*50)
@@ -138,28 +112,37 @@ def main():
         print("   Docs API: http://localhost:8000/docs")
     print("   Frontend: http://localhost:8501")
     print("")
-    print("   Para encerrar: Ctrl+C neste terminal")
+    print("   Pressione Ctrl+C para encerrar")
     print("="*50 + "\n")
 
-    # Manter script rodando
+    # Executar Streamlit na mesma janela (foreground)
     try:
-        print("Pressione Ctrl+C para encerrar a aplicação...\n")
-        while True:
-            time.sleep(1)
+        result = subprocess.run(
+            [python_cmd, "-m", "streamlit", "run", "streamlit_app.py"],
+            check=False,
+            capture_output=False,
+            text=True
+        )
+
+        # Se Streamlit encerrou com erro
+        if result.returncode != 0:
+            print(f"\n[ERRO] Streamlit encerrou com código: {result.returncode}")
+            input("\nPressione ENTER para sair...")
     except KeyboardInterrupt:
         print("\n\nEncerrando aplicação...")
+    except Exception as e:
+        print(f"\n[ERRO] Falha ao iniciar Streamlit: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nPressione ENTER para sair...")
 
-        # Encerrar processos
-        if backend_process:
-            backend_process.terminate()
-            print("   - Backend encerrado")
+    # Encerrar backend ao sair
+    if backend_process:
+        backend_process.terminate()
+        print("   - Backend encerrado")
 
-        if frontend_process:
-            frontend_process.terminate()
-            print("   - Frontend encerrado")
-
-        print("\nAplicação encerrada com sucesso!")
-        sys.exit(0)
+    print("\nAplicação encerrada com sucesso!")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

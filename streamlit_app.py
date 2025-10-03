@@ -329,6 +329,46 @@ else:
             ]
             st.rerun()
 
+    # --- Quick Actions (Perguntas Rápidas) ---
+    with st.sidebar:
+        st.divider()
+        st.subheader("⚡ Perguntas Rápidas")
+
+        # Perguntas populares por categoria
+        quick_actions = {
+            "🎯 Vendas": [
+                "Produto mais vendido",
+                "Top 10 produtos",
+                "Ranking de vendas na une scr"
+            ],
+            "🏬 UNEs/Lojas": [
+                "Ranking de vendas por UNE",
+                "Top 5 produtos da une 261",
+                "Vendas totais de cada une"
+            ],
+            "🏪 Segmentos": [
+                "Qual segmento mais vendeu?",
+                "Top 10 produtos do segmento TECIDOS",
+                "Ranking dos segmentos"
+            ],
+            "📈 Análises": [
+                "Evolução de vendas dos últimos 12 meses",
+                "Produtos sem movimento",
+                "Análise ABC de produtos"
+            ]
+        }
+
+        for categoria, perguntas in quick_actions.items():
+            with st.expander(categoria, expanded=False):
+                for pergunta in perguntas:
+                    if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
+                        # Adicionar pergunta ao input do chat
+                        st.session_state['pergunta_selecionada'] = pergunta
+                        # Executar query automaticamente
+                        query_backend(pergunta)
+                        st.rerun()
+
+        st.caption("💡 Clique para executar")
 
     # --- Estado da Sessão ---
 
@@ -605,19 +645,57 @@ else:
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True}, key=f"chart_{chart_key}")
 
                     # Botão para salvar gráfico
-                    if st.button("💾 Salvar Gráfico", key=f"save_chart_{chart_key}"):
-                        if "dashboard_charts" not in st.session_state:
-                            st.session_state.dashboard_charts = []
+                    col1, col2 = st.columns(2)
 
-                        chart_data = {
-                            "title": response_data.get("title", "Gráfico"),
-                            "type": "chart",
-                            "output": fig,
-                            "query": user_query,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        st.session_state.dashboard_charts.append(chart_data)
-                        st.success("✅ Gráfico salvo no Dashboard!")
+                    with col1:
+                        if st.button("💾 Salvar no Dashboard", key=f"save_chart_{chart_key}"):
+                            if "dashboard_charts" not in st.session_state:
+                                st.session_state.dashboard_charts = []
+
+                            chart_data = {
+                                "title": response_data.get("title", "Gráfico"),
+                                "type": "chart",
+                                "output": fig,
+                                "query": user_query,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            st.session_state.dashboard_charts.append(chart_data)
+                            st.success("✅ Gráfico salvo no Dashboard!")
+
+                    with col2:
+                        # Salvar gráfico em arquivo
+                        import os
+                        os.makedirs("reports/charts", exist_ok=True)
+
+                        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        title_safe = response_data.get("title", "grafico").replace(" ", "_")[:50]
+
+                        # Salvar como HTML (sempre funciona)
+                        filename_html = f"reports/charts/{title_safe}_{timestamp_str}.html"
+                        fig.write_html(filename_html)
+
+                        # Tentar salvar como PNG (requer kaleido)
+                        filename_png = f"reports/charts/{title_safe}_{timestamp_str}.png"
+                        try:
+                            fig.write_image(filename_png, width=1200, height=800)
+                            st.download_button(
+                                label="📥 Download PNG",
+                                data=open(filename_png, "rb").read(),
+                                file_name=f"{title_safe}.png",
+                                mime="image/png",
+                                key=f"download_png_{chart_key}"
+                            )
+                        except Exception as e:
+                            # Se falhar PNG, oferecer HTML
+                            st.download_button(
+                                label="📥 Download HTML",
+                                data=open(filename_html, "r", encoding="utf-8").read(),
+                                file_name=f"{title_safe}.html",
+                                mime="text/html",
+                                key=f"download_html_{chart_key}"
+                            )
+                            if st.session_state.get('role') == 'admin':
+                                st.caption(f"ℹ️ PNG não disponível: {str(e)[:100]}")
 
                     # Mostrar informações adicionais
                     result_info = response_data.get("result", {})
