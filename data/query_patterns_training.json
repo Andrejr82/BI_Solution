@@ -1,0 +1,119 @@
+{
+  "metadata": {
+    "description": "Padrões de perguntas para treinamento automático do agente",
+    "version": "1.0",
+    "auto_learn": true
+  },
+  "patterns": [
+    {
+      "id": "vendas_segmentos_une",
+      "name": "Vendas por segmento em UNE específica",
+      "examples": [
+        "venda total de cada segmento da une 261",
+        "vendas por segmento na une MAD",
+        "total de vendas de cada segmento da filial 261",
+        "quanto cada segmento vendeu na une 261",
+        "vendas de todos os segmentos da une 261"
+      ],
+      "regex": "venda[s]?\\s*(total|totais)?\\s*(de\\s*)?(cada\\s*)?segmento[s]?\\s*(da|na)?\\s*une\\s*(\\d+|[A-Z]{3})",
+      "extract": {
+        "une": "group(5)"
+      },
+      "query_type": "aggregation",
+      "group_by": "nomesegmento",
+      "filter": {
+        "une": "{une}"
+      },
+      "aggregation": "SUM",
+      "columns": ["mes_01", "mes_02", "mes_03", "mes_04", "mes_05", "mes_06", "mes_07", "mes_08", "mes_09", "mes_10", "mes_11", "mes_12"],
+      "output": "chart_bar",
+      "response_template": "Vendas por segmento na UNE {une}:\n{results}"
+    },
+    {
+      "id": "top_produtos_une",
+      "name": "Top N produtos em UNE específica",
+      "examples": [
+        "top 10 produtos da une 261",
+        "10 produtos mais vendidos na une MAD",
+        "quais os 5 produtos que mais vendem na une 261"
+      ],
+      "regex": "(top\\s+)?(\\d+)\\s*produtos\\s*(mais\\s*vendidos)?\\s*(da|na)?\\s*une\\s*(\\d+|[A-Z]{3})",
+      "extract": {
+        "limite": "group(2)",
+        "une": "group(5)"
+      },
+      "query_type": "ranking",
+      "filter": {
+        "une": "{une}"
+      },
+      "order_by": "vendas_total DESC",
+      "limit": "{limite}",
+      "output": "chart_bar"
+    },
+    {
+      "id": "vendas_produto_une",
+      "name": "Vendas de produto específico em UNE",
+      "examples": [
+        "vendas do produto 369947 na une SCR",
+        "quanto vendeu o produto 369947 na filial MAD",
+        "gráfico de vendas do produto 123456 na une 261"
+      ],
+      "regex": "(vendas?|gr[aá]fico).*produto\\s*(\\d{5,7}).*une\\s*(\\d+|[A-Z]{3})",
+      "extract": {
+        "produto": "group(2)",
+        "une": "group(3)"
+      },
+      "query_type": "time_series",
+      "filter": {
+        "codigo": "{produto}",
+        "une": "{une}"
+      },
+      "output": "chart_line"
+    },
+    {
+      "id": "comparacao_segmentos",
+      "name": "Comparação entre segmentos",
+      "examples": [
+        "compare vendas entre TECIDOS e ARMARINHO",
+        "comparar segmento FESTAS vs PAPELARIA",
+        "diferença de vendas entre TECIDOS e CONFECÇÃO"
+      ],
+      "regex": "compar[ae].*segmento[s]?\\s*([A-Z\\s]+)\\s*(vs|e|com)\\s*([A-Z\\s]+)",
+      "extract": {
+        "segmento1": "group(1)",
+        "segmento2": "group(3)"
+      },
+      "query_type": "comparison",
+      "output": "chart_bar"
+    },
+    {
+      "id": "evolucao_mes_a_mes",
+      "name": "Evolução mês a mês",
+      "examples": [
+        "evolução de vendas nos últimos 12 meses",
+        "vendas mês a mês do produto 369947",
+        "histórico mensal de vendas"
+      ],
+      "regex": "(evolu[çc][ãa]o|hist[óo]rico|m[eê]s\\s*a\\s*m[eê]s).*vendas?",
+      "query_type": "time_series",
+      "output": "chart_line"
+    },
+    {
+      "id": "ranking_geral",
+      "name": "Rankings gerais",
+      "examples": [
+        "ranking de vendas por UNE",
+        "top 10 segmentos",
+        "produtos mais vendidos geral"
+      ],
+      "regex": "(ranking|top\\s*\\d+).*por\\s*(une|segmento|produto)",
+      "query_type": "ranking",
+      "output": "table_or_chart"
+    }
+  ],
+  "fallback_strategy": {
+    "when_no_match": "use_llm_graph",
+    "confidence_threshold": 0.7,
+    "suggestion_on_fail": "Tente reformular sua pergunta ou veja exemplos disponíveis"
+  }
+}

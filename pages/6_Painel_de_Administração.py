@@ -60,10 +60,29 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
     st.subheader("Lista de Usuários")
 
     if not DB_AVAILABLE:
-        st.info("🌤️ Modo Cloud: Usuários disponíveis: admin, user, cacula")
-        users = []
+        st.info("🌤️ **Modo Cloud:** Usuários hardcoded disponíveis")
+        # Mostrar usuários do core/auth.py
+        from core.auth import CLOUD_USERS
+        users = [
+            {
+                "id": i,
+                "username": username,
+                "role": data["role"],
+                "ativo": True
+            }
+            for i, (username, data) in enumerate(CLOUD_USERS.items())
+        ]
     else:
-        users = auth_db.get_all_users()
+        try:
+            users = auth_db.get_all_users()
+        except AttributeError as e:
+            st.error(f"❌ Erro ao acessar usuários: Função get_all_users não disponível")
+            logging.error(f"AttributeError em get_all_users: {e}")
+            users = []
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar usuários: {str(e)}")
+            logging.error(f"Erro em get_all_users: {e}")
+            users = []
 
     if users:
         df_users = st.dataframe(users, use_container_width=True)

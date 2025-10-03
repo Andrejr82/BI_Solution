@@ -4,24 +4,22 @@ import json
 import os
 
 # --- Verificação de Autenticação ---
-if st.session_state.get("authentication_status"):
-    # --- Configuração da Página ---
-    st.set_page_config(
-        page_title="Área do Comprador - Gestão de Catálogo",
-        page_icon="🧑‍💼",
-        layout="wide"
-    )
-
-    st.title("🧑‍💼 Gestão do Catálogo de Dados")
-    st.markdown("""
-    Use esta página para refinar as descrições dos dados. 
-    O seu conhecimento de negócio é essencial para que o agente de IA possa entender as perguntas dos usuários e encontrar as respostas corretas.
-    """)
-
-    # O resto do código da página continua aqui...
-else:
-    st.error("Acesso negado. Por favor, faça o login na página principal para acessar esta área.")
+if not st.session_state.get("authenticated"):
+    st.error("❌ Acesso negado. Por favor, faça o login na página principal para acessar esta área.")
     st.stop()
+
+# --- Configuração da Página ---
+st.set_page_config(
+    page_title="Área do Comprador - Gestão de Catálogo",
+    page_icon="🧑‍💼",
+    layout="wide"
+)
+
+st.title("🧑‍💼 Gestão do Catálogo de Dados")
+st.markdown("""
+Use esta página para refinar as descrições dos dados.
+O seu conhecimento de negócio é essencial para que o agente de IA possa entender as perguntas dos usuários e encontrar as respostas corretas.
+""")
 
 # --- Constantes ---
 CATALOG_FILE_PATH = "data/CATALOGO_PARA_EDICAO.json"
