@@ -90,15 +90,15 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
         st.markdown("---")
         st.subheader("Editar Usuário Existente")
         selected_username = st.selectbox("Selecione o Usuário para Editar", [u['username'] for u in users])
-        
+
         if selected_username:
             selected_user = next((u for u in users if u['username'] == selected_username), None)
             if selected_user:
-                user_id = selected_user['id']
+                user_id = selected_user.get('id', 0)  # Fallback para modo cloud
                 
                 with st.form(f"edit_user_form_{user_id}"):
-                    current_role = selected_user['role']
-                    current_status = selected_user['ativo']
+                    current_role = selected_user.get('role', 'user')
+                    current_status = selected_user.get('ativo', True)
                     
                     edited_role = st.selectbox("Papel", ["user", "admin"], index=["user", "admin"].index(current_role))
                     edited_status = st.checkbox("Ativo", value=current_status)
@@ -112,15 +112,18 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                         delete_submitted = st.form_submit_button("Excluir Usuário", type="secondary")
 
                     if update_submitted:
-                        if edited_role != current_role:
-                            auth_db.update_user_role(user_id, edited_role)
-                            st.success(f"Papel do usuário '{selected_username}' atualizado para '{edited_role}'.")
-                            audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o papel do usuário {selected_username} para {edited_role}.")
-                        if edited_status != current_status:
-                            auth_db.set_user_status(user_id, edited_status)
-                            st.success(f"Status do usuário '{selected_username}' atualizado para {'Ativo' if edited_status else 'Inativo'}.")
-                            audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o status do usuário {selected_username} para {'Ativo' if edited_status else 'Inativo'}.")
-                        st.rerun()
+                        if DB_AVAILABLE and user_id > 0:
+                            if edited_role != current_role:
+                                auth_db.update_user_role(user_id, edited_role)
+                                st.success(f"Papel do usuário '{selected_username}' atualizado para '{edited_role}'.")
+                                audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o papel do usuário {selected_username} para {edited_role}.")
+                            if edited_status != current_status:
+                                auth_db.set_user_status(user_id, edited_status)
+                                st.success(f"Status do usuário '{selected_username}' atualizado para {'Ativo' if edited_status else 'Inativo'}.")
+                                audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o status do usuário {selected_username} para {'Ativo' if edited_status else 'Inativo'}.")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Modo Cloud: Edição de usuários não disponível. Use SQL Server para gerenciar usuários.")
 
                     if reset_password_submitted:
                         new_temp_password = st.text_input("Nova Senha Temporária", type="password", key=f"temp_pass_{user_id}")

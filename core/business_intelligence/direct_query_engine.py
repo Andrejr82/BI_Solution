@@ -228,12 +228,16 @@ class DirectQueryEngine:
                 return result
 
             # ALTA PRIORIDADE: Detectar consultas de TOP PRODUTOS em UNE específica
-            top_produtos_une_match = re.search(r'(\d+)\s*produtos\s*mais\s*vendidos\s+na\s+une\s+([A-Za-z0-9]+)\b', query_lower)
+            # Pattern melhorado para aceitar variações: "10 produtos mais vendidos na une tij"
+            top_produtos_une_match = re.search(
+                r'(?:quais?\s+(?:s[ãa]o\s+)?(?:os?\s+)?)?(\d+)\s*produtos\s*(?:mais\s*vendidos)?\s*(?:da|na)\s*une\s+([A-Za-z0-9]+)',
+                query_lower
+            )
             if top_produtos_une_match:
                 limite = int(top_produtos_une_match.group(1))
                 une_nome = top_produtos_une_match.group(2).upper()
                 result = ("top_produtos_une_especifica", {"limite": limite, "une_nome": une_nome})
-                logger.info(f"CLASSIFICADO COMO: top_produtos_une_especifica (limite: {limite}, une: {une_nome})")
+                logger.info(f"✅ CLASSIFICADO COMO: top_produtos_une_especifica (limite: {limite}, une: '{une_nome}')")
                 return result
 
             # ALTA PRIORIDADE: Detectar consultas de VENDAS DE UNE em MÊS específico
@@ -638,20 +642,29 @@ class DirectQueryEngine:
     def _query_top_produtos_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Top N produtos mais vendidos em UNE específica."""
         limite = params.get('limite', 10)
-        une_nome = params.get('une_nome')
+        une_nome = params.get('une_nome', '').upper()
+
+        logger.info(f"🔍 Buscando top {limite} produtos na UNE: '{une_nome}'")
 
         if 'vendas_total' not in df.columns:
             return {"error": "Dados de vendas não disponíveis", "type": "error"}
 
-        # Verificar se UNE existe
-        une_data = df[df['une_nome'] == une_nome]
+        # Buscar UNE (case-insensitive e por código ou nome)
+        une_data = df[
+            (df['une_nome'].str.upper() == une_nome) |
+            (df['une'].astype(str) == une_nome)
+        ]
+
         if une_data.empty:
             unes_disponiveis = df['une_nome'].unique()
+            logger.error(f"❌ UNE '{une_nome}' não encontrada. Disponíveis: {list(unes_disponiveis[:5])}")
             return {
-                "error": f"UNE {une_nome} não encontrada",
+                "error": f"UNE '{une_nome}' não encontrada",
                 "type": "error",
                 "suggestion": f"UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
             }
+
+        logger.info(f"✅ UNE encontrada: {len(une_data)} registros")
 
         # Filtrar apenas produtos da UNE específica com vendas > 0
         produtos_une = une_data[une_data['vendas_total'] > 0].copy()
