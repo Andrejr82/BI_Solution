@@ -6,6 +6,24 @@
   },
   "patterns": [
     {
+      "id": "top_produtos_segmento_une",
+      "name": "Top N produtos em segmento específico e UNE específica",
+      "examples": [
+        "quais são os 5 produtos mais vendidos no segmento tecidos na Une scr?",
+        "top 10 produtos do segmento ARMARINHO na filial 261",
+        "me mostre os 5 produtos mais vendidos em FESTAS na loja MAD",
+        "produtos mais vendidos no segmento PAPELARIA na une TIJ"
+      ],
+      "regex": "(quais?\\s+(?:são|sao)?\\s+(?:os?\\s+)?|me\\s+mostre\\s+(?:os?\\s+)?)?(top\\s+)?(\\d+)?\\s*produtos\\s*(mais\\s*vendidos?)?\\s*(do|no|em|de)?\\s*segmento\\s+([A-Za-z]+)\\s*(da|na|em|para)?\\s*(une|filial|loja|unidade)?\\s*([A-Z0-9]{2,})",
+      "extract": {
+        "limite": "group(3)",
+        "segmento": "group(6)",
+        "une_nome": "group(9)"
+      },
+      "query_type": "ranking_segmento_une",
+      "output": "chart_bar"
+    },
+    {
       "id": "vendas_segmentos_une",
       "name": "Vendas por segmento em UNE específica",
       "examples": [
