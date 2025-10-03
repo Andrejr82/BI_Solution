@@ -33,13 +33,53 @@ class DirectQueryEngine:
         self.query_cache = {}
         self.templates = self._load_query_templates()
         self.keywords_map = self._build_keywords_map()
-        self.patterns = self._load_query_patterns()  # 🆕 Carregar padrões treináveis
+        self.patterns = self._load_query_patterns()
 
         # Cache de dados frequentes
         self._cached_data = {}
         self._cache_timestamp = None
 
-        logger.info(f"DirectQueryEngine inicializado - {len(self.patterns)} padrões carregados - ZERO LLM tokens")
+        logger.info(f"DirectQueryEngine inicializado - {len(self.patterns)} padroes carregados - ZERO LLM tokens")
+
+    @staticmethod
+    def _safe_get_int(params: Dict[str, Any], key: str, default: int = 10) -> int:
+        """Obtém valor inteiro de params com validação segura."""
+        try:
+            value = params.get(key, default)
+            return int(value) if value is not None else default
+        except (ValueError, TypeError):
+            logger.warning(f"Falha ao converter '{key}': {params.get(key)} para int. Usando default: {default}")
+            return default
+
+    @staticmethod
+    def _safe_get_str(params: Dict[str, Any], key: str, default: str = '') -> str:
+        """Obtém valor string de params com validação segura."""
+        try:
+            value = params.get(key, default)
+            return str(value).strip() if value is not None else default
+        except (ValueError, TypeError):
+            logger.warning(f"Falha ao converter '{key}': {params.get(key)} para str. Usando default: '{default}'")
+            return default
+
+    def _normalize_query(self, query: str) -> str:
+        """Normaliza query do usuário para melhor matching."""
+        # Remove espaços múltiplos
+        query = re.sub(r'\s+', ' ', query.strip())
+
+        # Expansões comuns
+        expansions = {
+            r'\bp/\b': 'para',
+            r'\bvc\b': 'você',
+            r'\btb\b': 'também',
+            r'\bmto\b': 'muito',
+            r'\bq\b': 'que',
+            r'\bn\b': 'não',
+        }
+
+        for pattern, replacement in expansions.items():
+            query = re.sub(pattern, replacement, query, flags=re.IGNORECASE)
+
+        return query
 
     def _load_query_templates(self) -> Dict[str, Any]:
         """Carrega templates de consultas pré-definidas."""
@@ -202,6 +242,8 @@ class DirectQueryEngine:
         logger.info(f"CLASSIFICANDO INTENT: '{user_query}'")
 
         try:
+            # Normalizar query antes de processar
+            user_query = self._normalize_query(user_query)
             query_lower = user_query.lower()
 
             # 🆕 PRIORIDADE MÁXIMA: Testar padrões treináveis primeiro
@@ -215,7 +257,7 @@ class DirectQueryEngine:
                         params[key] = match.group(group_num)
 
                     query_type = pattern["id"]
-                    logger.info(f"✅ PADRÃO MATCH: {pattern['name']} → {query_type} com params: {params}")
+                    logger.info(f"[OK] PADRAO MATCH: {pattern['name']} -> {query_type} com params: {params}")
                     return (query_type, params)
 
             # ALTA PRIORIDADE: Detectar consultas de PREÇO de produto em UNE específica
@@ -237,7 +279,7 @@ class DirectQueryEngine:
                 limite = int(top_produtos_une_match.group(1))
                 une_nome = top_produtos_une_match.group(2).upper()
                 result = ("top_produtos_une_especifica", {"limite": limite, "une_nome": une_nome})
-                logger.info(f"✅ CLASSIFICADO COMO: top_produtos_une_especifica (limite: {limite}, une: '{une_nome}')")
+                logger.info(f"[OK] CLASSIFICADO COMO: top_produtos_une_especifica (limite: {limite}, une: '{une_nome}')")
                 return result
 
             # ALTA PRIORIDADE: Detectar consultas de VENDAS DE UNE em MÊS específico
@@ -358,7 +400,7 @@ class DirectQueryEngine:
             use_full_dataset = query_type in full_dataset_queries
 
             if use_full_dataset:
-                logger.info("⚡ CONSULTA ESPECÍFICA DETECTADA - Carregando dataset COMPLETO")
+                logger.info("[!] CONSULTA ESPECIFICA DETECTADA - Carregando dataset COMPLETO")
 
             df = self._get_cached_base_data(full_dataset=use_full_dataset)
 
@@ -641,10 +683,10 @@ class DirectQueryEngine:
 
     def _query_top_produtos_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Top N produtos mais vendidos em UNE específica."""
-        limite = params.get('limite', 10)
-        une_nome = params.get('une_nome', '').upper()
+        limite = self._safe_get_int(params, 'limite', 10)
+        une_nome = self._safe_get_str(params, 'une_nome', '').upper()
 
-        logger.info(f"🔍 Buscando top {limite} produtos na UNE: '{une_nome}'")
+        logger.info(f"[>] Buscando top {limite} produtos na UNE: '{une_nome}'")
 
         if 'vendas_total' not in df.columns:
             return {"error": "Dados de vendas não disponíveis", "type": "error"}
@@ -656,15 +698,20 @@ class DirectQueryEngine:
         ]
 
         if une_data.empty:
-            unes_disponiveis = df['une_nome'].unique()
-            logger.error(f"❌ UNE '{une_nome}' não encontrada. Disponíveis: {list(unes_disponiveis[:5])}")
+            unes_disponiveis = sorted(df['une_nome'].unique())
+            # Fuzzy matching simples para sugestões
+            suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
+            if not suggestions:
+                suggestions = unes_disponiveis[:5]
+
+            logger.error(f"[X] UNE '{une_nome}' nao encontrada. Sugestoes: {suggestions}")
             return {
                 "error": f"UNE '{une_nome}' não encontrada",
                 "type": "error",
-                "suggestion": f"UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
+                "suggestion": f"Você quis dizer: {', '.join(suggestions)}? UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
             }
 
-        logger.info(f"✅ UNE encontrada: {len(une_data)} registros")
+        logger.info(f"[OK] UNE encontrada: {len(une_data)} registros")
 
         # Filtrar apenas produtos da UNE específica com vendas > 0
         produtos_une = une_data[une_data['vendas_total'] > 0].copy()
@@ -769,11 +816,15 @@ class DirectQueryEngine:
         # Verificar se UNE existe
         une_data = df[df['une_nome'] == une_nome]
         if une_data.empty:
-            unes_disponiveis = df['une_nome'].unique()
+            unes_disponiveis = sorted(df['une_nome'].unique())
+            suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
+            if not suggestions:
+                suggestions = unes_disponiveis[:5]
+
             return {
                 "error": f"UNE {une_nome} não encontrada",
                 "type": "error",
-                "suggestion": f"UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
+                "suggestion": f"Você quis dizer: {', '.join(suggestions)}?"
             }
 
         # Calcular total de vendas da UNE no mês específico

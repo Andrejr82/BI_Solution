@@ -15,9 +15,9 @@
         "quanto cada segmento vendeu na une 261",
         "vendas de todos os segmentos da une 261"
       ],
-      "regex": "venda[s]?\\s*(total|totais)?\\s*(de\\s*)?(cada\\s*)?segmento[s]?\\s*(da|na)?\\s*une\\s*(\\d+|[A-Z]{3})",
+      "regex": "venda[s]?\\s*(total|totais)?\\s*(de\\s*)?(cada\\s*)?segmento[s]?\\s*(da|na)?\\s*(une|filial|loja|unidade)\\s*(\\d+|[A-Z]{3,})",
       "extract": {
-        "une": "group(5)"
+        "une": "group(6)"
       },
       "query_type": "aggregation",
       "group_by": "nomesegmento",
@@ -30,21 +30,24 @@
       "response_template": "Vendas por segmento na UNE {une}:\n{results}"
     },
     {
-      "id": "top_produtos_une",
+      "id": "top_produtos_une_especifica",
       "name": "Top N produtos em UNE específica",
       "examples": [
         "top 10 produtos da une 261",
         "10 produtos mais vendidos na une MAD",
-        "quais os 5 produtos que mais vendem na une 261"
+        "quais os 5 produtos que mais vendem na une 261",
+        "Quais são os 5 produtos mais vendidos na UNE SCR no último mês?",
+        "me mostre os 10 produtos mais vendidos na filial SCR",
+        "5 produtos que mais venderam na loja 261"
       ],
-      "regex": "(top\\s+)?(\\d+)\\s*produtos\\s*(mais\\s*vendidos)?\\s*(da|na)?\\s*une\\s*(\\d+|[A-Z]{3})",
+      "regex": "(quais?\\s+(?:são|sao)?\\s+(?:os?\\s+)?|me\\s+mostre\\s+(?:os?\\s+)?)?(top\\s+)?(\\d+)\\s*produtos\\s*(mais\\s*vendidos?|que\\s+mais\\s+vende[mr]am?)?\\s*(da|na|para|em)?\\s*(une|filial|loja|unidade)\\s*([A-Z0-9]{2,})",
       "extract": {
-        "limite": "group(2)",
-        "une": "group(5)"
+        "limite": "group(3)",
+        "une_nome": "group(7)"
       },
       "query_type": "ranking",
       "filter": {
-        "une": "{une}"
+        "une": "{une_nome}"
       },
       "order_by": "vendas_total DESC",
       "limit": "{limite}",
@@ -56,12 +59,13 @@
       "examples": [
         "vendas do produto 369947 na une SCR",
         "quanto vendeu o produto 369947 na filial MAD",
-        "gráfico de vendas do produto 123456 na une 261"
+        "gráfico de vendas do produto 123456 na une 261",
+        "mostre as vendas do produto 123456 na loja SCR"
       ],
-      "regex": "(vendas?|gr[aá]fico).*produto\\s*(\\d{5,7}).*une\\s*(\\d+|[A-Z]{3})",
+      "regex": "(vendas?|gr[aá]fico|mostre|exiba).*produto\\s*(\\d{5,7}).*(une|filial|loja)\\s*([A-Z0-9]{2,})",
       "extract": {
         "produto": "group(2)",
-        "une": "group(3)"
+        "une": "group(4)"
       },
       "query_type": "time_series",
       "filter": {
@@ -104,11 +108,42 @@
       "examples": [
         "ranking de vendas por UNE",
         "top 10 segmentos",
-        "produtos mais vendidos geral"
+        "produtos mais vendidos geral",
+        "ranking de filiais",
+        "melhores lojas"
       ],
-      "regex": "(ranking|top\\s*\\d+).*por\\s*(une|segmento|produto)",
+      "regex": "(ranking|top\\s*\\d+|melhores?).*(?:por\\s+)?(une[s]?|filiai[s]?|loja[s]?|segmento[s]?|produto[s]?)",
       "query_type": "ranking",
       "output": "table_or_chart"
+    },
+    {
+      "id": "produto_mes_passado",
+      "name": "Produtos mais vendidos no mês passado/anterior",
+      "examples": [
+        "produtos mais vendidos no mês passado",
+        "top 10 produtos do mês anterior",
+        "quais produtos venderam mais no último mês"
+      ],
+      "regex": "(produtos?|top\\s*\\d*).*(?:mais\\s+vendidos?|que\\s+mais\\s+vende[mr]am?).*(m[êe]s\\s+(?:passado|anterior|[úu]ltimo)|[úu]ltimo\\s+m[êe]s)",
+      "extract": {
+        "periodo": "ultimo_mes"
+      },
+      "query_type": "ranking",
+      "output": "chart_bar"
+    },
+    {
+      "id": "produto_por_extenso",
+      "name": "Números por extenso",
+      "examples": [
+        "cinco produtos mais vendidos",
+        "dez melhores produtos",
+        "três segmentos principais"
+      ],
+      "regex": "(cinco|dez|tr[êe]s|vinte|quinze|cem)\\s+(produtos?|segmentos?|filiai[s]?|lojas?)",
+      "extract": {
+        "numero_extenso": "group(1)"
+      },
+      "query_type": "ranking"
     }
   ],
   "fallback_strategy": {

@@ -70,10 +70,30 @@ def login():
     with col2:
         st.markdown(
             """
-            <div style='text-align:center;'>
-                <img src='https://raw.githubusercontent.com/github/explore/main/topics/business-intelligence/business-intelligence.png' width='150'>
-                <h2>Caçulinha BI</h2>
-                <p style='color:#666;'>Acesse com seu usuário e senha para continuar.</p>
+            <style>
+                .login-container {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 2rem;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    text-align: center;
+                    margin-bottom: 1rem;
+                }
+                .login-title {
+                    color: white;
+                    font-size: 2rem;
+                    font-weight: bold;
+                    margin: 1rem 0;
+                }
+                .login-subtitle {
+                    color: rgba(255,255,255,0.9);
+                    font-size: 1rem;
+                }
+            </style>
+            <div class='login-container'>
+                <div style='font-size: 4rem;'>📊</div>
+                <h2 class='login-title'>Agente de Negócios</h2>
+                <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
             </div>
             """,
             unsafe_allow_html=True,
