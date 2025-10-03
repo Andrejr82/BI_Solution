@@ -396,7 +396,7 @@ class DirectQueryEngine:
 
         try:
             # 🔧 FIX CRÍTICO: Para consultas específicas de produtos, carregar dataset completo
-            full_dataset_queries = ["consulta_produto_especifico", "consulta_une_especifica", "evolucao_vendas_produto", "produto_vendas_une_barras", "produto_vendas_todas_unes", "preco_produto_une_especifica", "top_produtos_une_especifica", "vendas_une_mes_especifico", "ranking_vendas_unes", "produto_mais_vendido_cada_une", "top_produtos_por_segmento"]
+            full_dataset_queries = ["consulta_produto_especifico", "consulta_une_especifica", "evolucao_vendas_produto", "produto_vendas_une_barras", "produto_vendas_todas_unes", "preco_produto_une_especifica", "top_produtos_une_especifica", "vendas_une_mes_especifico", "ranking_vendas_unes", "produto_mais_vendido_cada_une", "top_produtos_por_segmento", "top_produtos_segmento_une"]
             use_full_dataset = query_type in full_dataset_queries
 
             if use_full_dataset:
@@ -1035,6 +1035,114 @@ class DirectQueryEngine:
                 "vendas_total": sum(p['vendas'] for p in produtos_list)
             },
             "summary": f"Top {len(produtos_list)} produtos em '{segmento_real}'. Líder: {produtos_list[0]['nome']} ({produtos_list[0]['vendas']:,.0f} vendas)",
+            "tokens_used": 0
+        }
+
+    def _query_top_produtos_segmento_une(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Query: Top N produtos em segmento específico E UNE específica."""
+        limite = self._safe_get_int(params, 'limite', 10)
+        segmento = self._safe_get_str(params, 'segmento', '').upper()
+        une_nome = self._safe_get_str(params, 'une_nome', '').upper()
+
+        logger.info(f"[>] Buscando top {limite} produtos no segmento '{segmento}' na UNE: '{une_nome}'")
+
+        if 'vendas_total' not in df.columns:
+            return {"error": "Dados de vendas não disponíveis", "type": "error"}
+
+        # Filtrar por segmento (case insensitive)
+        segmento_filter = df['nomesegmento'].str.upper().str.contains(segmento, na=False)
+        if not segmento_filter.any():
+            segmentos_disponiveis = sorted(df['nomesegmento'].unique())[:10]
+            return {
+                "error": f"Segmento '{segmento}' não encontrado",
+                "type": "error",
+                "suggestion": f"Segmentos disponíveis: {', '.join(segmentos_disponiveis)}"
+            }
+
+        # Filtrar por UNE (suporta nome ou código)
+        une_data = df[
+            (df['une_nome'].str.upper() == une_nome) |
+            (df['une'].astype(str) == une_nome)
+        ]
+
+        if une_data.empty:
+            unes_disponiveis = sorted(df['une_nome'].unique())
+            suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
+            if not suggestions:
+                suggestions = unes_disponiveis[:5]
+
+            logger.error(f"[X] UNE '{une_nome}' nao encontrada. Sugestoes: {suggestions}")
+            return {
+                "error": f"UNE '{une_nome}' não encontrada",
+                "type": "error",
+                "suggestion": f"Você quis dizer: {', '.join(suggestions)}? UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
+            }
+
+        logger.info(f"[OK] UNE encontrada: {len(une_data)} registros")
+
+        # Aplicar ambos os filtros
+        df_filtered = une_data[segmento_filter]
+
+        if df_filtered.empty:
+            return {
+                "error": f"Nenhum produto encontrado no segmento '{segmento}' na UNE '{une_nome}'",
+                "type": "error"
+            }
+
+        logger.info(f"[OK] Segmento filtrado: {len(df_filtered)} produtos na UNE")
+
+        # Agrupar por produto e somar vendas
+        produtos_vendas = df_filtered.groupby('codigo').agg(
+            vendas_total=('vendas_total', 'sum'),
+            nome_produto=('nome_produto', 'first'),
+            nomesegmento=('nomesegmento', 'first'),
+            preco_38_percent=('preco_38_percent', 'first')
+        ).reset_index()
+
+        # Pegar top N produtos
+        top_produtos = produtos_vendas.nlargest(limite, 'vendas_total')
+
+        if top_produtos.empty:
+            return {"error": f"Nenhum produto com vendas no segmento '{segmento}' na UNE '{une_nome}'", "type": "error"}
+
+        # Preparar dados para o gráfico
+        x_data = [produto['nome_produto'][:50] for _, produto in top_produtos.iterrows()]  # Limitar nome
+        y_data = [float(produto['vendas_total']) for _, produto in top_produtos.iterrows()]
+
+        chart_data = {
+            "x": x_data,
+            "y": y_data,
+            "type": "bar",
+            "show_values": True
+        }
+
+        # Preparar lista de produtos
+        produtos_list = []
+        for _, produto in top_produtos.iterrows():
+            produtos_list.append({
+                "codigo": int(produto['codigo']),
+                "nome": produto['nome_produto'],
+                "vendas": float(produto['vendas_total']),
+                "segmento": produto['nomesegmento'],
+                "preco": float(produto.get('preco_38_percent', 0))
+            })
+
+        segmento_real = top_produtos.iloc[0]['nomesegmento']
+        vendas_total = sum(y_data)
+        lider = produtos_list[0]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} Produtos - {segmento_real} na UNE {une_nome}",
+            "result": {
+                "chart_data": chart_data,
+                "produtos": produtos_list,
+                "segmento": segmento_real,
+                "une": une_nome,
+                "total_produtos": len(produtos_list),
+                "vendas_total": vendas_total
+            },
+            "summary": f"Top {limite} produtos em '{segmento_real}' na UNE {une_nome}. Líder: {lider['nome']} ({lider['vendas']:,.0f} vendas)",
             "tokens_used": 0
         }
 
