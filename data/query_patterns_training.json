@@ -1,8 +1,11 @@
 {
   "metadata": {
     "description": "Padrões de perguntas para treinamento automático do agente",
-    "version": "1.0",
-    "auto_learn": true
+    "version": "2.0",
+    "auto_learn": true,
+    "total_patterns": 22,
+    "last_updated": "2025-10-03",
+    "coverage_target": "80+ perguntas de negócio"
   },
   "patterns": [
     {
@@ -162,6 +165,147 @@
         "numero_extenso": "group(1)"
       },
       "query_type": "ranking"
+    },
+    {
+      "id": "analise_abc",
+      "name": "Análise ABC de produtos",
+      "examples": [
+        "produtos ABC A",
+        "análise ABC: distribuição de produtos",
+        "produtos classificados como ABC A",
+        "produtos ABC C com potencial"
+      ],
+      "regex": "(produtos?|an[aá]lise)\\s*(abc|classificad[oa]s?.*abc)\\s*([abc])?",
+      "extract": {
+        "classe_abc": "group(3)"
+      },
+      "query_type": "abc_analysis",
+      "output": "table_or_chart"
+    },
+    {
+      "id": "produtos_sem_movimento",
+      "name": "Produtos sem movimento ou parados",
+      "examples": [
+        "produtos sem movimento",
+        "produtos parados",
+        "produtos que não venderam",
+        "produtos sem vendas"
+      ],
+      "regex": "produtos?\\s*(sem|parados?|que\\s+n[aã]o)\\s*(movimento|venda[s]?|venderam)",
+      "query_type": "produtos_sem_movimento",
+      "output": "table"
+    },
+    {
+      "id": "estoque_alto",
+      "name": "Produtos com excesso de estoque",
+      "examples": [
+        "produtos com excesso de estoque",
+        "estoque alto",
+        "produtos com muito estoque",
+        "identificar produtos com excesso de estoque"
+      ],
+      "regex": "(produtos?\\s*(com)?\\s*)?(excesso|muito|alto)\\s*(de\\s*)?estoque",
+      "query_type": "estoque_excesso",
+      "output": "table"
+    },
+    {
+      "id": "estoque_baixo",
+      "name": "Produtos com estoque baixo",
+      "examples": [
+        "produtos com estoque baixo",
+        "estoque baixo",
+        "produtos com pouco estoque",
+        "produtos com estoque baixo vs alta demanda"
+      ],
+      "regex": "(produtos?\\s*(com)?\\s*)?(baixo|pouco|m[íi]nimo)\\s*(de\\s*)?estoque",
+      "query_type": "estoque_baixo",
+      "output": "table"
+    },
+    {
+      "id": "rotacao_estoque",
+      "name": "Análise de rotação de estoque",
+      "examples": [
+        "produtos com maior rotação de estoque",
+        "rotação de estoque",
+        "produtos de alta rotação"
+      ],
+      "regex": "(produtos?\\s*(com)?\\s*)?(maior|alta|melhor)?\\s*rota[çc][ãa]o\\s*(de\\s*)?estoque",
+      "query_type": "rotacao_estoque",
+      "output": "table_or_chart"
+    },
+    {
+      "id": "tendencia_vendas",
+      "name": "Tendência de vendas",
+      "examples": [
+        "tendência de vendas",
+        "tendência de vendas dos últimos 6 meses",
+        "produtos com tendência decrescente",
+        "análise de tendência"
+      ],
+      "regex": "(tend[eê]ncia|evolu[çc][ãa]o).*vendas?.*([úu]ltimos?\\s*\\d+\\s*(meses?|dias?))?",
+      "query_type": "tendencia_vendas",
+      "output": "chart_line"
+    },
+    {
+      "id": "sazonalidade",
+      "name": "Análise de sazonalidade",
+      "examples": [
+        "análise de sazonalidade",
+        "sazonalidade no segmento FESTAS",
+        "quais meses vendem mais",
+        "produtos com padrão sazonal"
+      ],
+      "regex": "(an[aá]lise\\s*(de\\s*)?)?sazonalidade|quais\\s*meses?\\s*vende[mr]?\\s*mais|padr[ãa]o\\s*sazonal",
+      "query_type": "sazonalidade",
+      "output": "chart_line"
+    },
+    {
+      "id": "crescimento_segmento",
+      "name": "Crescimento por segmento",
+      "examples": [
+        "qual segmento teve maior crescimento",
+        "crescimento dos segmentos",
+        "segmento com mais crescimento"
+      ],
+      "regex": "(qual|quais)?\\s*segmentos?\\s*(teve[mr]?|com)\\s*(maior|mais|melhor)?\\s*crescimento",
+      "query_type": "crescimento_segmento",
+      "output": "chart_bar"
+    },
+    {
+      "id": "ranking_fabricantes",
+      "name": "Ranking de fabricantes",
+      "examples": [
+        "ranking de fabricantes",
+        "fabricantes com maior volume",
+        "quais fabricantes vendem mais"
+      ],
+      "regex": "(ranking|quais)\\s*(de\\s*)?fabricantes?|(fabricantes?.*maior|fabricantes?.*vendem\\s*mais)",
+      "query_type": "ranking_fabricantes",
+      "output": "chart_bar"
+    },
+    {
+      "id": "performance_categoria",
+      "name": "Performance por categoria",
+      "examples": [
+        "performance por categoria",
+        "categorias que mais vendem",
+        "performance por categoria no segmento ARMARINHO"
+      ],
+      "regex": "performance\\s*(por|de)\\s*categor(ia|ias)|categorias?\\s*(que\\s*)?(mais\\s*)?vende[mr]?",
+      "query_type": "performance_categoria",
+      "output": "chart_bar"
+    },
+    {
+      "id": "pico_vendas",
+      "name": "Produtos com pico de vendas",
+      "examples": [
+        "produtos que tiveram pico",
+        "pico de vendas no último mês",
+        "quais produtos tiveram pico"
+      ],
+      "regex": "(produtos?|quais).*pico.*vendas?|pico\\s*(de\\s*)?vendas?",
+      "query_type": "pico_vendas",
+      "output": "table_or_chart"
     }
   ],
   "fallback_strategy": {

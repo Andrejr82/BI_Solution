@@ -27,9 +27,10 @@ start_app.bat
 
 **O que acontece**:
 1. ✅ Ativa o ambiente virtual
-2. ✅ Inicia o Backend FastAPI (porta 8000)
+2. ✅ Inicia o Backend FastAPI em background (porta 8000)
 3. ✅ Aguarda backend estar 100% pronto
-4. ✅ Inicia o Frontend Streamlit (porta 8501)
+4. ✅ Inicia o Frontend Streamlit na mesma janela (porta 8501)
+5. ✅ Ctrl+C encerra tudo (backend + frontend)
 
 **Acessar**:
 - Frontend: http://localhost:8501
@@ -81,12 +82,9 @@ Os scripts garantem a ordem correta:
 
 ## 🛑 Como Parar a Aplicação
 
-### Windows (script BAT):
-- Feche as janelas do terminal abertas
-- Ou pressione qualquer tecla na janela principal
-
-### Python/SH:
+### Todas as plataformas:
 - Pressione `Ctrl+C` no terminal
+- O script encerra automaticamente backend e frontend
 
 ---
 
