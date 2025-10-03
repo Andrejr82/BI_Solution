@@ -66,32 +66,35 @@ def login():
     init_auth_system()
 
     # Coloca o formulário de login em uma coluna centralizada para melhor apelo visual
-    _, col2, _ = st.columns([1, 2, 1])
+    _, col2, _ = st.columns([1, 2.5, 1])
     with col2:
         st.markdown(
             """
             <style>
                 .login-container {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 2rem;
+                    padding: 2.5rem 3rem;
                     border-radius: 15px;
                     box-shadow: 0 10px 40px rgba(0,0,0,0.2);
                     text-align: center;
-                    margin-bottom: 1rem;
+                    margin-bottom: 1.5rem;
                 }
                 .login-title {
                     color: white;
-                    font-size: 2rem;
+                    font-size: 2.5rem;
                     font-weight: bold;
-                    margin: 1rem 0;
+                    margin: 1rem 0 0.5rem 0;
+                    letter-spacing: -0.5px;
                 }
                 .login-subtitle {
-                    color: rgba(255,255,255,0.9);
-                    font-size: 1rem;
+                    color: rgba(255,255,255,0.95);
+                    font-size: 1.1rem;
+                    margin-top: 0.5rem;
+                    font-weight: 300;
                 }
             </style>
             <div class='login-container'>
-                <div style='font-size: 4rem;'>📊</div>
+                <div style='font-size: 3.5rem; margin-bottom: 0.5rem;'>📊</div>
                 <h2 class='login-title'>Agente de Negócios</h2>
                 <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
             </div>
