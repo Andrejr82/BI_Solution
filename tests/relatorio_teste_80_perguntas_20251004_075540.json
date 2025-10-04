@@ -1,0 +1,815 @@
+{
+  "metadata": {
+    "timestamp": "2025-10-04T07:55:40.362525",
+    "total_perguntas": 80,
+    "total_categorias": 10
+  },
+  "estatisticas": {
+    "SUCCESS": 66,
+    "ERROR": 0,
+    "FALLBACK": 13,
+    "UNKNOWN": 1
+  },
+  "resultados": [
+    {
+      "id": 1,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Gere um gráfico de vendas do produto 369947 na UNE SCR",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.9089174270629883,
+      "timestamp": "2025-10-04T07:55:39.182630"
+    },
+    {
+      "id": 2,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Mostre a evolução de vendas mensais do produto 369947 nos últimos 12 meses",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0738534927368164,
+      "timestamp": "2025-10-04T07:55:39.256483"
+    },
+    {
+      "id": 3,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Compare as vendas do produto 369947 entre todas as UNEs",
+      "status": "UNKNOWN",
+      "mensagem": "Tipo desconhecido: evolucao_vendas_produto",
+      "tipo_resultado": "evolucao_vendas_produto",
+      "tempo_processamento": 0.0118255615234375,
+      "timestamp": "2025-10-04T07:55:39.268308"
+    },
+    {
+      "id": 4,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Quais são os 5 produtos mais vendidos na UNE SCR no último mês?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.08985066413879395,
+      "timestamp": "2025-10-04T07:55:39.358159"
+    },
+    {
+      "id": 5,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Análise de performance: produtos com vendas acima da média no segmento TECIDOS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.04771304130554199,
+      "timestamp": "2025-10-04T07:55:39.405872"
+    },
+    {
+      "id": 6,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Identifique produtos com variação de vendas superior a 20% mês a mês",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.004797458648681641,
+      "timestamp": "2025-10-04T07:55:39.410670"
+    },
+    {
+      "id": 7,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Top 10 produtos por margem de crescimento nos últimos 3 meses",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.009875297546386719,
+      "timestamp": "2025-10-04T07:55:39.420545"
+    },
+    {
+      "id": 8,
+      "categoria": "🎯 Vendas por Produto",
+      "pergunta": "Produtos com padrão de vendas sazonal no segmento FESTAS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.015699386596679688,
+      "timestamp": "2025-10-04T07:55:39.437260"
+    },
+    {
+      "id": 9,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Quais são os 10 produtos que mais vendem no segmento TECIDOS?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.07950377464294434,
+      "timestamp": "2025-10-04T07:55:39.516764"
+    },
+    {
+      "id": 10,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Compare as vendas entre os segmentos ARMARINHO E CONFECÇÃO vs TECIDOS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.04728579521179199,
+      "timestamp": "2025-10-04T07:55:39.564050"
+    },
+    {
+      "id": 11,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Ranking dos segmentos por volume de vendas no último trimestre",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.564050"
+    },
+    {
+      "id": 12,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Qual segmento teve maior crescimento percentual mês a mês?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.031867265701293945,
+      "timestamp": "2025-10-04T07:55:39.597924"
+    },
+    {
+      "id": 13,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Distribuição de vendas por categoria dentro do segmento PAPELARIA",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.005900859832763672,
+      "timestamp": "2025-10-04T07:55:39.603825"
+    },
+    {
+      "id": 14,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Segmentos com maior concentração de produtos ABC 'A'",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.05438351631164551,
+      "timestamp": "2025-10-04T07:55:39.658209"
+    },
+    {
+      "id": 15,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Análise de penetração: quantos produtos únicos vendidos por segmento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0017542839050292969,
+      "timestamp": "2025-10-04T07:55:39.659963"
+    },
+    {
+      "id": 16,
+      "categoria": "🏪 Análises por Segmento",
+      "pergunta": "Segmentos mais afetados por sazonalidade",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0157926082611084,
+      "timestamp": "2025-10-04T07:55:39.675756"
+    },
+    {
+      "id": 17,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Ranking de performance de vendas por UNE no segmento TECIDOS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.020209550857543945,
+      "timestamp": "2025-10-04T07:55:39.695965"
+    },
+    {
+      "id": 18,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Qual UNE vende mais produtos do segmento PAPELARIA?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.010970592498779297,
+      "timestamp": "2025-10-04T07:55:39.706936"
+    },
+    {
+      "id": 19,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Compare a performance da UNE SCR vs outras UNEs principais",
+      "status": "SUCCESS",
+      "mensagem": "Processado como table",
+      "tipo_resultado": "table",
+      "tempo_processamento": 0.07986307144165039,
+      "timestamp": "2025-10-04T07:55:39.786799"
+    },
+    {
+      "id": 20,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Identifique UNEs com maior potencial de crescimento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.016050100326538086,
+      "timestamp": "2025-10-04T07:55:39.802849"
+    },
+    {
+      "id": 21,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "UNEs com maior diversidade de produtos vendidos",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.802849"
+    },
+    {
+      "id": 22,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Análise de concentração: dependência de produtos específicos por UNE",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.015958547592163086,
+      "timestamp": "2025-10-04T07:55:39.818808"
+    },
+    {
+      "id": 23,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "UNEs com melhor desempenho em produtos promocionais",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.818808"
+    },
+    {
+      "id": 24,
+      "categoria": "🏬 Análises por UNE/Loja",
+      "pergunta": "Comparativo de eficiência de vendas entre UNEs similares",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.818808"
+    },
+    {
+      "id": 25,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Análise de sazonalidade: quais meses vendem mais no segmento FESTAS?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.015770435333251953,
+      "timestamp": "2025-10-04T07:55:39.834578"
+    },
+    {
+      "id": 26,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Tendência de vendas dos últimos 6 meses por categoria",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.024121522903442383,
+      "timestamp": "2025-10-04T07:55:39.858700"
+    },
+    {
+      "id": 27,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Identifique produtos com padrão de vendas decrescente",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.00793147087097168,
+      "timestamp": "2025-10-04T07:55:39.866631"
+    },
+    {
+      "id": 28,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Quais produtos tiveram pico de vendas no último mês?",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.866631"
+    },
+    {
+      "id": 29,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Produtos com ciclo de vendas consistente vs irregular",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.015806913375854492,
+      "timestamp": "2025-10-04T07:55:39.882438"
+    },
+    {
+      "id": 30,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Impacto sazonal por segmento: comparativo ano vs ano",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.016130685806274414,
+      "timestamp": "2025-10-04T07:55:39.898569"
+    },
+    {
+      "id": 31,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Previsão de vendas baseada no histórico dos últimos 12 meses",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:39.898569"
+    },
+    {
+      "id": 32,
+      "categoria": "📈 Análises Temporais",
+      "pergunta": "Produtos que precisam de ação comercial urgente (tendência negativa)",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.016083478927612305,
+      "timestamp": "2025-10-04T07:55:39.914652"
+    },
+    {
+      "id": 33,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Produtos classificados como ABC 'A' no segmento TECIDOS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.048474788665771484,
+      "timestamp": "2025-10-04T07:55:39.963127"
+    },
+    {
+      "id": 34,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Análise ABC: distribuição de produtos por classificação",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.047693729400634766,
+      "timestamp": "2025-10-04T07:55:40.010821"
+    },
+    {
+      "id": 35,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Migração ABC: produtos que mudaram de classificação",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.016097307205200195,
+      "timestamp": "2025-10-04T07:55:40.026918"
+    },
+    {
+      "id": 36,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Produtos ABC 'C' com potencial para 'B'",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.04798126220703125,
+      "timestamp": "2025-10-04T07:55:40.074899"
+    },
+    {
+      "id": 37,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Produtos com maior frequency de vendas nas últimas 5 semanas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.015779972076416016,
+      "timestamp": "2025-10-04T07:55:40.090679"
+    },
+    {
+      "id": 38,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Top 10 produtos por média de vendas semanal",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.090679"
+    },
+    {
+      "id": 39,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Produtos com vendas regulares vs esporádicas",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.090679"
+    },
+    {
+      "id": 40,
+      "categoria": "💰 Performance e ABC",
+      "pergunta": "Análise de consistência: produtos vendidos em todas as semanas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.015758275985717773,
+      "timestamp": "2025-10-04T07:55:40.106437"
+    },
+    {
+      "id": 41,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Produtos com estoque baixo vs alta demanda",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.106437"
+    },
+    {
+      "id": 42,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Análise de ponto de pedido: produtos próximos ao limite",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.106437"
+    },
+    {
+      "id": 43,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Produtos com maior leadtime vs performance de vendas",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.015726566314697266,
+      "timestamp": "2025-10-04T07:55:40.122164"
+    },
+    {
+      "id": 44,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Identificar produtos com excesso de estoque",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.122164"
+    },
+    {
+      "id": 45,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Produtos com maior rotação de estoque",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.122164"
+    },
+    {
+      "id": 46,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Análise de exposição: produtos com exposição mínima vs vendas",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.015845537185668945,
+      "timestamp": "2025-10-04T07:55:40.138010"
+    },
+    {
+      "id": 47,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Produtos pendentes de solicitação há mais de X dias",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.138010"
+    },
+    {
+      "id": 48,
+      "categoria": "📦 Estoque e Logística",
+      "pergunta": "Eficiência logística: relação entre estoque CD vs vendas",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.138010"
+    },
+    {
+      "id": 49,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Ranking de fabricantes por volume de vendas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.016219615936279297,
+      "timestamp": "2025-10-04T07:55:40.154229"
+    },
+    {
+      "id": 50,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Compare performance de diferentes fabricantes no segmento TECIDOS",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.154229"
+    },
+    {
+      "id": 51,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Fabricantes com maior diversidade de produtos",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.154229"
+    },
+    {
+      "id": 52,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Análise de concentração: dependência de fabricantes específicos",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.020676612854003906,
+      "timestamp": "2025-10-04T07:55:40.174906"
+    },
+    {
+      "id": 53,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Fabricantes com produtos de maior margem",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.174906"
+    },
+    {
+      "id": 54,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Novos fabricantes vs estabelecidos: performance comparativa",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.01107478141784668,
+      "timestamp": "2025-10-04T07:55:40.185980"
+    },
+    {
+      "id": 55,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Fabricantes exclusivos vs multimarca por UNE",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.185980"
+    },
+    {
+      "id": 56,
+      "categoria": "🏭 Análises por Fabricante",
+      "pergunta": "Oportunidades de cross-selling por fabricante",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.015926599502563477,
+      "timestamp": "2025-10-04T07:55:40.201907"
+    },
+    {
+      "id": 57,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Performance por categoria dentro do segmento ARMARINHO E CONFECÇÃO",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0020079612731933594,
+      "timestamp": "2025-10-04T07:55:40.203915"
+    },
+    {
+      "id": 58,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Grupos de produtos com maior margem de crescimento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.203915"
+    },
+    {
+      "id": 59,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Análise cross-selling: produtos frequentemente vendidos juntos",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.013739585876464844,
+      "timestamp": "2025-10-04T07:55:40.217655"
+    },
+    {
+      "id": 60,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Subgrupos mais rentáveis por segmento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.217655"
+    },
+    {
+      "id": 61,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Categorias com menor penetração que têm potencial",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.217655"
+    },
+    {
+      "id": 62,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Gap analysis: categorias ausentes em UNEs específicas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.019941091537475586,
+      "timestamp": "2025-10-04T07:55:40.237596"
+    },
+    {
+      "id": 63,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Produtos complementares com baixa correlação de vendas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.002646923065185547,
+      "timestamp": "2025-10-04T07:55:40.240243"
+    },
+    {
+      "id": 64,
+      "categoria": "🎨 Categoria/Grupo",
+      "pergunta": "Oportunidades de expansão de linha por categoria",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.009450674057006836,
+      "timestamp": "2025-10-04T07:55:40.249693"
+    },
+    {
+      "id": 65,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Dashboard executivo: KPIs principais por segmento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.249693"
+    },
+    {
+      "id": 66,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Relatório de performance mensal consolidado",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.01569390296936035,
+      "timestamp": "2025-10-04T07:55:40.265387"
+    },
+    {
+      "id": 67,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Scorecard de vendas: top/bottom performers",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.265387"
+    },
+    {
+      "id": 68,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Métricas de eficiência operacional por UNE",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.265387"
+    },
+    {
+      "id": 69,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Alertas: produtos que precisam de atenção (baixa rotação, estoque alto)",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0157473087310791,
+      "timestamp": "2025-10-04T07:55:40.281135"
+    },
+    {
+      "id": 70,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Monitor de tendências: produtos em ascensão vs declínio",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.281135"
+    },
+    {
+      "id": 71,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Relatório de exceções: performance fora do padrão",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.016080617904663086,
+      "timestamp": "2025-10-04T07:55:40.297215"
+    },
+    {
+      "id": 72,
+      "categoria": "📊 Dashboards Executivos",
+      "pergunta": "Indicadores de saúde do negócio por segmento",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.297215"
+    },
+    {
+      "id": 73,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Análise de canibalização: produtos que competem entre si",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0157623291015625,
+      "timestamp": "2025-10-04T07:55:40.312977"
+    },
+    {
+      "id": 74,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Impacto de promoções: antes vs durante vs depois",
+      "status": "FALLBACK",
+      "mensagem": "DirectQueryEngine não processou - necessário fallback",
+      "tipo_resultado": "fallback",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.312977"
+    },
+    {
+      "id": 75,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Produtos fora de linha: análise de descontinuação",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.312977"
+    },
+    {
+      "id": 76,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Oportunidades de bundle: produtos com sinergia de vendas",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.01585531234741211,
+      "timestamp": "2025-10-04T07:55:40.328833"
+    },
+    {
+      "id": 77,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Produtos com risco de ruptura baseado em tendências",
+      "status": "SUCCESS",
+      "mensagem": "Processado como chart",
+      "tipo_resultado": "chart",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.328833"
+    },
+    {
+      "id": 78,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Previsão de demanda para próximos 3 meses",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.01576995849609375,
+      "timestamp": "2025-10-04T07:55:40.344603"
+    },
+    {
+      "id": 79,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Simulação: impacto de mudanças de preço/exposição",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.0,
+      "timestamp": "2025-10-04T07:55:40.344603"
+    },
+    {
+      "id": 80,
+      "categoria": "🔍 Análises Específicas",
+      "pergunta": "Análise de cenários: melhor/pior caso por produto",
+      "status": "SUCCESS",
+      "mensagem": "Processado como text",
+      "tipo_resultado": "text",
+      "tempo_processamento": 0.017922163009643555,
+      "timestamp": "2025-10-04T07:55:40.362525"
+    }
+  ]
+}

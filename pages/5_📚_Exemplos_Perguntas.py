@@ -147,8 +147,8 @@ def enviar_pergunta(pergunta):
     """Envia pergunta para o chat principal"""
     # Armazenar pergunta no session state para uso no chat
     st.session_state['pergunta_selecionada'] = pergunta
-    st.info(f"💬 Pergunta selecionada: '{pergunta}'")
-    st.info("⬅️ Volte para a página 'Chat BI' para ver a resposta")
+    # Navegar automaticamente para a página principal
+    st.switch_page("streamlit_app.py")
 
 # Estatísticas gerais
 col1, col2, col3 = st.columns(3)

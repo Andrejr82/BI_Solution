@@ -168,9 +168,9 @@
             "ULTIMO_INVENTARIO_UNE": "Data do último inventário na UNE",
             "ULTIMA_ENTRADA_DATA_UNE": "Data da última entrada na UNE",
             "ULTIMA_ENTRADA_QTDE_UNE": "Quantidade da última entrada na UNE",
-            "ESTOQUE_LV": "Estoque no Linha Verde",
+            "ESTOQUE_LV": "Estoque na Linha Verde",
             "ESTOQUE_GONDOLA_LV": "Estoque na gôndola do Linha Verde",
-            "ESTOQUE_ILHA_LV": "Estoque na ilha do Linha Verde",
+            "ESTOQUE_ILHA_LV": "Estoque na ilha da Linha Verde",
             "EXPOSICAO_MINIMA": "Exposição mínima do produto",
             "EXPOSICAO_MINIMA_UNE": "Exposição mínima na UNE",
             "EXPOSICAO_MAXIMA_UNE": "Exposição máxima na UNE",
@@ -197,8 +197,4 @@
             "FREQ_ULT_SEM": "Frequência na última semana"
         }
     }
-<<<<<<< HEAD
 ]
-=======
-]
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

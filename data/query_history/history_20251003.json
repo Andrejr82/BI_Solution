@@ -1,0 +1,47 @@
+[
+  {
+    "query": "Ranking dos segmentos",
+    "session_id": "f6b8742e-88d1-4df1-8804-8e16ed775b0a",
+    "timestamp": "2025-10-03T14:59:40.416232",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.494150400161743
+  },
+  {
+    "query": "quais são os 10 produros mais vendidos na une tij",
+    "session_id": "f6b8742e-88d1-4df1-8804-8e16ed775b0a",
+    "timestamp": "2025-10-03T15:00:55.928278",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 1.2141880989074707
+  },
+  {
+    "query": "Análise ABC de produtos",
+    "session_id": "f6b8742e-88d1-4df1-8804-8e16ed775b0a",
+    "timestamp": "2025-10-03T15:01:17.148247",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 0.9286201000213623
+  },
+  {
+    "query": "Top 10 produtos do segmento TECIDOS",
+    "session_id": "cc41c6d6-3f76-49ea-b807-bb01cf7a3f09",
+    "timestamp": "2025-10-03T18:26:41.037607",
+    "success": false,
+    "results_count": 0,
+    "error": "❌ UNE 'OS' não encontrada\n\n💡 Você quis dizer: 261, BAR, MAD, SCR, TIJ? UNEs disponíveis: 261, BAR, MAD, SCR, TIJ",
+    "processing_time": 0.0
+  },
+  {
+    "query": "Mostre a evolução de vendas mensais do produto 369947 nos últimos 12 meses",
+    "session_id": "023fe109-3a28-4384-b921-0df439106f7b",
+    "timestamp": "2025-10-03T20:22:02.553402",
+    "success": true,
+    "results_count": 12,
+    "error": null,
+    "processing_time": 1.297621
+  }
+]

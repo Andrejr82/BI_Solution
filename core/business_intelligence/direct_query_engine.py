@@ -157,6 +157,79 @@ class DirectQueryEngine:
             "segmento campeão": "segmento_campao",
             "ranking segmentos": "ranking_segmentos",
 
+            # Fabricantes (NOVO - Fase 1)
+            "ranking fabricantes": "ranking_fabricantes",
+            "ranking de fabricantes": "ranking_fabricantes",
+            "top fabricantes": "ranking_fabricantes",
+            "fabricantes mais vendem": "ranking_fabricantes",
+            "melhores fabricantes": "ranking_fabricantes",
+
+            # Rankings Gerais (NOVO - Fase 1)
+            "ranking de vendas": "ranking_geral",
+            "ranking geral": "ranking_geral",
+            "top vendas": "ranking_geral",
+            "melhores": "ranking_geral",
+
+            # Comparação e Análise ABC (NOVO - Fase 2)
+            "comparação de segmentos": "comparacao_segmentos",
+            "comparar segmentos": "comparacao_segmentos",
+            "compare segmentos": "comparacao_segmentos",
+            "segmentos vs": "comparacao_segmentos",
+            "análise abc": "analise_abc",
+            "classificação abc": "analise_abc",
+            "curva abc": "analise_abc",
+            "produtos abc": "analise_abc",
+            "classe abc": "analise_abc",
+
+            # Estoque (NOVO - Fase 2)
+            "estoque alto": "estoque_alto",
+            "excesso de estoque": "estoque_alto",
+            "estoque excessivo": "estoque_alto",
+            "produtos com estoque alto": "estoque_alto",
+
+            # Segmento e Categoria (NOVO - Fase 2 refinada)
+            "produtos que mais vendem no segmento": "top_produtos_por_segmento",
+            "mais vendidos no segmento": "top_produtos_por_segmento",
+            "top produtos segmento": "top_produtos_por_segmento",
+            "distribuição de vendas por categoria": "distribuicao_categoria",
+            "distribuição por categoria": "distribuicao_categoria",
+            "vendas por categoria": "distribuicao_categoria",
+
+            # Diversidade e Penetração (NOVO - Fase 2 refinada)
+            "diversidade de produtos": "diversidade_produtos",
+            "produtos únicos": "diversidade_produtos",
+            "penetração": "diversidade_produtos",
+            "quantos produtos": "diversidade_produtos",
+
+            # Crescimento e Sazonalidade (já existem patterns, mas adicionando keywords)
+            "crescimento percentual": "crescimento_segmento",
+            "maior crescimento": "crescimento_segmento",
+            "sazonalidade": "sazonalidade",
+            "sazonal": "sazonalidade",
+            "padrão de vendas sazonal": "sazonalidade",
+            "meses que vendem mais": "sazonalidade",
+
+            # Ranking UNEs e queries por UNE (NOVO - Fase 2 refinada)
+            "qual une vende mais": "ranking_unes_por_segmento",
+            "ranking de unes": "ranking_geral",
+            "une que mais vende": "ranking_unes_por_segmento",
+
+            # Evolução mensal (NOVO - Fase 2 refinada)
+            "evolução de vendas mensais": "evolucao_mes_a_mes",
+            "evolução mensal": "evolucao_mes_a_mes",
+            "vendas mensais": "evolucao_mes_a_mes",
+            "mostre a evolução": "evolucao_mes_a_mes",
+
+            # Pico de vendas, tendências e performance (NOVO - Fase 2 refinada final)
+            "pico de vendas": "pico_vendas",
+            "produtos tiveram pico": "pico_vendas",
+            "produtos com pico": "pico_vendas",
+            "tendência de vendas": "tendencia_vendas",
+            "tendência dos últimos": "tendencia_vendas",
+            "produtos acima da média": "produtos_acima_media",
+            "vendas acima da média": "produtos_acima_media",
+            "performance produtos": "produtos_acima_media",
+
             # Top produtos por segmento
             "top 10 produtos": "top_produtos_por_segmento",
             "10 produtos mais vendidos": "top_produtos_por_segmento",
@@ -379,7 +452,15 @@ class DirectQueryEngine:
                         logger.info(f"CLASSIFICADO COMO: {query_type} (todos os segmentos)")
                         return result
 
-                    result = (query_type, {"matched_keywords": keywords})
+                    # Para queries que aceitam produtos específicos, detectar código de produto
+                    params = {"matched_keywords": keywords, "user_query": user_query}
+                    if query_type in ["evolucao_mes_a_mes", "vendas_produto_une"]:
+                        product_match = re.search(r'\b(\d{5,7})\b', user_query)
+                        if product_match:
+                            params['produto'] = product_match.group(1)
+                            logger.info(f"[i] Produto detectado: {params['produto']}")
+
+                    result = (query_type, params)
                     logger.info(f"CLASSIFICADO COMO: {query_type} (keyword: {keywords})")
                     return result
 
@@ -391,13 +472,18 @@ class DirectQueryEngine:
                 logger.info(f"CLASSIFICADO COMO: consulta_produto_especifico (código: {produto_codigo})")
                 return result
 
-            # Detectar nomes de UNE
-            une_match = re.search(r'\bune\s+(\w+)\b|\b(\w+)\s+une\b', query_lower)
+            # Detectar nomes de UNE (com filtro de palavras comuns)
+            # Palavras que NÃO são nomes de UNE
+            palavras_ignorar = ['qual', 'da', 'de', 'do', 'na', 'no', 'em', 'por', 'para', 'com', 'sem', 'uma', 'cada', 'toda', 'todo', 'vende', 'mais', 'menos', 'que', 'foram', 'foram', 'teve', 'tem']
+
+            une_match = re.search(r'\b(?:une|filial|loja)\s+([A-Za-z0-9]{2,})\b', query_lower)
             if une_match:
-                une_name = une_match.group(1) or une_match.group(2)
-                result = ("consulta_une_especifica", {"une_nome": une_name.upper()})
-                logger.info(f"CLASSIFICADO COMO: consulta_une_especifica (UNE: {une_name})")
-                return result
+                une_name = une_match.group(1)
+                # Só processar se não for palavra comum
+                if une_name.lower() not in palavras_ignorar:
+                    result = ("consulta_une_especifica", {"une_nome": une_name.upper()})
+                    logger.info(f"CLASSIFICADO COMO: consulta_une_especifica (UNE: {une_name})")
+                    return result
 
             # Default para análise geral
             result = ("analise_geral", {"tipo": "geral"})
@@ -420,9 +506,21 @@ class DirectQueryEngine:
         logger.info(f"EXECUTANDO CONSULTA: {query_type} | Params: {params}")
 
         try:
+            # 🔧 ALIAS FIX: Mapear query types antigos para novos
+            query_type_aliases = {
+                "rotacao_estoque": "rotacao_estoque_avancada"
+            }
+            query_type = query_type_aliases.get(query_type, query_type)
+            if query_type in query_type_aliases.values():
+                logger.info(f"ALIAS APLICADO: {list(query_type_aliases.keys())[0]} -> {query_type}")
+
             # 🔧 FIX CRÍTICO: Para consultas específicas de produtos, carregar dataset completo
-            full_dataset_queries = ["consulta_produto_especifico", "consulta_une_especifica", "evolucao_vendas_produto", "produto_vendas_une_barras", "produto_vendas_todas_unes", "preco_produto_une_especifica", "top_produtos_une_especifica", "vendas_une_mes_especifico", "ranking_vendas_unes", "produto_mais_vendido_cada_une", "top_produtos_por_segmento", "top_produtos_segmento_une"]
-            use_full_dataset = query_type in full_dataset_queries
+            full_dataset_queries = ["consulta_produto_especifico", "consulta_une_especifica", "evolucao_vendas_produto", "produto_vendas_une_barras", "produto_vendas_todas_unes", "preco_produto_une_especifica", "top_produtos_une_especifica", "vendas_une_mes_especifico", "ranking_vendas_unes", "produto_mais_vendido_cada_une", "top_produtos_por_segmento", "top_produtos_segmento_une", "vendas_produto_une", "evolucao_mes_a_mes", "comparacao_segmentos", "crescimento_segmento", "sazonalidade", "analise_abc", "ranking_unes_por_segmento", "performance_categoria", "comparativo_unes_similares", "fabricantes_novos_vs_estabelecidos", "fabricantes_exclusivos_multimarca", "ciclo_vendas_consistente", "estoque_baixo_alta_demanda", "leadtime_vs_performance", "rotacao_estoque_avancada", "exposicao_vs_vendas", "estoque_cd_vs_vendas"]
+
+            # Verificar se há produto específico nos parâmetros
+            has_specific_product = params.get('produto') or params.get('produto_codigo')
+
+            use_full_dataset = query_type in full_dataset_queries or has_specific_product
 
             if use_full_dataset:
                 logger.info("[!] CONSULTA ESPECIFICA DETECTADA - Carregando dataset COMPLETO")
@@ -1398,6 +1496,2148 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
+    def _query_ranking_geral(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ranking genérico - detecta automaticamente tipo (produtos/UNEs/segmentos)
+        baseado na query original do usuário.
+        """
+        user_query = params.get('user_query', params.get('matched_keywords', '')).lower()
+        limite = self._safe_get_int(params, 'limite', 10)
+
+        logger.info(f"[>] Processando ranking_geral - query: '{user_query[:50]}'")
+
+        # Detectar tipo de ranking
+        if any(word in user_query for word in ['produto', 'item', 'mercadoria']):
+            return self._ranking_produtos(df, limite)
+        elif any(word in user_query for word in ['une', 'filial', 'loja', 'unidade']):
+            return self._ranking_unes(df, limite)
+        elif any(word in user_query for word in ['segmento', 'categoria']):
+            return self._ranking_segmentos(df, limite)
+        else:
+            # Default: ranking de produtos
+            logger.info("[i] Tipo não detectado, usando ranking de produtos como padrão")
+            return self._ranking_produtos(df, limite)
+
+    def _ranking_produtos(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+        """Ranking de produtos mais vendidos."""
+        if 'vendas_total' not in df.columns:
+            return {"error": "Coluna vendas_total não disponível", "type": "error"}
+
+        # Agrupar por produto e somar vendas
+        produtos = df.groupby('codigo').agg({
+            'vendas_total': 'sum',
+            'nome_produto': 'first',
+            'preco_38_percent': 'first',
+            'nomesegmento': 'first'
+        }).reset_index()
+
+        # Top N
+        top_produtos = produtos.nlargest(limite, 'vendas_total')
+
+        if top_produtos.empty:
+            return {"error": "Nenhum produto encontrado", "type": "error"}
+
+        # Preparar chart
+        chart_data = {
+            "x": [p['nome_produto'][:40] for _, p in top_produtos.iterrows()],
+            "y": [float(p['vendas_total']) for _, p in top_produtos.iterrows()],
+            "type": "bar",
+            "show_values": True
+        }
+
+        produtos_list = [{
+            "codigo": int(p['codigo']),
+            "nome": p['nome_produto'],
+            "vendas": float(p['vendas_total']),
+            "segmento": p['nomesegmento']
+        } for _, p in top_produtos.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} Produtos Mais Vendidos",
+            "result": {
+                "chart_data": chart_data,
+                "produtos": produtos_list,
+                "total_produtos": len(produtos_list)
+            },
+            "summary": f"Top {len(produtos_list)} produtos. Líder: {produtos_list[0]['nome']} ({produtos_list[0]['vendas']:,.0f} vendas)",
+            "tokens_used": 0
+        }
+
+    def _ranking_unes(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+        """Ranking de UNEs por volume de vendas."""
+        if 'vendas_total' not in df.columns or 'une_nome' not in df.columns:
+            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
+
+        # Agrupar por UNE
+        unes = df.groupby('une_nome').agg({
+            'vendas_total': 'sum',
+            'une': 'first'
+        }).reset_index()
+
+        # Top N
+        top_unes = unes.nlargest(limite, 'vendas_total')
+
+        if top_unes.empty:
+            return {"error": "Nenhuma UNE encontrada", "type": "error"}
+
+        # Preparar chart
+        chart_data = {
+            "x": [une['une_nome'] for _, une in top_unes.iterrows()],
+            "y": [float(une['vendas_total']) for _, une in top_unes.iterrows()],
+            "type": "bar",
+            "show_values": True
+        }
+
+        unes_list = [{
+            "une_codigo": int(une['une']),
+            "une_nome": une['une_nome'],
+            "vendas": float(une['vendas_total'])
+        } for _, une in top_unes.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} UNEs por Volume de Vendas",
+            "result": {
+                "chart_data": chart_data,
+                "unes": unes_list,
+                "total_unes": len(unes_list)
+            },
+            "summary": f"Top {len(unes_list)} UNEs. Líder: {unes_list[0]['une_nome']} ({unes_list[0]['vendas']:,.0f} vendas)",
+            "tokens_used": 0
+        }
+
+    def _ranking_segmentos(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+        """Ranking de segmentos por volume de vendas."""
+        if 'vendas_total' not in df.columns or 'nomesegmento' not in df.columns:
+            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
+
+        # Agrupar por segmento
+        segmentos = df.groupby('nomesegmento').agg({
+            'vendas_total': 'sum'
+        }).reset_index()
+
+        # Top N
+        top_segmentos = segmentos.nlargest(limite, 'vendas_total')
+
+        if top_segmentos.empty:
+            return {"error": "Nenhum segmento encontrado", "type": "error"}
+
+        # Preparar chart
+        chart_data = {
+            "x": [seg['nomesegmento'] for _, seg in top_segmentos.iterrows()],
+            "y": [float(seg['vendas_total']) for _, seg in top_segmentos.iterrows()],
+            "type": "bar",
+            "show_values": True
+        }
+
+        segmentos_list = [{
+            "segmento": seg['nomesegmento'],
+            "vendas": float(seg['vendas_total'])
+        } for _, seg in top_segmentos.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} Segmentos por Volume de Vendas",
+            "result": {
+                "chart_data": chart_data,
+                "segmentos": segmentos_list,
+                "total_segmentos": len(segmentos_list)
+            },
+            "summary": f"Top {len(segmentos_list)} segmentos. Líder: {segmentos_list[0]['segmento']} ({segmentos_list[0]['vendas']:,.0f} vendas)",
+            "tokens_used": 0
+        }
+
+    def _query_consulta_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Consulta informações sobre uma UNE específica.
+        Retorna vendas totais, produtos mais vendidos, segmentos, etc.
+        """
+        une_nome = self._safe_get_str(params, 'une_nome', '').upper()
+
+        logger.info(f"[>] Consultando informações da UNE: '{une_nome}'")
+
+        if not une_nome:
+            return {"error": "Nome da UNE não especificado", "type": "error"}
+
+        # Buscar UNE
+        une_data = df[
+            (df['une_nome'].str.upper() == une_nome) |
+            (df['une'].astype(str) == une_nome)
+        ]
+
+        if une_data.empty:
+            unes_disponiveis = sorted(df['une_nome'].unique())[:10]
+            return {
+                "error": f"UNE '{une_nome}' não encontrada",
+                "type": "error",
+                "suggestion": f"UNEs disponíveis: {', '.join(unes_disponiveis)}"
+            }
+
+        # Calcular métricas
+        total_vendas = une_data['vendas_total'].sum()
+        total_produtos = une_data['codigo'].nunique()
+        segmentos = une_data.groupby('nomesegmento')['vendas_total'].sum().nlargest(5)
+
+        # Top 5 produtos da UNE
+        top_produtos = une_data.groupby('codigo').agg({
+            'vendas_total': 'sum',
+            'nome_produto': 'first'
+        }).nlargest(5, 'vendas_total')
+
+        return {
+            "type": "table",
+            "title": f"Informações da UNE {une_nome}",
+            "result": {
+                "une": une_nome,
+                "total_vendas": float(total_vendas),
+                "total_produtos": int(total_produtos),
+                "top_segmentos": [{"nome": seg, "vendas": float(val)} for seg, val in segmentos.items()],
+                "top_produtos": [{
+                    "codigo": int(cod),
+                    "nome": row['nome_produto'],
+                    "vendas": float(row['vendas_total'])
+                } for cod, row in top_produtos.iterrows()]
+            },
+            "summary": f"UNE {une_nome}: {total_vendas:,.0f} vendas totais, {total_produtos} produtos diferentes",
+            "tokens_used": 0
+        }
+
+    def _query_ranking_fabricantes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ranking de fabricantes por volume de vendas.
+        """
+        limite = self._safe_get_int(params, 'limite', 10)
+
+        logger.info(f"[>] Gerando ranking de fabricantes (top {limite})")
+
+        if 'vendas_total' not in df.columns or 'nome_fabricante' not in df.columns:
+            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
+
+        # Agrupar por fabricante
+        fabricantes = df.groupby('nome_fabricante').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique'  # Conta produtos únicos
+        }).reset_index()
+
+        fabricantes.columns = ['fabricante', 'vendas_total', 'produtos_unicos']
+
+        # Top N
+        top_fabricantes = fabricantes.nlargest(limite, 'vendas_total')
+
+        if top_fabricantes.empty:
+            return {"error": "Nenhum fabricante encontrado", "type": "error"}
+
+        # Preparar chart
+        chart_data = {
+            "x": [fab['fabricante'][:30] for _, fab in top_fabricantes.iterrows()],
+            "y": [float(fab['vendas_total']) for _, fab in top_fabricantes.iterrows()],
+            "type": "bar",
+            "show_values": True
+        }
+
+        fabricantes_list = [{
+            "fabricante": fab['fabricante'],
+            "vendas": float(fab['vendas_total']),
+            "produtos_unicos": int(fab['produtos_unicos'])
+        } for _, fab in top_fabricantes.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} Fabricantes por Volume de Vendas",
+            "result": {
+                "chart_data": chart_data,
+                "fabricantes": fabricantes_list,
+                "total_fabricantes": len(fabricantes_list)
+            },
+            "summary": f"Top {len(fabricantes_list)} fabricantes. Líder: {fabricantes_list[0]['fabricante']} ({fabricantes_list[0]['vendas']:,.0f} vendas, {fabricantes_list[0]['produtos_unicos']} produtos)",
+            "tokens_used": 0
+        }
+
+    # ============================================================
+    # FASE 2: ANÁLISES ESSENCIAIS
+    # ============================================================
+
+    def _query_comparacao_segmentos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compara vendas entre 2 ou mais segmentos.
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento1': str, 'segmento2': str, ...}
+
+        Returns:
+            Dict com comparação de vendas entre segmentos
+        """
+        logger.info(f"[>] Processando comparacao_segmentos - params: {params}")
+
+        # Extrair segmentos dos parâmetros ou da query original
+        segmentos_list = []
+        segmentos_conhecidos = df['nomesegmento'].unique()
+
+        # SEMPRE tentar extrair da query original primeiro (mais confiável)
+        user_query = params.get('user_query', '').upper()
+
+        # Buscar todos os segmentos conhecidos mencionados na query
+        for seg in segmentos_conhecidos:
+            if seg.upper() in user_query:
+                if seg.upper() not in segmentos_list:
+                    segmentos_list.append(seg.upper())
+
+        # Se não encontrou pelo menos 2, tentar pelos parâmetros do regex (com validação)
+        if len(segmentos_list) < 2:
+            for key in ['segmento1', 'segmento2', 'segmento3', 'segmento4']:
+                seg = self._safe_get_str(params, key, '').strip()  # TRIM aqui!
+                if seg and len(seg) >= 2:  # Reduzir para 2 caracteres mínimo
+                    # Buscar match parcial nos segmentos conhecidos
+                    seg_upper = seg.upper().strip()  # TRIM novamente para garantir
+
+                    # Primeiro tentar match exato
+                    for seg_conhecido in segmentos_conhecidos:
+                        if seg_conhecido.upper() == seg_upper:
+                            if seg_conhecido.upper() not in segmentos_list:
+                                segmentos_list.append(seg_conhecido.upper())
+                            break
+                    else:
+                        # Match parcial: o segmento conhecido deve CONTER o texto extraído
+                        # (não o contrário, para evitar "C" dar match em "CONFECÇÃO")
+                        for seg_conhecido in segmentos_conhecidos:
+                            if seg_upper in seg_conhecido.upper() and len(seg_upper) >= 5:
+                                if seg_conhecido.upper() not in segmentos_list:
+                                    segmentos_list.append(seg_conhecido.upper())
+                                break
+
+        if len(segmentos_list) < 2:
+            # Fallback: não conseguimos extrair 2 segmentos
+            logger.warning(f"[!] Não foi possível extrair 2 segmentos da query. Encontrados: {segmentos_list}")
+            return {
+                "type": "fallback",
+                "error": "Não foi possível identificar 2 segmentos para comparação",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        logger.info(f"[i] Comparando segmentos: {segmentos_list}")
+
+        # Filtrar dados por segmentos
+        df_filtrado = df[df['nomesegmento'].str.upper().isin(segmentos_list)]
+
+        if df_filtrado.empty:
+            # Dataset atual (amostra) não contém esses segmentos
+            # Retornar mensagem informativa em vez de erro
+            return {
+                "type": "text",
+                "title": f"Comparação: {' vs '.join(segmentos_list)}",
+                "result": {
+                    "message": f"Os segmentos {', '.join(segmentos_list)} não foram encontrados na amostra atual de dados.",
+                    "segmentos_solicitados": segmentos_list,
+                    "segmentos_disponiveis": df['nomesegmento'].unique().tolist()[:10]
+                },
+                "summary": f"Segmentos {', '.join(segmentos_list)} não disponíveis na amostra atual. Tente com: {', '.join(df['nomesegmento'].unique()[:5])}",
+                "tokens_used": 0
+            }
+
+        # Agrupar por segmento e calcular métricas
+        comparacao = df_filtrado.groupby('nomesegmento').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique',  # Produtos únicos
+            'une': 'nunique'  # UNEs com vendas
+        }).reset_index()
+
+        comparacao.columns = ['segmento', 'vendas_total', 'produtos_unicos', 'unes_ativas']
+        comparacao = comparacao.sort_values('vendas_total', ascending=False)
+
+        # Calcular percentuais
+        total_vendas = comparacao['vendas_total'].sum()
+        comparacao['percentual'] = (comparacao['vendas_total'] / total_vendas * 100).round(2)
+
+        # Preparar chart (barras comparativas)
+        chart_data = {
+            "x": comparacao['segmento'].tolist(),
+            "y": comparacao['vendas_total'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        # Preparar lista de resultados
+        resultados = [{
+            "segmento": row['segmento'],
+            "vendas_total": float(row['vendas_total']),
+            "produtos_unicos": int(row['produtos_unicos']),
+            "unes_ativas": int(row['unes_ativas']),
+            "percentual": float(row['percentual'])
+        } for _, row in comparacao.iterrows()]
+
+        # Gerar resumo
+        lider = resultados[0]
+        summary = f"Comparação de {len(resultados)} segmentos. Líder: {lider['segmento']} ({lider['percentual']:.1f}% das vendas, {lider['produtos_unicos']} produtos)"
+
+        return {
+            "type": "chart",
+            "title": f"Comparação de Vendas - {len(resultados)} Segmentos",
+            "result": {
+                "chart_data": chart_data,
+                "comparacao": resultados,
+                "total_vendas": float(total_vendas)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_analise_abc(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Classificação ABC de produtos (80-15-5).
+
+        Args:
+            df: DataFrame com dados
+            params: {'classe_abc': 'A'|'B'|'C' (opcional)}
+
+        Returns:
+            Dict com análise ABC
+        """
+        logger.info(f"[>] Processando analise_abc - params: {params}")
+
+        # Verificar se existe coluna ABC no dataset
+        if 'abc_une_mes_01' in df.columns:
+            # Usar classificação existente
+            logger.info("[i] Usando classificação ABC existente (abc_une_mes_01)")
+
+            # Agrupar por classe ABC
+            abc_dist = df.groupby('abc_une_mes_01').agg({
+                'vendas_total': 'sum',
+                'codigo': 'nunique'
+            }).reset_index()
+            abc_dist.columns = ['classe', 'vendas_total', 'produtos']
+
+        else:
+            # Calcular classificação ABC
+            logger.info("[i] Calculando classificação ABC (80-15-5)")
+
+            # Agrupar por produto e somar vendas
+            produtos_vendas = df.groupby('codigo').agg({
+                'vendas_total': 'sum',
+                'nome_produto': 'first'
+            }).reset_index()
+
+            # Ordenar por vendas decrescentes
+            produtos_vendas = produtos_vendas.sort_values('vendas_total', ascending=False)
+
+            # Calcular percentual acumulado
+            produtos_vendas['vendas_acumuladas'] = produtos_vendas['vendas_total'].cumsum()
+            total_vendas = produtos_vendas['vendas_total'].sum()
+            produtos_vendas['percentual_acumulado'] = (produtos_vendas['vendas_acumuladas'] / total_vendas * 100)
+
+            # Classificar ABC
+            produtos_vendas['classe'] = produtos_vendas['percentual_acumulado'].apply(
+                lambda x: 'A' if x <= 80 else ('B' if x <= 95 else 'C')
+            )
+
+            # Agrupar por classe
+            abc_dist = produtos_vendas.groupby('classe').agg({
+                'vendas_total': 'sum',
+                'codigo': 'count'
+            }).reset_index()
+            abc_dist.columns = ['classe', 'vendas_total', 'produtos']
+
+        # Calcular percentuais
+        total_vendas = abc_dist['vendas_total'].sum()
+        total_produtos = abc_dist['produtos'].sum()
+        abc_dist['percentual_vendas'] = (abc_dist['vendas_total'] / total_vendas * 100).round(2)
+        abc_dist['percentual_produtos'] = (abc_dist['produtos'] / total_produtos * 100).round(2)
+
+        # Ordenar A, B, C
+        ordem_abc = {'A': 0, 'B': 1, 'C': 2}
+        abc_dist['ordem'] = abc_dist['classe'].map(ordem_abc)
+        abc_dist = abc_dist.sort_values('ordem').drop('ordem', axis=1)
+
+        # Preparar chart
+        chart_data = {
+            "labels": abc_dist['classe'].tolist(),
+            "datasets": [
+                {
+                    "label": "% Vendas",
+                    "data": abc_dist['percentual_vendas'].tolist(),
+                    "backgroundColor": ["#4CAF50", "#FFC107", "#F44336"]
+                },
+                {
+                    "label": "% Produtos",
+                    "data": abc_dist['percentual_produtos'].tolist(),
+                    "backgroundColor": ["#81C784", "#FFD54F", "#EF5350"]
+                }
+            ],
+            "type": "bar"
+        }
+
+        # Preparar resultados
+        resultados = [{
+            "classe": row['classe'],
+            "vendas_total": float(row['vendas_total']),
+            "produtos": int(row['produtos']),
+            "percentual_vendas": float(row['percentual_vendas']),
+            "percentual_produtos": float(row['percentual_produtos'])
+        } for _, row in abc_dist.iterrows()]
+
+        # Gerar resumo
+        classe_a = resultados[0] if resultados else None
+        if classe_a:
+            summary = f"Classe A: {classe_a['percentual_vendas']:.1f}% das vendas com {classe_a['percentual_produtos']:.1f}% dos produtos ({classe_a['produtos']} itens)"
+        else:
+            summary = "Análise ABC concluída"
+
+        return {
+            "type": "chart",
+            "title": "Análise ABC de Produtos",
+            "result": {
+                "chart_data": chart_data,
+                "distribuicao": resultados,
+                "total_vendas": float(total_vendas),
+                "total_produtos": int(total_produtos)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_estoque_alto(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produtos com baixa rotação de vendas (vendas baixas = estoque parado implícito).
+
+        Args:
+            df: DataFrame com dados
+            params: {'threshold': float (opcional, padrão 2.0)}
+
+        Returns:
+            Dict com produtos com baixa rotação
+        """
+        logger.info(f"[>] Processando estoque_alto - params: {params}")
+
+        # Calcular média de vendas
+        media_vendas = df['vendas_total'].mean()
+
+        # Produtos com vendas muito abaixo da média (< 30% da média)
+        threshold_percentual = 0.3
+        df_baixa_rotacao = df[df['vendas_total'] < (media_vendas * threshold_percentual)].copy()
+        df_baixa_rotacao = df_baixa_rotacao.sort_values('vendas_total', ascending=True)
+
+        limite = self._safe_get_int(params, 'limite', 20)
+        top_produtos = df_baixa_rotacao.head(limite)
+
+        if top_produtos.empty:
+            return {
+                "type": "text",
+                "title": "Análise de Produtos com Baixa Rotação",
+                "result": {"message": "Todos os produtos têm vendas normais"},
+                "summary": "Nenhum produto com vendas significativamente abaixo da média",
+                "tokens_used": 0
+            }
+
+        # Preparar dados para visualização
+        chart_data = {
+            "x": top_produtos['nome_produto'].str[:30].tolist(),
+            "y": top_produtos['vendas_total'].tolist(),
+            "labels": top_produtos['nome_produto'].tolist()
+        }
+
+        # Preparar tabela
+        tabela = []
+        for _, prod in top_produtos.iterrows():
+            tabela.append({
+                "codigo": str(prod['codigo']),
+                "produto": prod['nome_produto'][:50],
+                "vendas_total": float(prod['vendas_total']),
+                "percentual_media": float((prod['vendas_total'] / media_vendas * 100)),
+                "segmento": prod['nomesegmento']
+            })
+
+        # Resumo
+        summary = f"Identificados {len(top_produtos)} produtos com baixa rotação (vendas < {threshold_percentual*100:.0f}% da média de R$ {media_vendas:,.2f})"
+
+        return {
+            "type": "chart",
+            "title": "Produtos com Baixa Rotação de Vendas",
+            "result": {
+                "produtos": tabela,
+                "total_produtos": len(tabela),
+                "media_vendas": float(media_vendas),
+                "chart_data": chart_data
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_top_produtos_por_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Top N produtos mais vendidos em um segmento específico.
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str, 'limite': int}
+
+        Returns:
+            Dict com top produtos do segmento
+        """
+        logger.info(f"[>] Processando top_produtos_por_segmento - params: {params}")
+
+        # Extrair segmento
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+        limite = self._safe_get_int(params, 'limite', 10)
+
+        # Se não veio nos params, buscar na user_query
+        if not segmento or segmento == 'TODOS':
+            user_query = params.get('user_query', '').upper()
+            segmentos_conhecidos = df['nomesegmento'].unique()
+            for seg in segmentos_conhecidos:
+                if seg.upper() in user_query:
+                    segmento = seg.upper()
+                    break
+
+        # Se ainda não tem segmento, usar TODOS (ranking geral)
+        if not segmento or segmento == 'TODOS':
+            logger.info(f"[i] Buscando top {limite} produtos GERAL (todos os segmentos)")
+            df_segmento = df
+            titulo_segmento = "Geral"
+        else:
+            logger.info(f"[i] Buscando top {limite} produtos no segmento: {segmento}")
+            # Filtrar por segmento
+            df_segmento = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_segmento = segmento
+
+            if df_segmento.empty:
+                # Segmento não encontrado, tentar ranking geral
+                logger.warning(f"[!] Segmento '{segmento}' não encontrado - usando ranking geral")
+                df_segmento = df
+                titulo_segmento = "Geral"
+
+        # Agrupar por produto e somar vendas
+        top_produtos = df_segmento.groupby('codigo', as_index=False).agg({
+            'nome_produto': 'first',
+            'vendas_total': 'sum'
+        })
+
+        top_produtos = top_produtos.nlargest(limite, 'vendas_total')
+
+        # Preparar chart
+        chart_data = {
+            "x": top_produtos['nome_produto'].str[:30].tolist(),
+            "y": top_produtos['vendas_total'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        produtos_list = [{
+            "codigo": str(row['codigo']),
+            "nome": row['nome_produto'],
+            "vendas": float(row['vendas_total'])
+        } for _, row in top_produtos.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Top {limite} Produtos - {titulo_segmento}",
+            "result": {
+                "chart_data": chart_data,
+                "produtos": produtos_list,
+                "total_produtos": len(produtos_list),
+                "segmento": titulo_segmento
+            },
+            "summary": f"Top {len(produtos_list)} produtos{' no segmento ' + titulo_segmento if titulo_segmento != 'Geral' else ' (ranking geral)'}. Líder: {produtos_list[0]['nome'][:40]} ({produtos_list[0]['vendas']:,.0f} vendas)",
+            "tokens_used": 0
+        }
+
+    def _query_distribuicao_categoria(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Distribuição de vendas por categoria (opcionalmente dentro de um segmento).
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str (opcional)}
+
+        Returns:
+            Dict com distribuição por categoria
+        """
+        logger.info(f"[>] Processando distribuicao_categoria - params: {params}")
+
+        # Extrair segmento se especificado
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+
+        # Se não veio nos params, buscar na user_query
+        if not segmento:
+            user_query = params.get('user_query', '').upper()
+            segmentos_conhecidos = df['nomesegmento'].unique()
+            for seg in segmentos_conhecidos:
+                if seg.upper() in user_query:
+                    segmento = seg.upper()
+                    break
+
+        # Filtrar por segmento se especificado
+        if segmento:
+            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_sufixo = f" - {segmento}"
+        else:
+            df_filtrado = df
+            titulo_sufixo = ""
+
+        if df_filtrado.empty:
+            return {
+                "type": "fallback",
+                "error": f"Nenhum dado encontrado para o segmento {segmento}" if segmento else "Dados vazios",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Agrupar por categoria
+        categorias = df_filtrado.groupby('nome_categoria').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique'
+        }).reset_index()
+
+        categorias.columns = ['categoria', 'vendas_total', 'produtos_unicos']
+        categorias = categorias.sort_values('vendas_total', ascending=False)
+
+        # Calcular percentuais
+        total_vendas = categorias['vendas_total'].sum()
+        categorias['percentual'] = (categorias['vendas_total'] / total_vendas * 100).round(2)
+
+        # Preparar chart
+        chart_data = {
+            "labels": categorias['categoria'].tolist(),
+            "data": categorias['vendas_total'].tolist(),
+            "type": "pie",
+            "show_percentages": True
+        }
+
+        categorias_list = [{
+            "categoria": row['categoria'],
+            "vendas": float(row['vendas_total']),
+            "produtos": int(row['produtos_unicos']),
+            "percentual": float(row['percentual'])
+        } for _, row in categorias.iterrows()]
+
+        return {
+            "type": "chart",
+            "title": f"Distribuição de Vendas por Categoria{titulo_sufixo}",
+            "result": {
+                "chart_data": chart_data,
+                "categorias": categorias_list,
+                "total_categorias": len(categorias_list),
+                "total_vendas": float(total_vendas)
+            },
+            "summary": f"{len(categorias_list)} categorias. Líder: {categorias_list[0]['categoria']} ({categorias_list[0]['percentual']:.1f}% das vendas)",
+            "tokens_used": 0
+        }
+
+    def _query_diversidade_produtos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Análise de diversidade de produtos por UNE ou segmento.
+
+        Args:
+            df: DataFrame com dados
+            params: {}
+
+        Returns:
+            Dict com análise de diversidade
+        """
+        logger.info(f"[>] Processando diversidade_produtos - params: {params}")
+
+        user_query = params.get('user_query', '').lower()
+
+        # Detectar se é por UNE ou por segmento
+        if 'une' in user_query or 'loja' in user_query or 'filial' in user_query:
+            # Diversidade por UNE
+            agrupamento = df.groupby('une_nome').agg({
+                'codigo': 'nunique',
+                'vendas_total': 'sum',
+                'nomesegmento': 'nunique'
+            }).reset_index()
+
+            agrupamento.columns = ['une', 'produtos_unicos', 'vendas_total', 'segmentos_ativos']
+            agrupamento = agrupamento.sort_values('produtos_unicos', ascending=False).head(15)
+
+            titulo = "UNEs com Maior Diversidade de Produtos"
+            label_col = 'une'
+
+        else:
+            # Diversidade por segmento
+            agrupamento = df.groupby('nomesegmento').agg({
+                'codigo': 'nunique',
+                'vendas_total': 'sum',
+                'nome_categoria': 'nunique'
+            }).reset_index()
+
+            agrupamento.columns = ['segmento', 'produtos_unicos', 'vendas_total', 'categorias']
+            agrupamento = agrupamento.sort_values('produtos_unicos', ascending=False)
+
+            titulo = "Segmentos com Maior Diversidade de Produtos"
+            label_col = 'segmento'
+
+        # Preparar chart
+        chart_data = {
+            "x": agrupamento[label_col].tolist(),
+            "y": agrupamento['produtos_unicos'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        resultados = [{
+            label_col: row[label_col],
+            "produtos_unicos": int(row['produtos_unicos']),
+            "vendas_total": float(row['vendas_total'])
+        } for _, row in agrupamento.iterrows()]
+
+        lider = resultados[0]
+        summary = f"{titulo.split()[0]} com maior diversidade: {lider[label_col]} ({lider['produtos_unicos']} produtos únicos)"
+
+        return {
+            "type": "chart",
+            "title": titulo,
+            "result": {
+                "chart_data": chart_data,
+                "resultados": resultados,
+                "total": len(resultados)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_crescimento_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Análise de crescimento percentual de vendas por segmento.
+
+        Args:
+            df: DataFrame com dados
+            params: {}
+
+        Returns:
+            Dict com análise de crescimento
+        """
+        logger.info(f"[>] Processando crescimento_segmento - params: {params}")
+
+        # Verificar se temos dados mensais
+        meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
+        if not all(col in df.columns for col in meses_cols[:2]):
+            return {
+                "type": "fallback",
+                "error": "Dados mensais não disponíveis para cálculo de crescimento",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Calcular vendas do primeiro e último trimestre
+        df_crescimento = df.groupby('nomesegmento').agg({
+            'mes_01': 'sum',
+            'mes_02': 'sum',
+            'mes_03': 'sum',
+            'mes_10': 'sum',
+            'mes_11': 'sum',
+            'mes_12': 'sum'
+        }).reset_index()
+
+        df_crescimento['primeiro_tri'] = df_crescimento[['mes_01', 'mes_02', 'mes_03']].sum(axis=1)
+        df_crescimento['ultimo_tri'] = df_crescimento[['mes_10', 'mes_11', 'mes_12']].sum(axis=1)
+
+        # Calcular crescimento percentual
+        df_crescimento['crescimento_pct'] = ((df_crescimento['ultimo_tri'] - df_crescimento['primeiro_tri']) / (df_crescimento['primeiro_tri'] + 1) * 100).round(2)
+
+        df_crescimento = df_crescimento.sort_values('crescimento_pct', ascending=False)
+
+        # Preparar chart
+        chart_data = {
+            "x": df_crescimento['nomesegmento'].tolist(),
+            "y": df_crescimento['crescimento_pct'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        resultados = [{
+            "segmento": row['nomesegmento'],
+            "crescimento_percentual": float(row['crescimento_pct']),
+            "vendas_primeiro_tri": float(row['primeiro_tri']),
+            "vendas_ultimo_tri": float(row['ultimo_tri'])
+        } for _, row in df_crescimento.iterrows()]
+
+        lider = resultados[0]
+        summary = f"Segmento com maior crescimento: {lider['segmento']} ({lider['crescimento_percentual']:+.1f}%)"
+
+        return {
+            "type": "chart",
+            "title": "Crescimento Percentual por Segmento",
+            "result": {
+                "chart_data": chart_data,
+                "segmentos": resultados,
+                "total_segmentos": len(resultados)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_sazonalidade(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Análise de sazonalidade de vendas.
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str (opcional)}
+
+        Returns:
+            Dict com análise de sazonalidade
+        """
+        logger.info(f"[>] Processando sazonalidade - params: {params}")
+
+        # Verificar se temos dados mensais
+        meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
+        if not all(col in df.columns for col in meses_cols):
+            return {
+                "type": "fallback",
+                "error": "Dados mensais não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Extrair segmento se especificado
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+
+        if not segmento:
+            user_query = params.get('user_query', '').upper()
+            segmentos_conhecidos = df['nomesegmento'].unique()
+            for seg in segmentos_conhecidos:
+                if seg.upper() in user_query:
+                    segmento = seg.upper()
+                    break
+
+        # Filtrar por segmento se especificado
+        if segmento:
+            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_sufixo = f" - {segmento}"
+        else:
+            df_filtrado = df
+            titulo_sufixo = ""
+
+        if df_filtrado.empty:
+            return {
+                "type": "fallback",
+                "error": f"Segmento '{segmento}' não encontrado" if segmento else "Dados vazios",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Somar vendas por mês
+        vendas_mensais = {f'Mês {i}': df_filtrado[f'mes_{i:02d}'].sum() for i in range(1, 13)}
+
+        # Calcular média e desvio
+        valores = list(vendas_mensais.values())
+        media = sum(valores) / len(valores)
+        variacao = [(v - media) / media * 100 for v in valores]
+
+        # Identificar picos (variação > 20%)
+        meses_pico = [mes for mes, var in zip(vendas_mensais.keys(), variacao) if var > 20]
+
+        # Preparar chart
+        chart_data = {
+            "x": list(vendas_mensais.keys()),
+            "y": list(vendas_mensais.values()),
+            "type": "line",
+            "show_values": True
+        }
+
+        summary = f"Sazonalidade{titulo_sufixo}. Média mensal: {media:,.0f}. " + (f"Picos em: {', '.join(meses_pico)}" if meses_pico else "Vendas estáveis ao longo do ano")
+
+        return {
+            "type": "chart",
+            "title": f"Análise de Sazonalidade{titulo_sufixo}",
+            "result": {
+                "chart_data": chart_data,
+                "vendas_mensais": vendas_mensais,
+                "media_mensal": float(media),
+                "meses_pico": meses_pico
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_ranking_unes_por_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ranking de UNEs por volume de vendas em um segmento específico.
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str, 'limite': int}
+
+        Returns:
+            Dict com ranking de UNEs
+        """
+        logger.info(f"[>] Processando ranking_unes_por_segmento - params: {params}")
+
+        # Extrair segmento
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+        limite = self._safe_get_int(params, 'limite', 10)
+
+        # Se não veio nos params, buscar na user_query
+        if not segmento:
+            user_query = params.get('user_query', '').upper()
+            segmentos_conhecidos = df['nomesegmento'].unique()
+            for seg in segmentos_conhecidos:
+                if seg.upper() in user_query:
+                    segmento = seg.upper()
+                    break
+
+        if not segmento:
+            # Se não encontrou segmento, retornar ranking geral de UNEs
+            logger.info("[i] Segmento não especificado, retornando ranking geral de UNEs")
+            return self._ranking_unes(df, limite)
+
+        logger.info(f"[i] Ranking de UNEs no segmento: {segmento}")
+
+        # Filtrar por segmento
+        df_segmento = df[df['nomesegmento'].str.upper() == segmento]
+
+        if df_segmento.empty:
+            return {
+                "type": "fallback",
+                "error": f"Segmento '{segmento}' não encontrado",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Agrupar por UNE
+        ranking = df_segmento.groupby('une_nome', as_index=False).agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique'
+        })
+
+        ranking.columns = ['une', 'vendas_total', 'produtos_unicos']
+        ranking = ranking.nlargest(limite, 'vendas_total')
+
+        # Preparar chart
+        chart_data = {
+            "x": ranking['une'].tolist(),
+            "y": ranking['vendas_total'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        unes_list = [{
+            "une": row['une'],
+            "vendas": float(row['vendas_total']),
+            "produtos": int(row['produtos_unicos'])
+        } for _, row in ranking.iterrows()]
+
+        lider = unes_list[0] if unes_list else None
+        summary = f"UNE que mais vende em {segmento}: {lider['une']} ({lider['vendas']:,.0f} vendas)" if lider else "Sem dados"
+
+        return {
+            "type": "chart",
+            "title": f"Ranking de UNEs - {segmento}",
+            "result": {
+                "chart_data": chart_data,
+                "unes": unes_list,
+                "total_unes": len(unes_list),
+                "segmento": segmento
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_vendas_produto_une(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Vendas de um produto específico em uma UNE específica.
+
+        Args:
+            df: DataFrame com dados
+            params: {'produto': str, 'une': str}
+
+        Returns:
+            Dict com vendas do produto na UNE
+        """
+        logger.info(f"[>] Processando vendas_produto_une - params: {params}")
+
+        produto_codigo = self._safe_get_str(params, 'produto', '').strip()
+        une_nome = self._safe_get_str(params, 'une', '').strip().upper()
+
+        if not produto_codigo or not une_nome:
+            return {
+                "type": "fallback",
+                "error": "Produto ou UNE não especificados",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        logger.info(f"[i] Buscando vendas do produto {produto_codigo} na UNE {une_nome}")
+
+        # Buscar produto na UNE
+        produto_une = df[
+            (df['codigo'].astype(str) == produto_codigo) &
+            ((df['une_nome'].str.upper() == une_nome) | (df['une'].astype(str) == une_nome))
+        ]
+
+        if produto_une.empty:
+            return {
+                "type": "fallback",
+                "error": f"Produto {produto_codigo} não encontrado na UNE {une_nome}",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Pegar primeira linha (deveria ser única)
+        prod = produto_une.iloc[0]
+
+        # Preparar vendas mensais
+        meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
+        vendas_mensais = {f'Mês {i}': float(prod[col]) for i, col in enumerate(meses_cols, 1) if col in prod.index}
+
+        # Preparar chart
+        chart_data = {
+            "x": list(vendas_mensais.keys()),
+            "y": list(vendas_mensais.values()),
+            "type": "line",
+            "show_values": True
+        }
+
+        summary = f"{prod['nome_produto'][:50]} na UNE {une_nome}: {prod['vendas_total']:,.0f} vendas totais"
+
+        return {
+            "type": "chart",
+            "title": f"Vendas de {prod['nome_produto'][:40]} - UNE {une_nome}",
+            "result": {
+                "chart_data": chart_data,
+                "produto": {
+                    "codigo": str(prod['codigo']),
+                    "nome": prod['nome_produto'],
+                    "vendas_total": float(prod['vendas_total']),
+                    "segmento": prod['nomesegmento']
+                },
+                "une": une_nome,
+                "vendas_mensais": vendas_mensais
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_evolucao_mes_a_mes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Evolução de vendas mês a mês (geral ou por produto/segmento).
+
+        Args:
+            df: DataFrame com dados
+            params: {'produto': str (opcional), 'segmento': str (opcional)}
+
+        Returns:
+            Dict com evolução mensal
+        """
+        logger.info(f"[>] Processando evolucao_mes_a_mes - params: {params}")
+
+        # Verificar se temos dados mensais
+        meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
+        if not all(col in df.columns for col in meses_cols):
+            return {
+                "type": "fallback",
+                "error": "Dados mensais não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        produto_codigo = self._safe_get_str(params, 'produto', '').strip()
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+
+        # Se não veio nos params, buscar na user_query
+        if not produto_codigo and not segmento:
+            user_query = params.get('user_query', '').upper()
+            # Tentar extrair código de produto (números)
+            import re
+            match_produto = re.search(r'\b(\d{5,})\b', user_query)
+            if match_produto:
+                produto_codigo = match_produto.group(1)
+
+        # Filtrar dados
+        if produto_codigo:
+            df_filtrado = df[df['codigo'].astype(str) == produto_codigo]
+            titulo_sufixo = f" - Produto {produto_codigo}"
+        elif segmento:
+            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_sufixo = f" - {segmento}"
+        else:
+            df_filtrado = df
+            titulo_sufixo = ""
+
+        if df_filtrado.empty:
+            return {
+                "type": "fallback",
+                "error": "Nenhum dado encontrado para os filtros especificados",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Somar vendas por mês
+        vendas_mensais = {f'Mês {i}': df_filtrado[col].sum() for i, col in enumerate(meses_cols, 1)}
+
+        # Preparar chart
+        chart_data = {
+            "x": list(vendas_mensais.keys()),
+            "y": list(vendas_mensais.values()),
+            "type": "line",
+            "show_values": True
+        }
+
+        total = sum(vendas_mensais.values())
+        summary = f"Evolução mensal{titulo_sufixo}. Total: {total:,.0f} vendas"
+
+        return {
+            "type": "chart",
+            "title": f"Evolução de Vendas Mês a Mês{titulo_sufixo}",
+            "result": {
+                "chart_data": chart_data,
+                "vendas_mensais": vendas_mensais,
+                "total_vendas": float(total)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_pico_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produtos com pico de vendas no último mês.
+
+        Args:
+            df: DataFrame com dados
+            params: {'limite': int}
+
+        Returns:
+            Dict com produtos que tiveram pico
+        """
+        logger.info(f"[>] Processando pico_vendas - params: {params}")
+
+        limite = self._safe_get_int(params, 'limite', 15)
+
+        # Verificar se temos dados mensais
+        if 'mes_12' not in df.columns or 'mes_11' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados mensais não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Calcular variação entre último mês e média dos 11 anteriores
+        df_pico = df.copy()
+        colunas_anteriores = [f'mes_{i:02d}' for i in range(1, 12)]
+        df_pico['media_anterior'] = df_pico[colunas_anteriores].mean(axis=1)
+        df_pico['variacao_pct'] = ((df_pico['mes_12'] - df_pico['media_anterior']) / (df_pico['media_anterior'] + 1) * 100)
+
+        # Filtrar produtos com pico (variação > 50%)
+        produtos_pico = df_pico[df_pico['variacao_pct'] > 50].nlargest(limite, 'variacao_pct')
+
+        if produtos_pico.empty:
+            return {
+                "type": "text",
+                "title": "Produtos com Pico de Vendas",
+                "result": {
+                    "message": "Nenhum produto com pico significativo no último mês"
+                },
+                "summary": "Não foram encontrados produtos com pico de vendas no último mês",
+                "tokens_used": 0
+            }
+
+        # Preparar chart
+        chart_data = {
+            "x": produtos_pico['nome_produto'].str[:30].tolist(),
+            "y": produtos_pico['variacao_pct'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        produtos_list = [{
+            "codigo": str(row['codigo']),
+            "nome": row['nome_produto'],
+            "vendas_ultimo_mes": float(row['mes_12']),
+            "media_anterior": float(row['media_anterior']),
+            "variacao_pct": float(row['variacao_pct'])
+        } for _, row in produtos_pico.iterrows()]
+
+        lider = produtos_list[0] if produtos_list else None
+        summary = f"{len(produtos_list)} produtos com pico. Destaque: {lider['nome'][:40]} ({lider['variacao_pct']:+.0f}%)" if lider else "Sem picos"
+
+        return {
+            "type": "chart",
+            "title": "Produtos com Pico de Vendas no Último Mês",
+            "result": {
+                "chart_data": chart_data,
+                "produtos": produtos_list,
+                "total_produtos": len(produtos_list)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_tendencia_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Tendência de vendas por categoria nos últimos meses.
+
+        Args:
+            df: DataFrame com dados
+            params: {'meses': int}
+
+        Returns:
+            Dict com tendência por categoria
+        """
+        logger.info(f"[>] Processando tendencia_vendas - params: {params}")
+
+        meses = self._safe_get_int(params, 'meses', 6)
+
+        # Verificar dados mensais
+        meses_cols = [f'mes_{i:02d}' for i in range(13-meses, 13)]
+        if not all(col in df.columns for col in meses_cols):
+            return {
+                "type": "fallback",
+                "error": "Dados mensais insuficientes",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Agrupar por categoria e somar vendas mensais
+        tendencia = df.groupby('nome_categoria')[meses_cols].sum()
+
+        # Calcular tendência (comparar primeiros vs últimos meses do período)
+        metade = len(meses_cols) // 2
+        tendencia['periodo_inicial'] = tendencia[meses_cols[:metade]].sum(axis=1)
+        tendencia['periodo_final'] = tendencia[meses_cols[metade:]].sum(axis=1)
+        tendencia['tendencia_pct'] = ((tendencia['periodo_final'] - tendencia['periodo_inicial']) / (tendencia['periodo_inicial'] + 1) * 100)
+
+        tendencia = tendencia.reset_index().sort_values('tendencia_pct', ascending=False)
+
+        # Preparar chart
+        chart_data = {
+            "x": tendencia['nome_categoria'].tolist(),
+            "y": tendencia['tendencia_pct'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        categorias_list = [{
+            "categoria": row['nome_categoria'],
+            "tendencia_pct": float(row['tendencia_pct']),
+            "periodo_inicial": float(row['periodo_inicial']),
+            "periodo_final": float(row['periodo_final'])
+        } for _, row in tendencia.iterrows()]
+
+        lider = categorias_list[0] if categorias_list else None
+        summary = f"Tendência de {len(categorias_list)} categorias. Maior crescimento: {lider['categoria']} ({lider['tendencia_pct']:+.1f}%)" if lider else "Sem dados"
+
+        return {
+            "type": "chart",
+            "title": f"Tendência de Vendas - Últimos {meses} Meses",
+            "result": {
+                "chart_data": chart_data,
+                "categorias": categorias_list,
+                "total_categorias": len(categorias_list)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_produtos_acima_media(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produtos com vendas acima da média (opcionalmente por segmento).
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str (opcional), 'limite': int}
+
+        Returns:
+            Dict com produtos acima da média
+        """
+        logger.info(f"[>] Processando produtos_acima_media - params: {params}")
+
+        segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
+        limite = self._safe_get_int(params, 'limite', 20)
+
+        # Se não veio nos params, buscar na user_query
+        if not segmento:
+            user_query = params.get('user_query', '').upper()
+            segmentos_conhecidos = df['nomesegmento'].unique()
+            for seg in segmentos_conhecidos:
+                if seg.upper() in user_query:
+                    segmento = seg.upper()
+                    break
+
+        # Filtrar por segmento se especificado
+        if segmento:
+            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_sufixo = f" - {segmento}"
+        else:
+            df_filtrado = df
+            titulo_sufixo = ""
+
+        if df_filtrado.empty:
+            return {
+                "type": "fallback",
+                "error": f"Segmento '{segmento}' não encontrado" if segmento else "Dados vazios",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Calcular média de vendas
+        media_vendas = df_filtrado['vendas_total'].mean()
+
+        # Filtrar produtos acima da média
+        produtos_acima = df_filtrado[df_filtrado['vendas_total'] > media_vendas].nlargest(limite, 'vendas_total')
+
+        # Preparar chart
+        chart_data = {
+            "x": produtos_acima['nome_produto'].str[:30].tolist(),
+            "y": produtos_acima['vendas_total'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        produtos_list = [{
+            "codigo": str(row['codigo']),
+            "nome": row['nome_produto'],
+            "vendas": float(row['vendas_total']),
+            "vs_media": float((row['vendas_total'] / media_vendas - 1) * 100)
+        } for _, row in produtos_acima.iterrows()]
+
+        summary = f"{len(produtos_list)} produtos acima da média{titulo_sufixo} ({media_vendas:,.0f} vendas)"
+
+        return {
+            "type": "chart",
+            "title": f"Produtos Acima da Média{titulo_sufixo}",
+            "result": {
+                "chart_data": chart_data,
+                "produtos": produtos_list,
+                "media_vendas": float(media_vendas),
+                "total_produtos": len(produtos_list)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_performance_categoria(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Performance de vendas por categoria (opcionalmente dentro de um segmento).
+
+        Args:
+            df: DataFrame com dados
+            params: {'segmento': str (opcional)}
+
+        Returns:
+            Dict com performance por categoria
+        """
+        logger.info(f"[>] Processando performance_categoria - params: {params}")
+
+        # Extrair segmento se especificado
+        user_query = params.get('user_query', '').upper()
+        segmentos_conhecidos = df['nomesegmento'].unique()
+        segmento = None
+
+        for seg in segmentos_conhecidos:
+            if seg.upper() in user_query:
+                segmento = seg.upper()
+                break
+
+        # Filtrar por segmento se especificado
+        if segmento:
+            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            titulo_sufixo = f" - {segmento}"
+            logger.info(f"[i] Analisando categorias do segmento: {segmento}")
+        else:
+            df_filtrado = df
+            titulo_sufixo = ""
+            logger.info("[i] Analisando todas as categorias")
+
+        if df_filtrado.empty:
+            return {
+                "type": "text",
+                "title": "Performance por Categoria",
+                "result": {"message": f"Segmento '{segmento}' não encontrado"},
+                "summary": f"Segmento '{segmento}' não disponível na amostra",
+                "tokens_used": 0
+            }
+
+        # Agrupar por categoria
+        performance = df_filtrado.groupby('nome_categoria').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique',  # Produtos únicos
+            'une': 'nunique'  # UNEs com vendas
+        }).reset_index()
+
+        performance.columns = ['categoria', 'vendas_total', 'produtos_unicos', 'unes_ativas']
+        performance = performance.sort_values('vendas_total', ascending=False)
+
+        # Calcular percentuais
+        total_vendas = performance['vendas_total'].sum()
+        performance['percentual'] = (performance['vendas_total'] / total_vendas * 100).round(2)
+
+        # Top 15 categorias
+        top_categorias = performance.head(15)
+
+        # Chart data
+        chart_data = {
+            "x": top_categorias['categoria'].tolist(),
+            "y": top_categorias['vendas_total'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        # Tabela
+        tabela = []
+        for _, cat in top_categorias.iterrows():
+            tabela.append({
+                "categoria": cat['categoria'],
+                "vendas_total": float(cat['vendas_total']),
+                "produtos_unicos": int(cat['produtos_unicos']),
+                "unes_ativas": int(cat['unes_ativas']),
+                "percentual": float(cat['percentual'])
+            })
+
+        # Resumo
+        top_cat = tabela[0] if tabela else None
+        summary = f"Performance por Categoria{titulo_sufixo}:\n\n"
+        summary += f"Líder: {top_cat['categoria']} (R$ {top_cat['vendas_total']:,.2f} - {top_cat['percentual']:.1f}%)\n"
+        summary += f"Total de categorias: {len(performance)}\n"
+        summary += f"Top 3: {', '.join(top_categorias['categoria'].head(3).tolist())}"
+
+        return {
+            "type": "chart",
+            "title": f"Performance por Categoria{titulo_sufixo}",
+            "result": {
+                "chart_data": chart_data,
+                "categorias": tabela,
+                "total_categorias": len(performance),
+                "segmento": segmento
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_comparativo_unes_similares(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compara eficiência de vendas entre UNEs com características similares.
+        Usa volume total de vendas como proxy para similaridade.
+
+        Args:
+            df: DataFrame com dados
+            params: {}
+
+        Returns:
+            Dict com comparativo de UNEs
+        """
+        logger.info(f"[>] Processando comparativo_unes_similares - params: {params}")
+
+        # Agrupar por UNE
+        unes = df.groupby('une_nome').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique',  # Diversidade de produtos
+            'nomesegmento': 'nunique'  # Diversidade de segmentos
+        }).reset_index()
+
+        unes.columns = ['une', 'vendas_total', 'produtos_unicos', 'segmentos_unicos']
+        unes = unes.sort_values('vendas_total', ascending=False)
+
+        # Calcular eficiência (vendas / produto)
+        unes['eficiencia'] = (unes['vendas_total'] / unes['produtos_unicos']).round(2)
+
+        # Top 10 UNEs
+        top_unes = unes.head(10)
+
+        # Chart data
+        chart_data = {
+            "x": top_unes['une'].tolist(),
+            "y": top_unes['eficiencia'].tolist(),
+            "type": "bar",
+            "show_values": True
+        }
+
+        # Tabela
+        tabela = []
+        for _, une in top_unes.iterrows():
+            tabela.append({
+                "une": une['une'],
+                "vendas_total": float(une['vendas_total']),
+                "produtos_unicos": int(une['produtos_unicos']),
+                "segmentos_unicos": int(une['segmentos_unicos']),
+                "eficiencia": float(une['eficiencia'])
+            })
+
+        # Resumo
+        media_eficiencia = unes['eficiencia'].mean()
+        summary = f"Comparativo de Eficiência entre UNEs:\n\n"
+        summary += f"Eficiência média: R$ {media_eficiencia:,.2f} por produto\n"
+        summary += f"Mais eficiente: {tabela[0]['une']} (R$ {tabela[0]['eficiencia']:,.2f}/produto)\n"
+        summary += f"Total de UNEs analisadas: {len(unes)}"
+
+        return {
+            "type": "chart",
+            "title": "Eficiência de Vendas por UNE",
+            "result": {
+                "chart_data": chart_data,
+                "unes": tabela,
+                "total_unes": len(unes),
+                "media_eficiencia": float(media_eficiencia)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_fabricantes_novos_vs_estabelecidos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compara performance entre fabricantes novos (baixo volume) vs estabelecidos (alto volume).
+        Usa volume de vendas como proxy para classificar fabricantes.
+
+        Args:
+            df: DataFrame com dados
+            params: {}
+
+        Returns:
+            Dict com comparação fabricantes
+        """
+        logger.info(f"[>] Processando fabricantes_novos_vs_estabelecidos - params: {params}")
+
+        # Agrupar por fabricante
+        fabricantes = df.groupby('nome_fabricante').agg({
+            'vendas_total': 'sum',
+            'codigo': 'nunique'
+        }).reset_index()
+
+        fabricantes.columns = ['fabricante', 'vendas_total', 'produtos_unicos']
+
+        # Classificar: top 30% = estabelecidos, bottom 30% = novos
+        threshold_estabelecidos = fabricantes['vendas_total'].quantile(0.70)
+        threshold_novos = fabricantes['vendas_total'].quantile(0.30)
+
+        estabelecidos = fabricantes[fabricantes['vendas_total'] >= threshold_estabelecidos].copy()
+        novos = fabricantes[fabricantes['vendas_total'] <= threshold_novos].copy()
+
+        # Estatísticas
+        stats = {
+            "estabelecidos": {
+                "count": len(estabelecidos),
+                "vendas_media": float(estabelecidos['vendas_total'].mean()),
+                "vendas_total": float(estabelecidos['vendas_total'].sum()),
+                "produtos_media": float(estabelecidos['produtos_unicos'].mean())
+            },
+            "novos": {
+                "count": len(novos),
+                "vendas_media": float(novos['vendas_total'].mean()),
+                "vendas_total": float(novos['vendas_total'].sum()),
+                "produtos_media": float(novos['produtos_unicos'].mean())
+            }
+        }
+
+        # Resumo
+        summary = f"Fabricantes: Novos vs Estabelecidos\n\n"
+        summary += f"📊 Estabelecidos (top 30%):\n"
+        summary += f"  - Quantidade: {stats['estabelecidos']['count']}\n"
+        summary += f"  - Vendas médias: R$ {stats['estabelecidos']['vendas_media']:,.2f}\n"
+        summary += f"  - Produtos médios: {stats['estabelecidos']['produtos_media']:.0f}\n\n"
+        summary += f"🆕 Novos (bottom 30%):\n"
+        summary += f"  - Quantidade: {stats['novos']['count']}\n"
+        summary += f"  - Vendas médias: R$ {stats['novos']['vendas_media']:,.2f}\n"
+        summary += f"  - Produtos médios: {stats['novos']['produtos_media']:.0f}"
+
+        return {
+            "type": "text",
+            "title": "Fabricantes: Novos vs Estabelecidos",
+            "result": stats,
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_fabricantes_exclusivos_multimarca(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compara fabricantes exclusivos de uma UNE vs fabricantes presentes em múltiplas UNEs.
+
+        Args:
+            df: DataFrame com dados
+            params: {}
+
+        Returns:
+            Dict com análise exclusividade fabricantes
+        """
+        logger.info(f"[>] Processando fabricantes_exclusivos_multimarca - params: {params}")
+
+        # Contar em quantas UNEs cada fabricante está presente
+        fabricantes_unes = df.groupby('nome_fabricante')['une'].nunique().reset_index()
+        fabricantes_unes.columns = ['nome_fabricante', 'unes_count']
+
+        # Pegar também volume de vendas
+        fabricantes_vendas = df.groupby('nome_fabricante')['vendas_total'].sum().reset_index()
+        fabricantes = fabricantes_unes.merge(fabricantes_vendas, on='nome_fabricante')
+
+        # Classificar
+        exclusivos = fabricantes[fabricantes['unes_count'] == 1].copy()
+        multimarca = fabricantes[fabricantes['unes_count'] > 1].copy()
+
+        # Estatísticas
+        stats = {
+            "exclusivos": {
+                "count": len(exclusivos),
+                "vendas_media": float(exclusivos['vendas_total'].mean()) if len(exclusivos) > 0 else 0,
+                "vendas_total": float(exclusivos['vendas_total'].sum()) if len(exclusivos) > 0 else 0
+            },
+            "multimarca": {
+                "count": len(multimarca),
+                "vendas_media": float(multimarca['vendas_total'].mean()) if len(multimarca) > 0 else 0,
+                "vendas_total": float(multimarca['vendas_total'].sum()) if len(multimarca) > 0 else 0,
+                "unes_media": float(multimarca['unes_count'].mean()) if len(multimarca) > 0 else 0
+            }
+        }
+
+        # Top fabricantes multimarca
+        top_multimarca = multimarca.nlargest(10, 'unes_count')[['nome_fabricante', 'unes_count', 'vendas_total']].to_dict('records')
+
+        # Resumo
+        summary = f"Fabricantes: Exclusivos vs Multimarca\n\n"
+        summary += f"🏪 Exclusivos (1 UNE):\n"
+        summary += f"  - Quantidade: {stats['exclusivos']['count']}\n"
+        summary += f"  - Vendas médias: R$ {stats['exclusivos']['vendas_media']:,.2f}\n\n"
+        summary += f"🌐 Multimarca (2+ UNEs):\n"
+        summary += f"  - Quantidade: {stats['multimarca']['count']}\n"
+        summary += f"  - Vendas médias: R$ {stats['multimarca']['vendas_media']:,.2f}\n"
+        summary += f"  - UNEs médias: {stats['multimarca']['unes_media']:.1f}"
+
+        return {
+            "type": "text",
+            "title": "Fabricantes: Exclusivos vs Multimarca",
+            "result": {
+                **stats,
+                "top_multimarca": top_multimarca
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_ciclo_vendas_consistente(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Identifica produtos com ciclo de vendas consistente vs irregular.
+        Usa desvio padrão das frequências semanais.
+        """
+        logger.info(f"[>] Processando ciclo_vendas_consistente - params: {params}")
+
+        # Colunas de frequência semanal
+        freq_cols = ['freq_semana_anterior_5', 'freq_semana_anterior_4', 'freq_semana_anterior_3',
+                     'freq_semana_anterior_2', 'freq_semana_atual']
+
+        # Verificar se colunas existem
+        if not all(col in df.columns for col in freq_cols):
+            return {
+                "type": "fallback",
+                "error": "Dados de frequência semanal não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Calcular desvio padrão das frequências (consistência)
+        df_temp = df[freq_cols].copy()
+        df['freq_std'] = df_temp.std(axis=1)
+
+        # Produtos com vendas (pelo menos em alguma semana)
+        df_vendas = df[df[freq_cols].sum(axis=1) > 0].copy()
+
+        # Classificar: std baixo = consistente, std alto = irregular
+        threshold = df_vendas['freq_std'].quantile(0.50)
+
+        consistentes = df_vendas[df_vendas['freq_std'] <= threshold].nlargest(15, 'vendas_total')
+        irregulares = df_vendas[df_vendas['freq_std'] > threshold].nlargest(15, 'vendas_total')
+
+        # Resumo
+        summary = f"Análise de Ciclo de Vendas:\n\n"
+        summary += f"📊 Produtos Consistentes: {len(consistentes)} (desvio padrão ≤ {threshold:.2f})\n"
+        summary += f"📈 Produtos Irregulares: {len(irregulares)} (desvio padrão > {threshold:.2f})\n\n"
+        summary += f"Top 3 Consistentes: {', '.join(consistentes['nome_produto'].head(3).str[:30])}"
+
+        return {
+            "type": "text",
+            "title": "Produtos: Ciclo Consistente vs Irregular",
+            "result": {
+                "consistentes": consistentes[['nome_produto', 'vendas_total', 'freq_std']].head(10).to_dict('records'),
+                "irregulares": irregulares[['nome_produto', 'vendas_total', 'freq_std']].head(10).to_dict('records'),
+                "threshold": float(threshold)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_estoque_baixo_alta_demanda(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produtos com estoque baixo mas alta demanda (venda_30_d alta).
+        """
+        logger.info(f"[>] Processando estoque_baixo_alta_demanda - params: {params}")
+
+        if 'estoque_atual' not in df.columns or 'venda_30_d' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados de estoque não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Produtos com vendas nos últimos 30 dias
+        df_vendas = df[df['venda_30_d'] > 0].copy()
+
+        # Calcular dias de estoque (estoque / média diária)
+        df_vendas['media_diaria'] = df_vendas['venda_30_d'] / 30
+        df_vendas['dias_estoque'] = (df_vendas['estoque_atual'] / (df_vendas['media_diaria'] + 0.01)).fillna(0)
+
+        # Estoque baixo = menos de 15 dias + demanda alta (acima da mediana)
+        mediana_demanda = df_vendas['venda_30_d'].quantile(0.50)
+
+        produtos_risco = df_vendas[
+            (df_vendas['dias_estoque'] < 15) &
+            (df_vendas['venda_30_d'] >= mediana_demanda)
+        ].nlargest(20, 'venda_30_d')
+
+        # Tabela
+        tabela = []
+        for _, prod in produtos_risco.iterrows():
+            tabela.append({
+                "codigo": str(prod['codigo']),
+                "produto": prod['nome_produto'][:50],
+                "estoque": float(prod.get('estoque_atual', 0)),
+                "venda_30d": float(prod['venda_30_d']),
+                "dias_estoque": float(prod['dias_estoque']),
+                "segmento": prod['nomesegmento']
+            })
+
+        summary = f"Produtos com Estoque Baixo e Alta Demanda:\n\n"
+        summary += f"Total identificado: {len(produtos_risco)}\n"
+        summary += f"Critério: Estoque < 15 dias + Demanda ≥ {mediana_demanda:.0f} (mediana)\n"
+        if tabela:
+            summary += f"Maior risco: {tabela[0]['produto']} ({tabela[0]['dias_estoque']:.1f} dias)"
+
+        return {
+            "type": "table",
+            "title": "Produtos com Estoque Baixo e Alta Demanda",
+            "result": {
+                "produtos": tabela,
+                "total": len(tabela),
+                "mediana_demanda": float(mediana_demanda)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_leadtime_vs_performance(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Relação entre leadtime e performance de vendas.
+        """
+        logger.info(f"[>] Processando leadtime_vs_performance - params: {params}")
+
+        if 'leadtime_lv' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados de leadtime não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Produtos com leadtime definido e vendas
+        df_lead = df[(df['leadtime_lv'].notna()) & (df['leadtime_lv'] > 0) & (df['vendas_total'] > 0)].copy()
+
+        if df_lead.empty:
+            return {
+                "type": "text",
+                "title": "Leadtime vs Performance",
+                "result": {"message": "Sem dados de leadtime disponíveis"},
+                "summary": "Dados de leadtime não encontrados na amostra",
+                "tokens_used": 0
+            }
+
+        # Classificar por leadtime
+        df_lead['leadtime_categoria'] = pd.cut(df_lead['leadtime_lv'], bins=[0, 7, 15, 30, 999],
+                                                labels=['Rápido (0-7d)', 'Médio (8-15d)', 'Lento (16-30d)', 'Muito Lento (30+d)'])
+
+        # Agrupar por categoria
+        analise = df_lead.groupby('leadtime_categoria', observed=True).agg({
+            'vendas_total': ['mean', 'sum', 'count'],
+            'leadtime_lv': 'mean'
+        }).reset_index()
+
+        analise.columns = ['categoria', 'vendas_media', 'vendas_total', 'count', 'leadtime_medio']
+
+        summary = f"Relação Leadtime vs Performance:\n\n"
+        for _, row in analise.iterrows():
+            summary += f"{row['categoria']}: {row['count']} produtos, Vendas médias: R$ {row['vendas_media']:,.2f}\n"
+
+        return {
+            "type": "text",
+            "title": "Leadtime vs Performance de Vendas",
+            "result": {
+                "analise": analise.to_dict('records'),
+                "correlacao": "Análise por categoria de leadtime"
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_rotacao_estoque_avancada(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produtos com maior rotação de estoque (venda_30d / estoque).
+        """
+        logger.info(f"[>] Processando rotacao_estoque_avancada - params: {params}")
+
+        if 'estoque_atual' not in df.columns or 'venda_30_d' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados de estoque não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Produtos com estoque e vendas
+        df_rot = df[(df['estoque_atual'] > 0) & (df['venda_30_d'] > 0)].copy()
+
+        # Calcular rotação mensal (vendas / estoque)
+        df_rot['rotacao'] = (df_rot['venda_30_d'] / df_rot['estoque_atual']).round(2)
+
+        # Top 20 produtos com maior rotação
+        top_rotacao = df_rot.nlargest(20, 'rotacao')
+
+        # Tabela
+        tabela = []
+        for _, prod in top_rotacao.iterrows():
+            tabela.append({
+                "codigo": str(prod['codigo']),
+                "produto": prod['nome_produto'][:50],
+                "estoque": float(prod['estoque_atual']),
+                "venda_30d": float(prod['venda_30_d']),
+                "rotacao": float(prod['rotacao']),
+                "segmento": prod['nomesegmento']
+            })
+
+        summary = f"Top 20 Produtos com Maior Rotação de Estoque:\n\n"
+        if tabela:
+            summary += f"Líder: {tabela[0]['produto']} (rotação: {tabela[0]['rotacao']:.2f}x/mês)\n"
+            summary += f"Média de rotação: {top_rotacao['rotacao'].mean():.2f}x/mês"
+
+        return {
+            "type": "table",
+            "title": "Produtos com Maior Rotação de Estoque",
+            "result": {
+                "produtos": tabela,
+                "total": len(tabela)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_exposicao_vs_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Análise de exposição mínima vs vendas.
+        """
+        logger.info(f"[>] Processando exposicao_vs_vendas - params: {params}")
+
+        if 'exposicao_minima_une' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados de exposição não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Produtos com exposição definida e vendas
+        df_exp = df[(df['exposicao_minima_une'].notna()) & (df['vendas_total'] > 0)].copy()
+
+        if df_exp.empty:
+            return {
+                "type": "text",
+                "title": "Exposição vs Vendas",
+                "result": {"message": "Sem dados de exposição disponíveis"},
+                "summary": "Dados de exposição não encontrados",
+                "tokens_used": 0
+            }
+
+        # Converter exposição para numérico
+        df_exp['exposicao_num'] = pd.to_numeric(df_exp['exposicao_minima_une'], errors='coerce')
+        df_exp = df_exp[df_exp['exposicao_num'].notna()]
+
+        # Produtos com exposição mínima mas boas vendas
+        mediana_exp = df_exp['exposicao_num'].quantile(0.30)
+        mediana_vendas = df_exp['vendas_total'].quantile(0.70)
+
+        produtos_destaque = df_exp[
+            (df_exp['exposicao_num'] <= mediana_exp) &
+            (df_exp['vendas_total'] >= mediana_vendas)
+        ].nlargest(15, 'vendas_total')
+
+        tabela = []
+        for _, prod in produtos_destaque.iterrows():
+            tabela.append({
+                "codigo": str(prod['codigo']),
+                "produto": prod['nome_produto'][:50],
+                "exposicao": float(prod['exposicao_num']),
+                "vendas_total": float(prod['vendas_total']),
+                "segmento": prod['nomesegmento']
+            })
+
+        summary = f"Produtos com Exposição Mínima mas Alto Desempenho:\n\n"
+        summary += f"Total identificado: {len(produtos_destaque)}\n"
+        summary += f"Critério: Exposição ≤ {mediana_exp:.0f} + Vendas ≥ {mediana_vendas:,.0f}"
+
+        return {
+            "type": "table",
+            "title": "Exposição Mínima vs Alto Desempenho",
+            "result": {
+                "produtos": tabela,
+                "total": len(tabela)
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_estoque_cd_vs_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Eficiência logística: relação entre estoque CD vs vendas.
+        """
+        logger.info(f"[>] Processando estoque_cd_vs_vendas - params: {params}")
+
+        if 'estoque_cd' not in df.columns:
+            return {
+                "type": "fallback",
+                "error": "Dados de estoque CD não disponíveis",
+                "summary": "Acionando fallback para processamento com IA.",
+                "tokens_used": 0
+            }
+
+        # Produtos com estoque CD e vendas
+        df_cd = df[(df['estoque_cd'] > 0) & (df['vendas_total'] > 0)].copy()
+
+        # Calcular ratio CD/vendas
+        df_cd['ratio_cd_vendas'] = (df_cd['estoque_cd'] / df_cd['vendas_total']).round(3)
+
+        # Análise por quartis
+        q1 = df_cd['ratio_cd_vendas'].quantile(0.25)
+        q3 = df_cd['ratio_cd_vendas'].quantile(0.75)
+
+        # Produtos eficientes (ratio baixo = pouco estoque, muita venda)
+        eficientes = df_cd[df_cd['ratio_cd_vendas'] <= q1].nlargest(15, 'vendas_total')
+
+        # Produtos com excesso CD (ratio alto)
+        excesso_cd = df_cd[df_cd['ratio_cd_vendas'] >= q3].nlargest(15, 'estoque_cd')
+
+        summary = f"Eficiência Logística - Estoque CD vs Vendas:\n\n"
+        summary += f"📦 Eficientes (CD/Vendas ≤ {q1:.3f}): {len(eficientes)} produtos\n"
+        summary += f"⚠️ Excesso CD (CD/Vendas ≥ {q3:.3f}): {len(excesso_cd)} produtos"
+
+        return {
+            "type": "text",
+            "title": "Eficiência Logística: Estoque CD vs Vendas",
+            "result": {
+                "eficientes": eficientes[['nome_produto', 'estoque_cd', 'vendas_total', 'ratio_cd_vendas']].head(10).to_dict('records'),
+                "excesso_cd": excesso_cd[['nome_produto', 'estoque_cd', 'vendas_total', 'ratio_cd_vendas']].head(10).to_dict('records'),
+                "quartis": {"q1": float(q1), "q3": float(q3)}
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
+    def _query_analise_geral(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Router inteligente para análises gerais.
+        Sub-classifica queries genéricas baseado em keywords e roteia para métodos específicos.
+        """
+        # Pegar query original do usuário
+        user_query = params.get('user_query', '').lower()
+
+        logger.info(f"[ANALISE_GERAL ROUTER] Query original: {user_query}")
+
+        # Sub-classificação por keywords - ordem de prioridade
+
+        # 1. ABC Analysis
+        if any(kw in user_query for kw in ['abc', 'curva abc', 'classificação abc', 'classe a', 'classe b', 'classe c']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_analise_abc")
+            return self._query_analise_abc(df, params)
+
+        # 2. Sazonalidade
+        if any(kw in user_query for kw in ['sazonalidade', 'sazonal', 'sazonais', 'padrão sazonal', 'variação mensal']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_sazonalidade")
+            return self._query_sazonalidade(df, params)
+
+        # 3. Crescimento
+        if any(kw in user_query for kw in ['crescimento', 'cresceu', 'aumentou', 'evolução', 'crescente']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_crescimento_segmento")
+            return self._query_crescimento_segmento(df, params)
+
+        # 4. Tendência
+        if any(kw in user_query for kw in ['tendência', 'tendencia', 'trend', 'projeção']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_tendencia_vendas")
+            return self._query_tendencia_vendas(df, params)
+
+        # 5. Pico de vendas
+        if any(kw in user_query for kw in ['pico', 'máximo', 'maximo', 'maior venda', 'record']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_pico_vendas")
+            return self._query_pico_vendas(df, params)
+
+        # 6. Concentração/Dependência
+        if any(kw in user_query for kw in ['concentração', 'concentracao', 'dependência', 'dependencia', 'diversificação', 'diversificacao']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_diversidade_produtos")
+            return self._query_diversidade_produtos(df, params)
+
+        # 7. Distribuição por categoria
+        if any(kw in user_query for kw in ['distribuição', 'distribuicao', 'categoria', 'categorias']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_distribuicao_categoria")
+            return self._query_distribuicao_categoria(df, params)
+
+        # 8. Estoque
+        if any(kw in user_query for kw in ['estoque alto', 'excesso de estoque', 'estoque parado', 'muito estoque']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_estoque_alto")
+            return self._query_estoque_alto(df, params)
+
+        # 9. Produtos acima da média
+        if any(kw in user_query for kw in ['acima da média', 'acima da media', 'superam', 'ultrapassam']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_produtos_acima_media")
+            return self._query_produtos_acima_media(df, params)
+
+        # 10. Ranking/Top produtos
+        if any(kw in user_query for kw in ['top', 'ranking', 'melhores', 'maiores', 'principais']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_ranking_geral")
+            return self._query_ranking_geral(df, params)
+
+        # 11. Comparação de segmentos
+        if any(kw in user_query for kw in ['comparar', 'comparação', 'comparacao', 'versus', 'vs', 'entre']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_comparacao_segmentos")
+            return self._query_comparacao_segmentos(df, params)
+
+        # 12. Evolução mês a mês
+        if any(kw in user_query for kw in ['evolução', 'evolucao', 'mês a mês', 'mes a mes', 'mensal']):
+            logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_evolucao_mes_a_mes")
+            return self._query_evolucao_mes_a_mes(df, params)
+
+        # 13. Análise geral de vendas - padrão fallback com informações básicas
+        logger.info("[ANALISE_GERAL ROUTER] -> Gerando análise geral padrão")
+
+        # Calcular métricas gerais
+        total_vendas = df['vendas_total'].sum()
+        total_produtos = df['nome_produto'].nunique()
+        total_unes = df['une'].nunique() if 'une' in df.columns else 0
+        media_vendas = df['vendas_total'].mean()
+
+        # Top 5 produtos
+        top_5 = df.nlargest(5, 'vendas_total')[['nome_produto', 'vendas_total']]
+
+        summary = f"""Análise Geral do Período:
+
+📊 Métricas Principais:
+- Vendas Totais: R$ {total_vendas:,.2f}
+- Total de Produtos: {total_produtos}
+- Total de UNEs: {total_unes}
+- Média de Vendas por Produto: R$ {media_vendas:,.2f}
+
+🏆 Top 5 Produtos:
+"""
+        for idx, row in top_5.iterrows():
+            summary += f"\n{idx+1}. {row['nome_produto']}: R$ {row['vendas_total']:,.2f}"
+
+        return {
+            "type": "text",
+            "title": "Análise Geral de Vendas",
+            "result": {
+                "total_vendas": float(total_vendas),
+                "total_produtos": int(total_produtos),
+                "total_unes": int(total_unes),
+                "media_vendas": float(media_vendas),
+                "top_5_produtos": top_5.to_dict('records')
+            },
+            "summary": summary,
+            "tokens_used": 0
+        }
+
     def _query_fallback(self, df: pd.DataFrame, query_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback para queries não implementadas, sinalizando para usar o grafo principal."""
         logger.warning(f"Consulta não implementada ou não compreendida no DirectQueryEngine: {query_type}. Acionando fallback para o agent_graph.")
@@ -1414,6 +3654,9 @@ class DirectQueryEngine:
 
         # Classificar intenção SEM LLM
         query_type, params = self.classify_intent_direct(user_query)
+
+        # Adicionar user_query aos params para o router inteligente
+        params['user_query'] = user_query
 
         # Executar consulta direta
         result = self.execute_direct_query(query_type, params)

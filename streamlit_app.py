@@ -329,46 +329,48 @@ else:
             ]
             st.rerun()
 
-    # --- Quick Actions (Perguntas Rápidas) ---
-    with st.sidebar:
-        st.divider()
-        st.subheader("⚡ Perguntas Rápidas")
+    # --- Quick Actions (Perguntas Rápidas) - Apenas para Admin ---
+    user_role = st.session_state.get('role', '')
+    if user_role == 'admin':
+        with st.sidebar:
+            st.divider()
+            # Perguntas Rápidas (Ocultas - pode ser reativado via checkbox)
+            if st.checkbox("⚡ Mostrar Perguntas Rápidas", value=False, key="show_quick_questions"):
+                st.subheader("⚡ Perguntas Rápidas")
 
-        # Perguntas populares por categoria
-        quick_actions = {
-            "🎯 Vendas": [
-                "Produto mais vendido",
-                "Top 10 produtos",
-                "Ranking de vendas na une scr"
-            ],
-            "🏬 UNEs/Lojas": [
-                "Ranking de vendas por UNE",
-                "Top 5 produtos da une 261",
-                "Vendas totais de cada une"
-            ],
-            "🏪 Segmentos": [
-                "Qual segmento mais vendeu?",
-                "Top 10 produtos do segmento TECIDOS",
-                "Ranking dos segmentos"
-            ],
-            "📈 Análises": [
-                "Evolução de vendas dos últimos 12 meses",
-                "Produtos sem movimento",
-                "Análise ABC de produtos"
-            ]
-        }
+                # Perguntas populares por categoria
+                quick_actions = {
+                    "🎯 Vendas": [
+                        "Produto mais vendido",
+                        "Top 10 produtos",
+                        "Ranking de vendas na une scr"
+                    ],
+                    "🏬 UNEs/Lojas": [
+                        "Ranking de vendas por UNE",
+                        "Top 5 produtos da une 261",
+                        "Vendas totais de cada une"
+                    ],
+                    "🏪 Segmentos": [
+                        "Qual segmento mais vendeu?",
+                        "Top 10 produtos do segmento TECIDOS",
+                        "Ranking dos segmentos"
+                    ],
+                    "📈 Análises": [
+                        "Evolução de vendas dos últimos 12 meses",
+                        "Produtos sem movimento",
+                        "Análise ABC de produtos"
+                    ]
+                }
 
-        for categoria, perguntas in quick_actions.items():
-            with st.expander(categoria, expanded=False):
-                for pergunta in perguntas:
-                    if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
-                        # Adicionar pergunta ao input do chat
-                        st.session_state['pergunta_selecionada'] = pergunta
-                        # Executar query automaticamente
-                        query_backend(pergunta)
-                        st.rerun()
+                for categoria, perguntas in quick_actions.items():
+                    with st.expander(categoria, expanded=False):
+                        for pergunta in perguntas:
+                            if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
+                                # Adicionar pergunta ao session state
+                                st.session_state['pergunta_selecionada'] = pergunta
+                                st.rerun()
 
-        st.caption("💡 Clique para executar")
+                st.caption("💡 Clique para executar")
 
     # --- Estado da Sessão ---
 
@@ -747,6 +749,13 @@ else:
             # ❌ Tratamento de erro na renderização
             st.error(f"Erro ao renderizar mensagem {i+1}: {str(e)}")
             st.write(f"Dados da mensagem: {msg}")
+
+    # Verificar se há uma pergunta selecionada da página de exemplos
+    if 'pergunta_selecionada' in st.session_state and st.session_state.pergunta_selecionada:
+        pergunta = st.session_state.pergunta_selecionada
+        st.session_state.pergunta_selecionada = None  # Limpar para não processar novamente
+        query_backend(pergunta)
+        st.rerun()
 
     if prompt := st.chat_input("Faça sua pergunta..."):
         query_backend(prompt)
