@@ -27,11 +27,21 @@ class ParquetAdapter(DatabaseAdapter):
             MemoryOptimizer.log_memory_usage("Before loading Parquet")
             logger.info(f"Loading Parquet file from {self.file_path}...")
 
-            # OTIMIZAÇÃO STREAMLIT CLOUD: Carregar apenas colunas essenciais
-            essential_cols = ['codigo', 'nome_produto', 'preco_38_percent', 'nomesegmento',
-                            'nome_categoria', 'nome_fabricante', 'mes_01', 'mes_02', 'mes_03',
-                            'mes_04', 'mes_05', 'mes_06', 'mes_07', 'mes_08', 'mes_09',
-                            'mes_10', 'mes_11', 'mes_12', 'une', 'une_nome']
+            # OTIMIZAÇÃO STREAMLIT CLOUD: Carregar colunas essenciais + análises avançadas
+            essential_cols = [
+                # Básicas
+                'codigo', 'nome_produto', 'preco_38_percent', 'nomesegmento',
+                'nome_categoria', 'nome_fabricante', 'une', 'une_nome',
+                # Vendas mensais
+                'mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06',
+                'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12',
+                # Frequência semanal (ciclo vendas)
+                'freq_semana_anterior_5', 'freq_semana_anterior_4', 'freq_semana_anterior_3',
+                'freq_semana_anterior_2', 'freq_semana_atual',
+                # Estoque e logística
+                'estoque_atual', 'estoque_cd', 'venda_30_d', 'leadtime_lv',
+                'exposicao_minima_une'
+            ]
 
             try:
                 self._dataframe = pd.read_parquet(self.file_path, columns=essential_cols)

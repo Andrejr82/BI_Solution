@@ -124,14 +124,14 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
         logger.error(f"Erro ao obter o schema do arquivo Parquet: {e}", exc_info=True)
         return {"parquet_filters": {}, "final_response": {"type": "error", "content": "Não foi possível aceder ao schema do arquivo Parquet para gerar a consulta."}}
 
-    # Load the cleaned catalog
-    catalog_file_path = "data/catalog_cleaned.json"
+    # Load the focused catalog
+    catalog_file_path = "data/catalog_focused.json"
     try:
         with open(catalog_file_path, 'r', encoding='utf-8') as f:
             catalog_data = json.load(f)
-        
-        # Find the entry for admmat.parquet
-        admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admmat.parquet"), None)
+
+        # Find the entry for admatao.parquet
+        admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admatao.parquet"), None)
         
         if admatao_catalog and "column_descriptions" in admatao_catalog:
             column_descriptions = admatao_catalog["column_descriptions"]

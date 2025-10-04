@@ -1,11 +1,11 @@
 {
   "metadata": {
     "description": "Padrões de perguntas para treinamento automático do agente",
-    "version": "2.0",
+    "version": "3.1",
     "auto_learn": true,
-    "total_patterns": 22,
-    "last_updated": "2025-10-03",
-    "coverage_target": "80+ perguntas de negócio"
+    "total_patterns": 28,
+    "last_updated": "2025-10-04",
+    "coverage_target": "80 perguntas de negócio - Meta 96.25%"
   },
   "patterns": [
     {
@@ -17,11 +17,11 @@
         "me mostre os 5 produtos mais vendidos em FESTAS na loja MAD",
         "produtos mais vendidos no segmento PAPELARIA na une TIJ"
       ],
-      "regex": "(quais?\\s+(?:são|sao)?\\s+(?:os?\\s+)?|me\\s+mostre\\s+(?:os?\\s+)?)?(top\\s+)?(\\d+)?\\s*produtos\\s*(mais\\s*vendidos?)?\\s*(do|no|em|de)?\\s*segmento\\s+([A-Za-z]+)\\s*(da|na|em|para)?\\s*(une|filial|loja|unidade)?\\s*([A-Z0-9]{2,})",
+      "regex": "(quais?\\s+(?:são|sao)?\\s+(?:os?\\s+)?|me\\s+mostre\\s+(?:os?\\s+)?)?(top\\s+)?(\\d+)?\\s*produtos\\s*(mais\\s*vendidos?)?\\s*(do|no|em|de)?\\s*segmento\\s+(\\w+)\\s+(?:da|na|em|para)?\\s+(une|filial|loja|unidade)\\s+([A-Z0-9]{2,})",
       "extract": {
         "limite": "group(3)",
         "segmento": "group(6)",
-        "une_nome": "group(9)"
+        "une_nome": "group(8)"
       },
       "query_type": "ranking_segmento_une",
       "output": "chart_bar"
@@ -103,7 +103,7 @@
         "comparar segmento FESTAS vs PAPELARIA",
         "diferença de vendas entre TECIDOS e CONFECÇÃO"
       ],
-      "regex": "compar[ae].*segmento[s]?\\s*([A-Z\\s]+)\\s*(vs|e|com)\\s*([A-Z\\s]+)",
+      "regex": "compar[ae].*segmentos?\\s+([A-Z][A-ZÀ-Ü\\s]+?)\\s+(vs|e|entre)\\s+([A-Z][A-ZÀ-Ü\\s]+?)(?:\\s|$)",
       "extract": {
         "segmento1": "group(1)",
         "segmento2": "group(3)"
@@ -230,7 +230,7 @@
         "produtos de alta rotação"
       ],
       "regex": "(produtos?\\s*(com)?\\s*)?(maior|alta|melhor)?\\s*rota[çc][ãa]o\\s*(de\\s*)?estoque",
-      "query_type": "rotacao_estoque",
+      "query_type": "rotacao_estoque_avancada",
       "output": "table_or_chart"
     },
     {
@@ -306,6 +306,102 @@
       "regex": "(produtos?|quais).*pico.*vendas?|pico\\s*(de\\s*)?vendas?",
       "query_type": "pico_vendas",
       "output": "table_or_chart"
+    },
+    {
+      "id": "comparativo_unes_similares",
+      "name": "Comparativo de eficiência entre UNEs similares",
+      "examples": [
+        "comparativo de eficiência de vendas entre UNEs similares",
+        "eficiência entre UNEs",
+        "compare UNEs similares"
+      ],
+      "regex": "(comparativ[oa]|efici[êe]ncia|compar[ae]).*unes?\\s*(similares?|efici[êe]ncia)",
+      "query_type": "comparativo_unes_similares",
+      "output": "chart_bar"
+    },
+    {
+      "id": "fabricantes_novos_vs_estabelecidos",
+      "name": "Fabricantes novos vs estabelecidos",
+      "examples": [
+        "novos fabricantes vs estabelecidos",
+        "fabricantes novos vs estabelecidos: performance comparativa",
+        "compare fabricantes novos e estabelecidos"
+      ],
+      "regex": "(novos?\\s*fabricantes?.*estabelecidos?|fabricantes?.*novos?.*vs.*estabelecidos?|fabricantes?.*estabelecidos?.*vs.*novos?)",
+      "query_type": "fabricantes_novos_vs_estabelecidos",
+      "output": "comparison"
+    },
+    {
+      "id": "fabricantes_exclusivos_multimarca",
+      "name": "Fabricantes exclusivos vs multimarca",
+      "examples": [
+        "fabricantes exclusivos vs multimarca por UNE",
+        "compare fabricantes exclusivos e multimarca",
+        "fabricantes exclusivos de uma UNE vs presentes em várias"
+      ],
+      "regex": "fabricantes?\\s*(exclusivos?.*multimarca|multimarca.*exclusivos?)|exclusivos?.*vs.*multimarca",
+      "query_type": "fabricantes_exclusivos_multimarca",
+      "output": "comparison"
+    },
+    {
+      "id": "ciclo_vendas_consistente",
+      "name": "Produtos com ciclo de vendas consistente vs irregular",
+      "examples": [
+        "produtos com ciclo de vendas consistente vs irregular",
+        "vendas regulares vs esporádicas",
+        "produtos com padrão regular de vendas"
+      ],
+      "regex": "(ciclo.*vendas?.*consistente|vendas?.*regular.*vs.*espor[áa]dic|consistente.*vs.*irregular|padr[ãa]o.*regular)",
+      "query_type": "ciclo_vendas_consistente",
+      "output": "comparison"
+    },
+    {
+      "id": "estoque_baixo_alta_demanda",
+      "name": "Produtos com estoque baixo vs alta demanda",
+      "examples": [
+        "produtos com estoque baixo vs alta demanda",
+        "estoque baixo e muita venda",
+        "produtos em risco de ruptura"
+      ],
+      "regex": "(estoque.*baixo.*alta?\\s*demanda|estoque.*baixo.*venda|risco.*ruptura)",
+      "query_type": "estoque_baixo_alta_demanda",
+      "output": "table"
+    },
+    {
+      "id": "leadtime_vs_performance",
+      "name": "Leadtime vs performance de vendas",
+      "examples": [
+        "produtos com maior leadtime vs performance de vendas",
+        "relação entre leadtime e vendas",
+        "leadtime impacta nas vendas"
+      ],
+      "regex": "(leadtime.*performance|leadtime.*vendas?|maior\\s*leadtime)",
+      "query_type": "leadtime_vs_performance",
+      "output": "analysis"
+    },
+    {
+      "id": "exposicao_vs_vendas",
+      "name": "Exposição mínima vs vendas",
+      "examples": [
+        "análise de exposição: produtos com exposição mínima vs vendas",
+        "exposição mínima mas vende bem",
+        "produtos com pouca exposição e boas vendas"
+      ],
+      "regex": "(exposi[çc][ãa]o.*m[íi]nima.*vendas?|exposi[çc][ãa]o.*vendas?|an[áa]lise.*exposi[çc][ãa]o)",
+      "query_type": "exposicao_vs_vendas",
+      "output": "table"
+    },
+    {
+      "id": "estoque_cd_vs_vendas",
+      "name": "Eficiência logística: estoque CD vs vendas",
+      "examples": [
+        "eficiência logística: relação entre estoque CD vs vendas",
+        "estoque no CD vs vendas",
+        "análise de estoque CD"
+      ],
+      "regex": "(efici[êe]ncia.*log[íi]stica|estoque.*cd.*vendas?|rela[çc][ãa]o.*estoque.*cd)",
+      "query_type": "estoque_cd_vs_vendas",
+      "output": "analysis"
     }
   ],
   "fallback_strategy": {

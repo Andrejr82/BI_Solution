@@ -53,7 +53,7 @@ class CodeGenAgent:
 
     def _get_catalog_timestamp(self) -> float:
         """Retorna o timestamp da última modificação do arquivo de catálogo."""
-        catalog_path = os.path.join(os.getcwd(), "data", "catalog_cleaned.json")
+        catalog_path = os.path.join(os.getcwd(), "data", "catalog_focused.json")
         try:
             return os.path.getmtime(catalog_path)
         except FileNotFoundError:
