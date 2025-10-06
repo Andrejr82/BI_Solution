@@ -6,7 +6,12 @@ ZERO Pydantic, ZERO ValidationError
 import os
 import logging
 
+from dotenv import load_dotenv
+
 logger = logging.getLogger(__name__)
+
+# Carregar variáveis de ambiente do .env no início
+load_dotenv()
 
 class SafeSettings:
     """
@@ -17,6 +22,10 @@ class SafeSettings:
         self.GEMINI_API_KEY = self._get_gemini_key()
         self.DEEPSEEK_API_KEY = self._get_deepseek_key()
         self.LLM_MODEL_NAME = self._get_llm_model()
+
+        # Modelos específicos para cada LLM
+        self.GEMINI_MODEL_NAME = self._get_gemini_model()
+        self.DEEPSEEK_MODEL_NAME = self._get_deepseek_model()
 
         # Configurações de banco (opcionais) - Streamlit Cloud ou .env
         self.DB_SERVER = self._get_secret_or_env("DB_SERVER", "")
@@ -34,7 +43,11 @@ class SafeSettings:
                 return st.secrets["GEMINI_API_KEY"]
         except:
             pass
-        return os.getenv("GEMINI_API_KEY", "")
+        key = os.getenv("GEMINI_API_KEY", "")
+        # Remover aspas se existirem
+        if key:
+            key = key.strip('"').strip("'")
+        return key
 
     def _get_deepseek_key(self):
         """Obtém chave DeepSeek de forma segura"""
@@ -44,10 +57,14 @@ class SafeSettings:
                 return st.secrets["DEEPSEEK_API_KEY"]
         except:
             pass
-        return os.getenv("DEEPSEEK_API_KEY", "")
+        key = os.getenv("DEEPSEEK_API_KEY", "")
+        # Remover aspas se existirem
+        if key:
+            key = key.strip('"').strip("'")
+        return key
 
     def _get_llm_model(self):
-        """Obtém modelo LLM"""
+        """Obtém modelo LLM (genérico, mantido para compatibilidade)"""
         try:
             import streamlit as st
             if hasattr(st, 'secrets') and "LLM_MODEL_NAME" in st.secrets:
@@ -56,6 +73,36 @@ class SafeSettings:
             pass
 
         return os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
+
+    def _get_gemini_model(self):
+        """Obtém modelo Gemini específico"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and "GEMINI_MODEL_NAME" in st.secrets:
+                return st.secrets["GEMINI_MODEL_NAME"]
+        except:
+            pass
+
+        model = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash")
+        # Remover aspas se existirem
+        if model:
+            model = model.strip('"').strip("'")
+        return model
+
+    def _get_deepseek_model(self):
+        """Obtém modelo DeepSeek específico"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and "DEEPSEEK_MODEL_NAME" in st.secrets:
+                return st.secrets["DEEPSEEK_MODEL_NAME"]
+        except:
+            pass
+
+        model = os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-chat")
+        # Remover aspas se existirem
+        if model:
+            model = model.strip('"').strip("'")
+        return model
 
     def _get_secret_or_env(self, key, default=""):
         """Obtém valor de Streamlit secrets ou variável de ambiente"""

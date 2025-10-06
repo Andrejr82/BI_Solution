@@ -5,7 +5,7 @@ Cada função representa um passo no fluxo de processamento da consulta.
 import logging
 import json
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import pandas as pd
 import numpy as np
 
@@ -15,6 +15,7 @@ from core.llm_base import BaseLLMAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 from core.tools.data_tools import fetch_data_from_query
 from core.connectivity.parquet_adapter import ParquetAdapter
+from core.connectivity.hybrid_adapter import HybridDataAdapter
 
 
 from core.utils.json_utils import _clean_json_values # Import the cleaning function
@@ -110,7 +111,7 @@ def clarify_requirements(state: AgentState) -> Dict[str, Any]:
 
     return {"clarification_needed": False}
 
-def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
+def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: Union[ParquetAdapter, HybridDataAdapter]) -> Dict[str, Any]:
     """
     Gera um dicionário de filtros para consulta Parquet a partir da pergunta do utilizador, usando o schema do arquivo Parquet e descrições de colunas.
     """
@@ -200,7 +201,7 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
     return {"parquet_filters": parquet_filters}
 
 
-def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
+def execute_query(state: AgentState, parquet_adapter: Union[ParquetAdapter, HybridDataAdapter]) -> Dict[str, Any]:
     """
     Executa os filtros Parquet do estado.
     """

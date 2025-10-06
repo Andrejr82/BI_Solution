@@ -57,6 +57,9 @@ class ParquetAdapter(DatabaseAdapter):
 
             if vendas_colunas_existentes:
                 logger.info(f"Criando coluna vendas_total com colunas: {vendas_colunas_existentes}")
+                # Converter para numérico antes de somar (corrige tipos mistos)
+                for col in vendas_colunas_existentes:
+                    self._dataframe[col] = pd.to_numeric(self._dataframe[col], errors='coerce')
                 self._dataframe['vendas_total'] = self._dataframe[vendas_colunas_existentes].fillna(0).sum(axis=1)
                 logger.info(f"Coluna vendas_total criada. Min: {self._dataframe['vendas_total'].min()}, Max: {self._dataframe['vendas_total'].max()}")
             else:
@@ -101,11 +104,11 @@ class ParquetAdapter(DatabaseAdapter):
         # Se não há filtros, retorna uma amostra dos dados para análise
         if not query_filters:
             logger.info("Sem filtros específicos. Retornando amostra de dados.")
-            # ✅ OTIMIZAÇÃO: Reduzir tamanho da amostra para evitar problemas de memória
-            sample_size = min(500, len(filtered_df))  # Máximo 500 linhas
-            sample_df = filtered_df.head(sample_size)
+            # ✅ OTIMIZAÇÃO: Amostra aleatória maior para evitar dados repetidos
+            sample_size = min(20000, len(filtered_df))  # Máximo 20000 linhas
+            sample_df = filtered_df.sample(n=sample_size, random_state=42)  # Amostra aleatória
             results = sample_df.to_dict(orient="records")
-            logger.info(f"Amostra retornada com sucesso. {len(results)} linhas de {len(filtered_df)} total.")
+            logger.info(f"Amostra aleatória retornada com sucesso. {len(results)} linhas de {len(filtered_df)} total.")
             return results
 
         try:
@@ -151,11 +154,7 @@ class ParquetAdapter(DatabaseAdapter):
                         condition = pd.to_numeric(condition)
                     filtered_df = filtered_df[filtered_df[column] == condition]
 
-            # ✅ OTIMIZAÇÃO: Limitar resultados para evitar problemas de memória
-            max_results = 5000  # Limite máximo de resultados
-            if len(filtered_df) > max_results:
-                logger.warning(f"Query returned {len(filtered_df)} rows, limiting to {max_results} for performance")
-                filtered_df = filtered_df.head(max_results)
+
 
             results = filtered_df.to_dict(orient="records")
             logger.info(f"Query executed successfully. {len(results)} rows returned from {len(self._dataframe)} total.")

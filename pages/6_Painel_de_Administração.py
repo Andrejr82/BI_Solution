@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 import logging
+from core.security.input_validator import validate_password_strength, sanitize_username
 
 # Importação condicional para funcionar no cloud
 try:
@@ -30,8 +31,12 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
         unsafe_allow_html=True,
     )
 
-    # --- Gerenciamento de Usuários ---
-    st.subheader("👥 Gerenciamento de Usuários")
+    # --- Tabs para organizar ---
+    tab1, tab2 = st.tabs(["👥 Usuários", "🔐 Permissões"])
+
+    with tab1:
+        # --- Gerenciamento de Usuários ---
+        st.subheader("👥 Gerenciamento de Usuários")
 
     # Adicionar Novo Usuário
     with st.expander("➕ Adicionar Novo Usuário"):
@@ -45,15 +50,29 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                 if not DB_AVAILABLE:
                     st.warning("⚠️ Funcionalidade não disponível no modo cloud. Use autenticação local.")
                 else:
-                    try:
-                        auth_db.criar_usuario(new_username, new_password, new_role)
-                        st.success(f"Usuário '{new_username}' adicionado com sucesso!")
-                        audit_logger.info(f"Admin {st.session_state.get('username')} adicionou o usuário {new_username} com papel {new_role}.")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(f"Erro ao adicionar usuário: {e}")
-                    except Exception as e:
-                        st.error(f"Ocorreu um erro inesperado: {e}")
+                    # Validações de segurança
+                    if not new_username or not new_password:
+                        st.error("❌ Preencha todos os campos.")
+                    else:
+                        # Sanitizar username
+                        sanitized_username = sanitize_username(new_username)
+                        if sanitized_username != new_username:
+                            st.warning(f"⚠️ Username sanitizado: '{new_username}' → '{sanitized_username}'")
+
+                        # Validar força da senha
+                        is_valid, error_msg = validate_password_strength(new_password)
+                        if not is_valid:
+                            st.error(f"❌ {error_msg}")
+                        else:
+                            try:
+                                auth_db.criar_usuario(sanitized_username, new_password, new_role)
+                                st.success(f"Usuário '{sanitized_username}' adicionado com sucesso!")
+                                audit_logger.info(f"Admin {st.session_state.get('username')} adicionou o usuário {sanitized_username} com papel {new_role}.")
+                                st.rerun()
+                            except ValueError as e:
+                                st.error(f"Erro ao adicionar usuário: {e}")
+                            except Exception as e:
+                                st.error(f"Ocorreu um erro inesperado: {e}")
 
     # Listar e Gerenciar Usuários Existentes
     st.markdown("---")
@@ -126,12 +145,47 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                             st.warning("⚠️ Modo Cloud: Edição de usuários não disponível. Use SQL Server para gerenciar usuários.")
 
                     if reset_password_submitted:
-                        new_temp_password = st.text_input("Nova Senha Temporária", type="password", key=f"temp_pass_{user_id}")
-                        if st.form_submit_button("Confirmar Redefinição"):
-                            auth_db.reset_user_password(user_id, new_temp_password)
-                            st.success(f"Senha do usuário '{selected_username}' redefinida com sucesso!")
-                            audit_logger.info(f"Admin {st.session_state.get('username')} redefiniu a senha do usuário {selected_username}.")
-                            st.rerun()
+                        if DB_AVAILABLE and user_id > 0:
+                            st.markdown("---")
+                            st.warning(f"⚠️ Resetar senha para: **{selected_username}**")
+
+                            with st.container():
+                                new_temp_password = st.text_input(
+                                    "Nova Senha Temporária",
+                                    type="password",
+                                    key=f"temp_pass_{user_id}",
+                                    help="Digite a nova senha temporária para o usuário"
+                                )
+                                confirm_temp = st.text_input(
+                                    "Confirme a Senha",
+                                    type="password",
+                                    key=f"confirm_temp_{user_id}",
+                                    help="Digite novamente a senha"
+                                )
+
+                                if st.button("🔑 Confirmar Reset", key=f"confirm_reset_{user_id}", type="primary"):
+                                    if not new_temp_password:
+                                        st.error("❌ Digite a nova senha.")
+                                    elif new_temp_password != confirm_temp:
+                                        st.error("❌ As senhas não coincidem.")
+                                    else:
+                                        # Validar força da senha
+                                        is_valid, error_msg = validate_password_strength(new_temp_password)
+                                        if not is_valid:
+                                            st.error(f"❌ {error_msg}")
+                                        else:
+                                            success = auth_db.reset_user_password(user_id, new_temp_password)
+                                            if success:
+                                                st.success(f"✅ Senha resetada para '{selected_username}'!")
+                                                audit_logger.info(f"Admin {st.session_state.get('username')} resetou senha de {selected_username}.")
+                                                st.info("💡 Informe o usuário sobre a nova senha temporária.")
+                                                import time
+                                                time.sleep(2)
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Erro ao resetar senha.")
+                        else:
+                            st.warning("⚠️ Reset de senha não disponível no modo Cloud.")
 
                     if delete_submitted:
                         if st.checkbox(f"Confirmar exclusão de {selected_username}?", key=f"confirm_delete_{user_id}"):
@@ -142,6 +196,78 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                                 st.rerun()
     else:
         st.info("Nenhum usuário cadastrado ainda.")
+
+    with tab2:
+        # --- Gerenciamento de Permissões ---
+        st.subheader("🔐 Gerenciar Permissões de Páginas")
+
+        from core.permissions import AVAILABLE_PAGES, get_user_permissions, set_user_permissions
+
+        if users:
+            selected_user_perms = st.selectbox(
+                "Selecione o Usuário",
+                [u['username'] for u in users if u['role'] != 'admin'],
+                key="perms_user_select"
+            )
+
+            if selected_user_perms:
+                user_data = next((u for u in users if u['username'] == selected_user_perms), None)
+
+                if user_data:
+                    st.info(f"👤 Configurando permissões para: **{selected_user_perms}** ({user_data['role']})")
+
+                    # Obter permissões atuais
+                    current_perms = get_user_permissions(selected_user_perms, user_data['role'])
+
+                    st.markdown("### Páginas Disponíveis")
+                    st.caption("Marque as páginas que o usuário pode acessar:")
+
+                    selected_pages = []
+
+                    # Criar checkboxes para cada página
+                    for page_file, page_name in AVAILABLE_PAGES.items():
+                        # Admins sempre têm acesso total (não mostrar)
+                        if "Painel_de_Administração" in page_file or "Gemini_Playground" in page_file:
+                            continue
+
+                        is_checked = page_file in current_perms
+                        if st.checkbox(page_name, value=is_checked, key=f"perm_{page_file}"):
+                            selected_pages.append(page_file)
+
+                    st.markdown("---")
+
+                    col_save, col_reset = st.columns([1, 1])
+
+                    with col_save:
+                        if st.button("💾 Salvar Permissões", use_container_width=True, type="primary"):
+                            set_user_permissions(selected_user_perms, selected_pages)
+                            st.success(f"✅ Permissões atualizadas para {selected_user_perms}!")
+                            st.info(f"📄 {len(selected_pages)} páginas liberadas")
+                            audit_logger.info(f"Admin {st.session_state.get('username')} atualizou permissões de {selected_user_perms}")
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+
+                    with col_reset:
+                        if st.button("🔄 Resetar para Padrão", use_container_width=True):
+                            # Remover permissões customizadas
+                            if f"permissions_{selected_user_perms}" in st.session_state:
+                                del st.session_state[f"permissions_{selected_user_perms}"]
+                            st.success("✅ Permissões resetadas para o padrão!")
+                            st.rerun()
+
+                    # Mostrar resumo
+                    st.markdown("---")
+                    st.markdown("### 📋 Resumo Atual")
+                    if current_perms:
+                        st.write(f"**{len(current_perms)} páginas** com acesso:")
+                        for page in current_perms:
+                            page_name = AVAILABLE_PAGES.get(page, page)
+                            st.write(f"- {page_name}")
+                    else:
+                        st.warning("Nenhuma página com acesso")
+        else:
+            st.info("Nenhum usuário disponível para gerenciar permissões.")
 
     st.markdown(
         f"<div class='footer'>Desenvolvido para Análise de Dados Caçula © {datetime.now().year}</div>",

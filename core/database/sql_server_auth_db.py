@@ -269,6 +269,50 @@ def redefinir_senha(username, nova_senha):
         logger.error(f"Erro ao redefinir senha: {e}")
         raise
 
+def alterar_senha_usuario(user_id, nova_senha):
+    """Permite que um usuário altere sua própria senha"""
+    if not is_database_configured():
+        logger.warning("⚠️ Alteração de senha não disponível em modo cloud")
+        return False
+
+    try:
+        conn = get_db_connection()
+        if conn:
+            with conn:
+                password_hash = get_password_hash(nova_senha)
+                conn.execute(
+                    text("UPDATE usuarios SET password_hash=:password_hash WHERE id=:user_id"),
+                    {"password_hash": password_hash, "user_id": user_id}
+                )
+                conn.commit()
+                logger.info(f"Senha alterada para usuário ID {user_id}")
+                return True
+    except Exception as e:
+        logger.error(f"Erro ao alterar senha: {e}")
+        return False
+
+def reset_user_password(user_id, nova_senha_temporaria):
+    """Admin reseta senha de um usuário (sem precisar da senha antiga)"""
+    if not is_database_configured():
+        logger.warning("⚠️ Reset de senha não disponível em modo cloud")
+        return False
+
+    try:
+        conn = get_db_connection()
+        if conn:
+            with conn:
+                password_hash = get_password_hash(nova_senha_temporaria)
+                conn.execute(
+                    text("UPDATE usuarios SET password_hash=:password_hash WHERE id=:user_id"),
+                    {"password_hash": password_hash, "user_id": user_id}
+                )
+                conn.commit()
+                logger.info(f"Senha resetada pelo admin para usuário ID {user_id}")
+                return True
+    except Exception as e:
+        logger.error(f"Erro ao resetar senha: {e}")
+        return False
+
 def get_all_users():
     """Retorna lista de todos os usuários (admin only)"""
     if not is_database_configured():
@@ -299,16 +343,17 @@ def get_all_users():
 
         with conn:
             result = conn.execute(
-                text("SELECT username, role, ativo, ultimo_login FROM usuarios ORDER BY username")
+                text("SELECT id, username, role, ativo, ultimo_login FROM usuarios ORDER BY username")
             ).fetchall()
 
             users = []
             for row in result:
                 users.append({
-                    "username": row[0],
-                    "role": row[1],
-                    "ativo": bool(row[2]),
-                    "ultimo_login": row[3]
+                    "id": row[0],
+                    "username": row[1],
+                    "role": row[2],
+                    "ativo": bool(row[3]),
+                    "ultimo_login": row[4]
                 })
             return users
     except Exception as e:

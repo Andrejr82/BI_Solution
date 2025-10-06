@@ -3,16 +3,17 @@ Módulo de ferramentas de dados para o Agent_BI.
 Estas ferramentas são componentes simples e reutilizáveis que os agentes podem executar.
 """
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 
 from langchain_core.tools import tool
 
-from core.connectivity.parquet_adapter import ParquetAdapter # Corrected Import
+from core.connectivity.parquet_adapter import ParquetAdapter
+from core.connectivity.hybrid_adapter import HybridDataAdapter
 
 logger = logging.getLogger(__name__)
 
 @tool
-def fetch_data_from_query(query_filters: Dict[str, Any], parquet_adapter: ParquetAdapter) -> List[Dict[str, Any]]:
+def fetch_data_from_query(query_filters: Dict[str, Any], parquet_adapter: Union[ParquetAdapter, HybridDataAdapter]) -> List[Dict[str, Any]]:
     """
     Ferramenta que recebe um dicionário de filtros, os executa usando o ParquetAdapter injetado,
     e retorna os dados brutos como uma lista de dicionários.

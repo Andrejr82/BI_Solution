@@ -31,14 +31,18 @@ class GeminiLLMAdapter:
 
         logger.info("Adaptador do GeminiLLMAdapter inicializado com sucesso.")
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=1024, json_mode=False):
+    def _stream_completion_generator(self, response_stream):
+        for chunk in response_stream:
+            content = chunk.choices[0].delta.content or ""
+            yield content
+
+    def get_completion(self, messages, model=None, temperature=0, max_tokens=1024, json_mode=False, stream=False):
         try:
-            if self.cache_enabled and self.cache:
+            if not stream and self.cache_enabled and self.cache:
                 cached_response = self.cache.get(messages, model, temperature)
                 if cached_response:
                     return cached_response
 
-            # Usa o modelo da chamada ou o padrão da instância
             model_to_use = model or self.model_name
 
             params = {
@@ -46,6 +50,7 @@ class GeminiLLMAdapter:
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "stream": stream,
             }
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
@@ -53,7 +58,36 @@ class GeminiLLMAdapter:
             logger.info(f"💰 Chamada API Gemini: {model_to_use} - tokens: {max_tokens}")
             response = self.client.chat.completions.create(**params)
 
-            content = response.choices[0].message.content
+            if stream:
+                return self._stream_completion_generator(response)
+
+            # Extrair conteúdo com validação
+            try:
+                content = response.choices[0].message.content
+                finish_reason = response.choices[0].finish_reason
+
+                # Verificar se parou por limite de tokens sem gerar nada
+                if finish_reason == 'length' and (content is None or not content):
+                    completion_tokens = response.usage.completion_tokens if hasattr(response, 'usage') else 0
+                    if completion_tokens == 0:
+                        logger.error(f"❌ max_tokens muito baixo! O modelo parou antes de gerar qualquer resposta. Tokens usados: {response.usage}")
+                        content = "⚠️ ERRO: max_tokens muito baixo. Aumente o valor de max_tokens para permitir que o modelo gere uma resposta."
+                    else:
+                        logger.warning(f"⚠️ Resposta cortada por limite de tokens. Aumente max_tokens se necessário.")
+                elif content is None:
+                    logger.warning(f"⚠️ API retornou content=None. Response: {response}")
+                    # Tentar pegar de outro lugar se disponível
+                    if hasattr(response.choices[0].message, 'text'):
+                        content = response.choices[0].message.text
+                    elif hasattr(response.choices[0], 'text'):
+                        content = response.choices[0].text
+                    else:
+                        content = ""
+                        logger.error(f"❌ Não foi possível extrair conteúdo. Response completo: {response.model_dump() if hasattr(response, 'model_dump') else response}")
+            except (IndexError, AttributeError) as e:
+                logger.error(f"❌ Erro ao extrair conteúdo da resposta: {e}")
+                content = ""
+
             result = {"content": content}
 
             if self.cache_enabled and self.cache:
