@@ -7,7 +7,19 @@ import streamlit as st
 import uuid
 import pandas as pd
 import logging
+import sys
 from datetime import datetime
+
+# Configurar logging para exibir no console
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+
+# Configurar logger específico para streamlit_app
+logger = logging.getLogger("streamlit_app")
+logger.setLevel(logging.INFO)
 
 # Funções de autenticação com lazy loading
 AUTH_AVAILABLE = None
@@ -177,50 +189,66 @@ else:
             llm_adapter = ComponentFactory.get_llm_adapter("gemini")
             debug_info.append("✅ LLM OK")
 
-            # Debug 5: Inicializar Parquet
-            debug_info.append("Inicializando Parquet...")
+            # Debug 5: Inicializar HybridDataAdapter (SQL Server + Parquet fallback)
+            debug_info.append("Inicializando HybridDataAdapter...")
             import os
+            from core.connectivity.hybrid_adapter import HybridDataAdapter
+
+            # Inicializar adapter híbrido (tenta SQL Server, fallback para Parquet)
+            data_adapter = HybridDataAdapter()
+            adapter_status = data_adapter.get_status()
+
+            debug_info.append(f"✅ HybridDataAdapter OK - Fonte: {adapter_status['current_source'].upper()}")
+
+            # Validar que temos dados (via Parquet que sempre existe)
+            import pandas as pd
             parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
 
-            if not os.path.exists(parquet_path):
-                # ❌ ERRO CRÍTICO: Arquivo de dados não encontrado
-                debug_info.append("❌ ERRO: Arquivo admmat.parquet não encontrado")
-                raise FileNotFoundError(
-                    f"Arquivo de dados não encontrado: {parquet_path}\n\n"
-                    "AÇÃO NECESSÁRIA:\n"
-                    "1. Verifique se o arquivo 'data/parquet/admmat.parquet' existe no repositório\n"
-                    "2. Para Streamlit Cloud: configure o arquivo via Git ou external storage\n"
-                    "3. Para desenvolvimento local: copie o arquivo para a pasta correta"
-                )
+            if os.path.exists(parquet_path):
+                # Usar o adapter para obter informações de forma mais eficiente
+                adapter_info = data_adapter.get_status()
+                if adapter_info.get('current_source') == 'parquet':
+                    schema_info = data_adapter.get_schema()
+                    # Extrair número de linhas e UNEs do schema ou de um método específico
+                    # Esta é uma aproximação, o ideal seria um método dedicado no adapter
+                    num_produtos = len(data_adapter._dataframe) if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None else 0
+                    num_unes = data_adapter._dataframe['une_nome'].nunique() if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None and 'une_nome' in data_adapter._dataframe.columns else 0
+                    debug_info.append(f"✅ Dataset: {num_produtos:,} produtos, {num_unes} UNEs")
+                else: # Se for SQL
+                    debug_info.append("✅ Dataset: Conectado ao SQL Server")
+            else:
+                debug_info.append("⚠️ Parquet não encontrado, usando apenas SQL Server")
 
-            # Validar estrutura do arquivo
-            import pandas as pd
-            df_test = pd.read_parquet(parquet_path)
-            required_columns = ['une', 'une_nome', 'codigo', 'nome_produto', 'mes_01']
-            missing_columns = [col for col in required_columns if col not in df_test.columns]
-
-            if missing_columns:
-                debug_info.append(f"❌ ERRO: Colunas obrigatórias ausentes: {missing_columns}")
-                raise ValueError(
-                    f"Arquivo de dados inválido - faltam colunas: {missing_columns}\n"
-                    f"Colunas esperadas: {required_columns}\n"
-                    f"Colunas encontradas: {list(df_test.columns[:10])}"
-                )
-
-            if len(df_test) < 1000:
-                debug_info.append(f"⚠️ AVISO: Dataset muito pequeno ({len(df_test)} linhas)")
-
-            parquet_adapter = ParquetAdapter(file_path=parquet_path)
-            debug_info.append(f"✅ Parquet OK ({len(df_test):,} produtos, {df_test['une_nome'].nunique()} UNEs)")
-
-            # Mostrar UNEs disponíveis no sidebar APENAS para admins
+            # Mostrar status da fonte de dados no sidebar APENAS para admins
             user_role = st.session_state.get('role', '')
             if user_role == 'admin':
                 with st.sidebar:
-                    st.info(f"**📊 Dataset Carregado**\n\n"
-                           f"- {len(df_test):,} produtos\n"
-                           f"- {df_test['une_nome'].nunique()} UNEs\n\n"
-                           f"**UNEs disponíveis:** {', '.join(sorted(df_test['une_nome'].unique()))}")
+                    fonte_icon = "🗄️" if adapter_status['current_source'] == 'sqlserver' else "📦"
+                    fonte_nome = "SQL Server" if adapter_status['current_source'] == 'sqlserver' else "Parquet"
+
+                    info_text = f"**{fonte_icon} Fonte de Dados: {fonte_nome}**\n\n"
+
+                    if adapter_status['sql_enabled']:
+                        info_text += f"SQL Server: {'✅ Conectado' if adapter_status['sql_available'] else '❌ Indisponível'}\n"
+
+                    info_text += f"Parquet Fallback: {'✅ Ativo' if adapter_status['fallback_enabled'] else '❌ Desativado'}\n"
+
+                    # Tentar obter informações do dataset
+                    try:
+                        if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None:
+                            df = data_adapter._dataframe
+                            info_text += f"\n**Dataset:**\n"
+                            info_text += f"- {len(df):,} produtos\n"
+                            if 'une_nome' in df.columns:
+                                info_text += f"- {df['une_nome'].nunique()} UNEs\n\n"
+                                info_text += f"**UNEs:** {', '.join(sorted(df['une_nome'].unique())[:5])}..."
+                    except Exception as e:
+                        logger.debug(f"Não foi possível obter informações do dataset: {e}")
+
+                    st.info(info_text)
+
+            # Para compatibilidade com código legado, criar alias
+            parquet_adapter = data_adapter
 
             # Debug 6: Inicializar CodeGen
             debug_info.append("Inicializando CodeGen...")
@@ -390,6 +418,8 @@ else:
     # --- Funções de Interação ---
     def query_backend(user_input: str):
         '''Processa a query diretamente usando o backend integrado.'''
+        logger.info(f"[QUERY] User: {st.session_state.get('username', 'unknown')} | Query: {user_input[:100]}")
+
         # 📝 GARANTIR que a pergunta do usuário seja sempre preservada
         user_message = {"role": "user", "content": {"type": "text", "content": user_input}}
         st.session_state.messages.append(user_message)
@@ -402,11 +432,26 @@ else:
                 if not DirectQueryEngine:
                     from core.business_intelligence.direct_query_engine import DirectQueryEngine
 
-                ParquetAdapter = get_backend_module("ParquetAdapter")
+                # Usar HybridDataAdapter do backend (já inicializado)
+                if backend_components and 'parquet_adapter' in backend_components:
+                    adapter = backend_components['parquet_adapter']  # Na verdade é HybridDataAdapter
+                else:
+                    # Fallback: criar novo adapter
+                    from core.connectivity.hybrid_adapter import HybridDataAdapter
+                    adapter = HybridDataAdapter()
 
-                adapter = ParquetAdapter('data/parquet/admmat.parquet')
                 engine = DirectQueryEngine(adapter)
+
+                # Log fonte de dados
+                adapter_status = adapter.get_status() if hasattr(adapter, 'get_status') else {}
+                fonte_dados = adapter_status.get('current_source', 'unknown')
+                logger.info(f"[PROCESSING] Fonte: {fonte_dados} | DirectQueryEngine iniciado")
+
+                start_time = datetime.now()
                 direct_result = engine.process_query(user_input)
+                elapsed = (datetime.now() - start_time).total_seconds()
+
+                logger.info(f"[RESULT] DirectQueryEngine completou em {elapsed:.2f}s | Type: {direct_result.get('type', 'unknown')}")
 
                 # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
                 result_type = direct_result.get("type") if direct_result else None
@@ -423,11 +468,16 @@ else:
                             result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
                             st.write(f"**Result Keys:** {result_keys}")
 
+                # Inicializar agent_response
+                agent_response = None
+
                 # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
                 if result_type == "error":
                     # Mostrar erro do DirectQueryEngine ao usuário
                     error_msg = direct_result.get("error", "Erro desconhecido")
                     suggestion = direct_result.get("suggestion", "")
+
+                    logger.warning(f"[ERROR] DirectQueryEngine erro: {error_msg[:100]}")
 
                     agent_response = {
                         "type": "error",
@@ -440,6 +490,7 @@ else:
                 elif direct_result and result_type not in ["fallback", None]:
                     # SUCESSO: Usar o resultado do DirectQueryEngine
                     st.write("✅ Usando resultado do DirectQueryEngine")
+                    logger.info(f"[SUCCESS] DirectQuery | Type: {result_type} | Title: {direct_result.get('title', 'N/A')[:50]}")
                     agent_response = {
                         "type": direct_result.get("type", "text"),
                         "title": direct_result.get("title", ""),
@@ -453,6 +504,7 @@ else:
                     # FALLBACK: Usar o agent_graph
                     st.write("🔄 DirectQueryEngine não processou, usando fallback agent_graph...")
                     st.warning(f"⚠️ Motivo do fallback: result_type={result_type}")
+                    logger.info(f"[FALLBACK] Usando agent_graph | Motivo: result_type={result_type}")
                     if not backend_components or not backend_components.get("agent_graph"):
                         # Caso de fallback onde o grafo não está disponível
                         agent_response = {
@@ -478,14 +530,27 @@ else:
                             agent_response["user_query"] = user_input
 
                 # ✅ GARANTIR estrutura correta da resposta
-                assistant_message = {"role": "assistant", "content": agent_response}
-                st.session_state.messages.append(assistant_message)
+                if agent_response:
+                    assistant_message = {"role": "assistant", "content": agent_response}
+                    st.session_state.messages.append(assistant_message)
+                else:
+                    # Fallback se agent_response não foi definido
+                    error_message = {
+                        "role": "assistant",
+                        "content": {
+                            "type": "error",
+                            "content": "Erro ao processar consulta. Tente novamente.",
+                            "user_query": user_input
+                        }
+                    }
+                    st.session_state.messages.append(error_message)
 
                 # 🔍 LOG da resposta
                 logging.info(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')}")
 
             except Exception as e:
                 # Tratamento de erro local
+                logger.error(f"[EXCEPTION] Erro grave ao processar query: {str(e)[:200]}", exc_info=True)
                 logging.exception("Ocorreu um erro grave ao processar a consulta do usuário.")
                 error_content = {
                     "type": "error",

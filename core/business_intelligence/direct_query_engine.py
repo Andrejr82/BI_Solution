@@ -61,6 +61,26 @@ class DirectQueryEngine:
             logger.warning(f"Falha ao converter '{key}': {params.get(key)} para str. Usando default: '{default}'")
             return default
 
+    @staticmethod
+    def _normalize_une_filter(df: pd.DataFrame, une_input: str) -> pd.DataFrame:
+        """Normaliza filtro de UNE para aceitar código OU sigla."""
+        une_upper = str(une_input).upper().strip()
+
+        # Tentar filtrar por sigla (une_nome) OU por código (une)
+        result = df[
+            (df['une_nome'].str.upper() == une_upper) |
+            (df['une'].astype(str) == une_upper)
+        ]
+
+        # Se vazio e input é numérico, tentar como int
+        if result.empty and une_upper.isdigit():
+            try:
+                result = df[df['une'] == int(une_upper)]
+            except:
+                pass
+
+        return result
+
     def _normalize_query(self, query: str) -> str:
         """Normaliza query do usuário para melhor matching."""
         # Remove espaços múltiplos
@@ -814,11 +834,8 @@ class DirectQueryEngine:
         if 'vendas_total' not in df.columns:
             return {"error": "Dados de vendas não disponíveis", "type": "error"}
 
-        # Buscar UNE (case-insensitive e por código ou nome)
-        une_data = df[
-            (df['une_nome'].str.upper() == une_nome) |
-            (df['une'].astype(str) == une_nome)
-        ]
+        # Buscar UNE (aceita código OU sigla)
+        une_data = self._normalize_une_filter(df, une_nome)
 
         if une_data.empty:
             unes_disponiveis = sorted(df['une_nome'].unique())
@@ -1182,11 +1199,8 @@ class DirectQueryEngine:
                 "suggestion": f"Segmentos disponíveis: {', '.join(segmentos_disponiveis)}"
             }
 
-        # Filtrar por UNE (suporta nome ou código)
-        une_data = df[
-            (df['une_nome'].str.upper() == une_nome) |
-            (df['une'].astype(str) == une_nome)
-        ]
+        # Filtrar por UNE (aceita código OU sigla)
+        une_data = self._normalize_une_filter(df, une_nome)
 
         if une_data.empty:
             unes_disponiveis = sorted(df['une_nome'].unique())
@@ -1660,11 +1674,8 @@ class DirectQueryEngine:
         if not une_nome:
             return {"error": "Nome da UNE não especificado", "type": "error"}
 
-        # Buscar UNE
-        une_data = df[
-            (df['une_nome'].str.upper() == une_nome) |
-            (df['une'].astype(str) == une_nome)
-        ]
+        # Buscar UNE (aceita código OU sigla)
+        une_data = self._normalize_une_filter(df, une_nome)
 
         if une_data.empty:
             unes_disponiveis = sorted(df['une_nome'].unique())[:10]
@@ -2561,11 +2572,9 @@ class DirectQueryEngine:
 
         logger.info(f"[i] Buscando vendas do produto {produto_codigo} na UNE {une_nome}")
 
-        # Buscar produto na UNE
-        produto_une = df[
-            (df['codigo'].astype(str) == produto_codigo) &
-            ((df['une_nome'].str.upper() == une_nome) | (df['une'].astype(str) == une_nome))
-        ]
+        # Buscar produto na UNE (aceita código OU sigla)
+        une_filtered = self._normalize_une_filter(df, une_nome)
+        produto_une = une_filtered[une_filtered['codigo'].astype(str) == produto_codigo]
 
         if produto_une.empty:
             return {

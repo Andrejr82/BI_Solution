@@ -1,0 +1,11 @@
+{
+  "timestamp": 1759709322.7560415,
+  "response": {
+    "content": "Com certeza! Para calcular o total de vendas por categoria nos últimos 30 dias, você precisará de algumas tabelas. Vou assumir um esquema de banco de dados comum para e-commerce:\n\n1.  **`Vendas` (Sales):** Contém informações sobre cada venda.\n    *   `id_venda` (PK)\n    *   `id_produto` (FK para `Produtos`)\n    *   `quantidade` (INT)\n    *   `valor_unitario` (DECIMAL) - O preço do produto no momento da venda.\n    *   `data_venda` (DATE ou DATETIME)\n\n2.  **`Produtos` (Products):** Contém informações sobre os produtos.\n    *   `id_produto` (PK)\n    *   `nome_produto`\n    *   `id_categoria` (FK para `Categorias`)\n\n3.  **`Categorias` (Categories):** Contém informações sobre as categorias de produtos.\n    *   `id_categoria` (PK)\n    *   `nome_categoria`\n\n---\n\n### Query SQL (Compatível com PostgreSQL, MySQL)\n\n```sql\nSELECT\n    c.nome_categoria,\n    SUM(v.quantidade * v.valor_unitario) AS total_vendas\nFROM\n    Vendas AS v\nJOIN\n    Produtos AS p ON v.id_produto = p.id_produto\nJOIN\n    Categorias AS c ON p.id_categoria = c.id_categoria\nWHERE\n    v.data_venda >= CURRENT_DATE - INTERVAL '30 days'\nGROUP BY\n    c.nome_categoria\nORDER BY\n    total_vendas DESC;\n```\n\n---\n\n### Explicação da Query:\n\n1.  **`SELECT c.nome_categoria, SUM(v.quantidade * v.valor_unitario) AS total_vendas`**:\n    *   Seleciona o nome da categoria (`nome_categoria`) da tabela `Categorias`.\n    *   Calcula o total de vendas para cada item (`quantidade * valor_unitario`) e, em seguida, soma esses totais para obter o `total_vendas` por categoria.\n\n2.  **`FROM Vendas AS v`**:\n    *   Começa selecionando da tabela `Vendas`, usando o alias `v` para facilitar a leitura.\n\n3.  **`JOIN Produtos AS p ON v.id_produto = p.id_produto`**:\n    *   "
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0.0,
+    "query_hash": "0e8ec16fbec00b616bc6251c5fd71991"
+  }
+}

@@ -5,6 +5,7 @@ o fluxo de tarefas, conectando os nós definidos em 'bi_agent_nodes.py'.
 """
 import logging
 from functools import partial
+from typing import Union
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
 
@@ -12,6 +13,7 @@ from langchain_core.messages import HumanMessage
 from core.agent_state import AgentState
 from core.llm_base import BaseLLMAdapter
 from core.connectivity.parquet_adapter import ParquetAdapter
+from core.connectivity.hybrid_adapter import HybridDataAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 # CORREÇÃO: Removida a importação da função inexistente.
 from core.agents import bi_agent_nodes
@@ -24,7 +26,7 @@ class GraphBuilder:
     lógica da máquina de estados para o fluxo de BI.
     """
 
-    def __init__(self, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter, code_gen_agent: CodeGenAgent):
+    def __init__(self, llm_adapter: BaseLLMAdapter, parquet_adapter: Union[ParquetAdapter, HybridDataAdapter], code_gen_agent: CodeGenAgent):
         """
         Inicializa o construtor com as dependências necessárias (injeção de dependência).
         """

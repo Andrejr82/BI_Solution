@@ -1,0 +1,63 @@
+TESTE: 10 PERGUNTAS PRÉ-APRESENTAÇÃO
+Data: 2025-10-05 08:07:01
+======================================================================
+
+RESUMO:
+  Total: 10
+  Sucessos: 0
+  Erros: 10
+  Taxa sucesso: 0.0%
+  Tempo total: 26.10s
+  Tempo médio: 2.61s
+
+DETALHES:
+  1. Produto mais vendido
+     Status: [SEM DADOS]
+     Tempo: 24.69s
+     Detalhes: Resposta vazia
+
+  2. Top 10 produtos UNE 2720
+     Status: [SEM DADOS]
+     Tempo: 0.84s
+     Detalhes: Resposta vazia
+
+  3. Ranking de vendas por UNE
+     Status: [SEM DADOS]
+     Tempo: 0.01s
+     Detalhes: Resposta vazia
+
+  4. Vendas totais de cada UNE
+     Status: [SEM DADOS]
+     Tempo: 0.24s
+     Detalhes: Resposta vazia
+
+  5. Top 10 produtos segmento TECIDOS
+     Status: [SEM DADOS]
+     Tempo: 0.03s
+     Detalhes: Resposta vazia
+
+  6. Evolução vendas últimos 12 meses
+     Status: [SEM DADOS]
+     Tempo: 0.15s
+     Detalhes: Resposta vazia
+
+  7. Produtos sem movimento
+     Status: [SEM DADOS]
+     Tempo: 0.01s
+     Detalhes: Consulta não compreendida pelo motor de busca rápida. Usando IA avançada.
+
+  8. Análise ABC
+     Status: [SEM DADOS]
+     Tempo: 0.09s
+     Detalhes: Resposta vazia
+
+  9. Comparação de segmentos
+     Status: [SEM DADOS]
+     Tempo: 0.01s
+     Detalhes: Não foi possível identificar 2 segmentos para comparação
+
+  10. Produtos com estoque alto
+     Status: [SEM DADOS]
+     Tempo: 0.02s
+     Detalhes: Resposta vazia
+

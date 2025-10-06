@@ -5,8 +5,12 @@
 import streamlit as st
 import time
 import logging
+from core.security import RateLimiter, sanitize_username
 
 audit_logger = logging.getLogger("audit")
+
+# Rate limiters para segurança
+login_limiter = RateLimiter(max_calls=5, period=300)  # 5 tentativas em 5 minutos
 
 # Importação condicional do sistema de auth (lazy loading)
 SQL_AUTH_AVAILABLE = None
@@ -94,29 +98,59 @@ def login():
                 }
             </style>
             <div class='login-container'>
-                <div style='font-size: 3.5rem; margin-bottom: 0.5rem;'>📊</div>
+                <svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom: 0.5rem; opacity: 0.9;">
+                    <rect x="15" y="60" width="10" height="30" fill="white" opacity="0.7"/>
+                    <rect x="30" y="45" width="10" height="45" fill="white" opacity="0.8"/>
+                    <rect x="45" y="30" width="10" height="60" fill="white" opacity="0.9"/>
+                    <rect x="60" y="20" width="10" height="70" fill="white"/>
+                    <rect x="75" y="35" width="10" height="55" fill="white" opacity="0.85"/>
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="white" stroke-width="2" opacity="0.3"/>
+                </svg>
                 <h2 class='login-title'>Agente de Negócios</h2>
                 <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        
+
         with st.form("login_form"):
             username = st.text_input("Usuário", placeholder="Digite seu usuário")
             password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
-            login_btn = st.form_submit_button("Entrar", use_container_width=True, type="primary")
+
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                login_btn = st.form_submit_button("Entrar", use_container_width=True, type="primary")
+            with col2:
+                forgot_btn = st.form_submit_button("Esqueci", use_container_width=True)
+
+            if forgot_btn:
+                st.info("🔑 Entre em contato com o administrador para redefinir sua senha.")
+                st.stop()
 
             if login_btn:
-                # Bypass de autenticação para desenvolvimento
-                if username == 'admin' and password == 'bypass':
+                # Sanitizar username
+                username = sanitize_username(username)
+
+                # Rate limiting - prevenir força bruta
+                if not login_limiter.is_allowed(username):
+                    reset_time = login_limiter.get_reset_time(username)
+                    audit_logger.warning(f"🚨 Rate limit excedido para {username}")
+                    st.error(f"⚠️ Muitas tentativas de login. Tente novamente em {reset_time:.0f} segundos.")
+                    st.stop()
+
+                # Bypass de autenticação APENAS para desenvolvimento (NUNCA em produção)
+                import os
+                ENABLE_DEV_BYPASS = os.getenv("ENABLE_DEV_BYPASS", "false").lower() == "true"
+
+                if ENABLE_DEV_BYPASS and username == 'admin' and password == 'bypass':
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = "admin"
                     st.session_state["role"] = "admin"
                     st.session_state["ultimo_login"] = time.time()
-                    audit_logger.info(f"Usuário admin logado com sucesso (bypass). Papel: admin")
+                    audit_logger.warning(f"⚠️ DEV BYPASS USADO - Usuário admin (DESENVOLVIMENTO APENAS)")
+                    st.warning("⚠️ Modo de Desenvolvimento - Bypass Ativo")
                     st.success(f"Bem-vindo, admin! Acesso de desenvolvedor concedido.")
-                    time.sleep(1) # Pausa para o usuário ler a mensagem
+                    time.sleep(1)
                     st.rerun()
                     return
 
@@ -131,6 +165,9 @@ def login():
                     else:
                         role, erro = None, "Banco de dados não disponível"
                     if role:
+                        # Login bem-sucedido - resetar rate limiter
+                        login_limiter.reset(username)
+
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username
                         st.session_state["role"] = role
@@ -151,6 +188,9 @@ def login():
                     # Usar autenticação cloud fallback
                     is_valid, role = verify_cloud_user(username, password)
                     if is_valid:
+                        # Login bem-sucedido - resetar rate limiter
+                        login_limiter.reset(username)
+
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username
                         st.session_state["role"] = role
