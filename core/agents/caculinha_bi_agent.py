@@ -9,20 +9,14 @@ from langchain_core.tools import tool
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
 from langchain_core.prompts import ChatPromptTemplate
-from core.factory.component_factory import ComponentFactory
+from langchain_openai import ChatOpenAI
+from core.llm_langchain_adapter import CustomLangChainLLM
 
 from core.connectivity.base import DatabaseAdapter
-# Settings importadas com lazy loading
+from core.config.settings import settings # Import the settings instance
+from core.utils.field_mapper import get_field_mapper # Import do mapeador de campos
 
 logger = logging.getLogger(__name__)
-
-def get_settings():
-    """Obtém settings de forma lazy"""
-    try:
-        from core.config.safe_settings import get_safe_settings
-        return get_safe_settings()
-    except Exception:
-        return None
 
 def create_caculinha_bi_agent(
     parquet_dir: str,
@@ -41,6 +35,11 @@ def create_caculinha_bi_agent(
 
     from core.tools.data_tools import query_product_data, list_table_columns
 
+    # Inicializar o mapeador de campos
+    catalog_path = os.path.join(os.path.dirname(os.path.dirname(parquet_dir)), "data", "catalog_focused.json")
+    field_mapper = get_field_mapper(catalog_path)
+    logger.info(f"FieldMapper inicializado com catálogo: {catalog_path}")
+
     @tool
     def generate_and_execute_python_code(query: str) -> Dict[str, Any]:
         """Gera e executa código Python para análises complexas e gráficos."""
@@ -51,102 +50,156 @@ def create_caculinha_bi_agent(
     bi_tools = [query_product_data, list_table_columns, generate_and_execute_python_code]
 
     # --- LLM para Geração de SQL ---
-    sql_gen_llm = ComponentFactory.get_llm_adapter("gemini")
+    sql_gen_llm = ChatOpenAI(
+        model=settings.LLM_MODEL_NAME,
+        openai_api_key=settings.OPENAI_API_KEY.get_secret_value(),
+        temperature=0,
+    )
 
-    # Get parquet schema
-    # This is a simplified way to get schema from parquet.
-    # In a real scenario, you might have a metadata store for parquet files.
+    # Get parquet schema usando o arquivo correto: admatao.parquet
     parquet_schema = {}
     try:
-        df_sample = pd.read_parquet(os.path.join(parquet_dir, "ADMAT_REBUILT.parquet"), columns=[])
+        # Tenta carregar do arquivo admatao.parquet
+        parquet_file = os.path.join(parquet_dir, "admatao.parquet")
+        if not os.path.exists(parquet_file):
+            # Fallback para ADMAT_REBUILT.parquet se admatao não existir
+            parquet_file = os.path.join(parquet_dir, "ADMAT_REBUILT.parquet")
+        
+        df_sample = pd.read_parquet(parquet_file, columns=[])
         for col in df_sample.columns:
             parquet_schema[col] = str(df_sample[col].dtype)
+        logger.info(f"Schema carregado de: {parquet_file}")
     except Exception as e:
         logger.error(f"Erro ao inferir esquema do parquet: {e}")
         parquet_schema = {"error": "Não foi possível inferir o esquema do parquet."}
     
-    schema_str = "\n".join([f"- {col}: {dtype}" for col, dtype in parquet_schema.items()]) # Convert schema to string for the prompt
+    # Gerar string de schema com descrições do catálogo
+    schema_lines = []
+    for col, dtype in parquet_schema.items():
+        description = field_mapper.get_field_description(col)
+        schema_lines.append(f"- {col} ({dtype}): {description}")
+    schema_str = "\n".join(schema_lines)
+
+    # Gerar mapeamento de campos para o prompt
+    field_mapping_str = """
+## Mapeamento de Campos (Linguagem Natural → Campo Real)
+
+Quando o usuário mencionar:
+- "segmento" → use: NOMESEGMENTO
+- "categoria" → use: NomeCategoria
+- "grupo" → use: NOMEGRUPO
+- "subgrupo" → use: NomeSUBGRUPO
+- "código" ou "código do produto" → use: PRODUTO
+- "nome" ou "nome do produto" → use: NOME
+- "estoque" (sem especificar) → use: ESTOQUE_UNE
+- "estoque CD" → use: ESTOQUE_CD
+- "estoque linha verde" ou "estoque LV" → use: ESTOQUE_LV
+- "preço" → use: LIQUIDO_38
+- "vendas 30 dias" ou "vendas" → use: VENDA_30DD
+- "fabricante" → use: NomeFabricante
+- "embalagem" → use: EMBALAGEM
+- "última venda" → use: ULTIMA_VENDA_DATA_UNE
+
+## Regras Especiais para Estoque
+
+1. **Campo Padrão**: ESTOQUE_UNE (estoque na unidade de negócio)
+2. **Estoque Zero**: Use sempre `(ESTOQUE_UNE = 0 OR ESTOQUE_UNE IS NULL)`
+3. **Campos de Texto**: Use sempre UPPER() e LIKE para buscas
+   - Exemplo: `UPPER(NOMESEGMENTO) LIKE '%TECIDO%'`
+4. **Campos Numéricos**: Use operadores diretos (=, >, <, etc.)
+   - Exemplo: `PRODUTO = 369947`
+"""
 
     sql_gen_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                """Você é um assistente de BI. Sua tarefa é converter a consulta em linguagem natural do usuário em um objeto JSON que representa os filtros para consultar o arquivo ADMAT_REBUILT.parquet.
-O arquivo está localizado em 'C:/Users/André/Documents/Agent_BI/data/parquet_cleaned/ADMAT_REBUILT.parquet'.
+                """Você é um assistente de BI especializado. Sua tarefa é converter a consulta em linguagem natural do usuário em um objeto JSON que representa os filtros para consultar o arquivo admatao.parquet.
 
-Use o seguinte esquema de dados (coluna: tipo) para gerar os filtros JSON:
+**IMPORTANTE: Use SEMPRE os nomes de campos EXATOS conforme o mapeamento abaixo.**
+
+{field_mapping}
+
+Use o seguinte esquema de dados para gerar os filtros JSON:
 {tables}
-
-**IMPORTANTE: Para o código do produto, use a coluna 'CÓDIGO' (com acento e maiúsculas) conforme o schema do Parquet.**
 
 Retorne APENAS o objeto JSON. Não inclua explicações ou qualquer outro texto.
 O JSON deve ter a seguinte estrutura:
 {{
-    "target_file": "ADMAT_REBUILT.parquet",
+    "target_file": "admatao.parquet",
     "filters": [
-        {{"column": "nome_da_coluna", "operator": "operador", "value": "valor"}}
+        {{"column": "nome_da_coluna_real", "operator": "operador", "value": "valor"}}
     ]
 }}
 
-Operadores suportados: "==", "!=", ">", "<", "contains".
-Para buscas em colunas de texto (string), sempre use o operador "contains".
-Para buscas em colunas numéricas, use "==", "!=", ">", "<".
+Operadores suportados:
+- Para campos de TEXTO (string): use "contains" sempre
+- Para campos NUMÉRICOS: use "==", "!=", ">", "<"
+
+**Exemplos Corretos:**
 
 Exemplo 1:
 Consulta: Qual é o preço do produto 369947?
 JSON:
 ```json
 {{
-    "target_file": "ADMAT_REBUILT.parquet",
+    "target_file": "admatao.parquet",
     "filters": [
-        {{"column": "CÓDIGO", "operator": "==", "value": 369947}}
+        {{"column": "PRODUTO", "operator": "==", "value": 369947}}
     ]
 }}
 ```
 
 Exemplo 2:
-Consulta: Liste todos os produtos da categoria 'Eletrônicos' com preço maior que 100.
+Consulta: Quais são as categorias do segmento tecidos com estoque 0?
 JSON:
 ```json
 {{
-    "target_file": "ADMAT_REBUILT.parquet",
+    "target_file": "admatao.parquet",
     "filters": [
-        {{"column": "categoria", "operator": "contains", "value": "Eletrônicos"}},
-        {{"column": "preco_38_percent", "operator": ">", "value": 100}}
+        {{"column": "NOMESEGMENTO", "operator": "contains", "value": "TECIDO"}},
+        {{"column": "ESTOQUE_UNE", "operator": "==", "value": 0}}
     ]
 }}
 ```
 
 Exemplo 3:
-Consulta: Mostre os produtos com vendas nos últimos 30 dias maiores que 50.
+Consulta: Liste produtos da categoria Aviamentos com vendas acima de 100.
 JSON:
 ```json
 {{
-    "target_file": "ADMAT_REBUILT.parquet",
+    "target_file": "admatao.parquet",
     "filters": [
-        {{"column": "VEND# QTD 30D", "operator": ">", "value": 50}}
+        {{"column": "NomeCategoria", "operator": "contains", "value": "Aviamentos"}},
+        {{"column": "VENDA_30DD", "operator": ">", "value": 100}}
     ]
 }}
 ```
 
+Exemplo 4:
+Consulta: Mostre produtos do fabricante XYZ
+JSON:
+```json
+{{
+    "target_file": "admatao.parquet",
+    "filters": [
+        {{"column": "NomeFabricante", "operator": "contains", "value": "XYZ"}}
+    ]
+}}
+```
 
+**ATENÇÃO**: 
+- NUNCA use "SEGMENTO", use "NOMESEGMENTO"
+- NUNCA use "CATEGORIA", use "NomeCategoria"
+- NUNCA use "CODIGO", use "PRODUTO"
+- NUNCA use "EST_UNE", use "ESTOQUE_UNE"
 """
             ),
             ("user", "{query}")
         ]
     )
 
-    def sql_generator_chain_func(data):
-        """Gera SQL usando o adaptador LLM customizado"""
-        formatted_prompt = sql_gen_prompt.format_messages(**data)
-        messages = [{"role": "system" if msg.type == "system" else "user", "content": msg.content} for msg in formatted_prompt]
-        response = sql_gen_llm.get_completion(messages)
-        return type('obj', (object,), {'content': response.get('content', '')})()
-
-    sql_generator_chain = sql_generator_chain_func
-
-    # Preparar schema como string
-    schema_str = "\n".join([f"{col}: {dtype}" for col, dtype in parquet_schema.items()])
+    sql_generator_chain = sql_gen_prompt | sql_gen_llm
 
     def agent_runnable_logic(state: Dict[str, Any]) -> Dict[str, Any]:
         last_message = state["messages"][-1]
@@ -156,14 +209,14 @@ JSON:
             logger.info(f"Agente de BI recebeu a consulta: {user_query}")
 
             # LLM para decisão de ferramenta
-            tool_selection_llm = llm_adapter
+            tool_selection_llm = CustomLangChainLLM(llm_adapter=llm_adapter)
 
             tool_selection_prompt = ChatPromptTemplate.from_messages(
                 [
                     (
                         "system",
                         "Você é um assistente de BI. Sua tarefa é decidir qual ferramenta usar para responder à consulta do usuário. As ferramentas disponíveis são:\n" 
-                        "- `query_product_data`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria).\n" 
+                        "- `query_product_data`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria, categorias com estoque zero).\n" 
                         "- `list_table_columns`: Para listar todas as colunas de uma tabela (arquivo Parquet) específica.\n" 
                         "- `generate_and_execute_python_code`: Para análises complexas, cálculos, agregações ou geração de gráficos que exigem código Python.\n\n" 
                         "Retorne APENAS o nome da ferramenta: `query_product_data`, `list_table_columns` ou `generate_and_execute_python_code`.",
@@ -172,23 +225,20 @@ JSON:
                 ]
             )
 
-            def tool_selection_chain_func(data):
-                """Seleciona ferramenta usando o adaptador LLM customizado"""
-                formatted_prompt = tool_selection_prompt.format_messages(**data)
-                messages = [{"role": "system" if msg.type == "system" else "user", "content": msg.content} for msg in formatted_prompt]
-                response = tool_selection_llm.get_completion(messages)
-                return type('obj', (object,), {'content': response.get('content', '')})()
-
-            tool_selection_chain = tool_selection_chain_func
+            tool_selection_chain = tool_selection_prompt | tool_selection_llm
             
             # Decide qual ferramenta usar
-            tool_decision_message = tool_selection_chain({"query": user_query})
+            tool_decision_message = tool_selection_chain.invoke({"query": user_query})
             tool_decision = tool_decision_message.content.strip()
             logger.info(f"Decisão da ferramenta: {tool_decision}")
 
             if "query_product_data" in tool_decision:
                 # Gerar JSON de filtros e retornar ToolCall
-                generated_json_message = sql_generator_chain({"query": user_query, "tables": schema_str})
+                generated_json_message = sql_generator_chain.invoke({
+                    "query": user_query, 
+                    "tables": schema_str,
+                    "field_mapping": field_mapping_str
+                })
                 generated_json_content = generated_json_message.content.strip()
                 
                 json_match = re.search(r"```json\n(.*?)```", generated_json_content, re.DOTALL)
@@ -199,7 +249,7 @@ JSON:
                 
                 try:
                     parsed_json = json.loads(json_str)
-                    target_file = parsed_json.get("target_file", "ADMAT_REBUILT.parquet")
+                    target_file = parsed_json.get("target_file", "admatao.parquet")
                     filters = parsed_json.get("filters", [])
                     logger.info(f"JSON de filtros gerado: {parsed_json}")
                     
@@ -210,7 +260,7 @@ JSON:
                     return {"messages": state["messages"] + [AIMessage(content=f"Desculpe, não consegui processar sua consulta devido a um erro na geração dos filtros: {e}")]}
 
             elif "list_table_columns" in tool_decision:
-                table_name = "ADMAT_REBUILT" # This needs to be dynamically extracted in a real scenario
+                table_name = "admatao" # Atualizado para usar admatao
                 logger.info(f"Listando colunas para a tabela: {table_name}")
                 # Return AIMessage encapsulating ToolCall for list_table_columns
                 return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="list_table_columns", args={"table_name": table_name})])]}
@@ -236,4 +286,3 @@ JSON:
     agent_runnable = RunnableLambda(agent_runnable_logic)
 
     return agent_runnable, bi_tools
-
