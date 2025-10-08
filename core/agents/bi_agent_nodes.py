@@ -5,7 +5,7 @@ Cada função representa um passo no fluxo de processamento da consulta.
 import logging
 import json
 import re
-from typing import Dict, Any, Union
+from typing import Dict, Any
 import pandas as pd
 import numpy as np
 
@@ -15,7 +15,6 @@ from core.llm_base import BaseLLMAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 from core.tools.data_tools import fetch_data_from_query
 from core.connectivity.parquet_adapter import ParquetAdapter
-from core.connectivity.hybrid_adapter import HybridDataAdapter
 
 
 from core.utils.json_utils import _clean_json_values # Import the cleaning function
@@ -35,18 +34,16 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     Responda APENAS com um objeto JSON válido contendo as chaves 'intent' e 'entities'.
     Intenções possíveis: 'gerar_grafico', 'consulta_sql_complexa', 'resposta_simples'.
 
-    **ATENÇÃO ESPECIAL PARA ANÁLISES VISUAIS:**
+    **ATENÇÃO ESPECIAL PARA ANÁLISES TEMPORAIS:**
     Se a consulta mencionar:
     - "evolução", "tendência", "ao longo do tempo", "histórico"
     - "últimos X meses", "mensais", "meses"
     - "crescimento", "declínio", "variação temporal"
-    - "TOP", "melhores", "maiores", "principais", "ranking"
-    - "mais vendidos", "menos vendidos", "top 10", "top 5"
-    - "gráfico", "gráficos", "visualização", "mostre"
 
     SEMPRE classifique como 'gerar_grafico' e inclua nas entities:
-    - Para temporal: "temporal": true, "periodo": "mensal", "tipo_analise": "evolucao"
-    - Para ranking: "ranking": true, "limite": N, "metrica": "vendas"
+    - "temporal": true
+    - "periodo": "mensal" ou "multiplos_meses"
+    - "tipo_analise": "evolucao" ou "tendencia"
 
     **Exemplos:**
     - "Gere um gráfico de vendas do produto 369947" → intent: "gerar_grafico", entities: {{"produto": 369947, "metrica": "vendas"}}
@@ -111,13 +108,16 @@ def clarify_requirements(state: AgentState) -> Dict[str, Any]:
 
     return {"clarification_needed": False}
 
-def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: Union[ParquetAdapter, HybridDataAdapter]) -> Dict[str, Any]:
+def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
     """
     Gera um dicionário de filtros para consulta Parquet a partir da pergunta do utilizador, usando o schema do arquivo Parquet e descrições de colunas.
     """
     logger.info("Nó: generate_parquet_query")
     user_query = state['messages'][-1].content
 
+    # Importar field_mapper
+    from core.utils.field_mapper import get_field_mapper
+    
     # Obter o schema do arquivo Parquet para dar contexto ao LLM
     try:
         schema = parquet_adapter.get_schema()
@@ -125,12 +125,15 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
         logger.error(f"Erro ao obter o schema do arquivo Parquet: {e}", exc_info=True)
         return {"parquet_filters": {}, "final_response": {"type": "error", "content": "Não foi possível aceder ao schema do arquivo Parquet para gerar a consulta."}}
 
-    # Load the focused catalog
-    catalog_file_path = "data/catalog_focused.json"
+    # Load the focused catalog (catalog_focused.json)
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    catalog_file_path = os.path.join(base_dir, "data", "catalog_focused.json")
+    
     try:
         with open(catalog_file_path, 'r', encoding='utf-8') as f:
             catalog_data = json.load(f)
-
+        
         # Find the entry for admatao.parquet
         admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admatao.parquet"), None)
         
@@ -139,7 +142,7 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
             column_descriptions_str = json.dumps(column_descriptions, indent=2, ensure_ascii=False)
         else:
             column_descriptions_str = "Nenhuma descrição de coluna disponível."
-            logger.warning("Descrições de coluna para admmat.parquet não encontradas no catálogo.")
+            logger.warning("Descrições de coluna para admatao.parquet não encontradas no catálogo.")
 
     except FileNotFoundError:
         column_descriptions_str = "Erro: Arquivo de catálogo não encontrado."
@@ -147,19 +150,49 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
     except Exception as e:
         column_descriptions_str = f"Erro ao carregar descrições de coluna: {e}"
         logger.error(f"Erro ao carregar descrições de coluna: {e}", exc_info=True)
+    
+    # Inicializar field_mapper
+    field_mapper = get_field_mapper(catalog_file_path)
+    
+    # Gerar mapeamento de campos para o prompt
+    field_mapping_guide = """
+## Mapeamento de Campos (OBRIGATÓRIO)
+
+Quando o usuário mencionar:
+- "segmento" → use: NOMESEGMENTO
+- "categoria" → use: NomeCategoria
+- "grupo" → use: NOMEGRUPO
+- "subgrupo" → use: NomeSUBGRUPO
+- "código" ou "produto" → use: PRODUTO
+- "nome" → use: NOME
+- "estoque" → use: ESTOQUE_UNE
+- "preço" → use: LIQUIDO_38
+- "vendas" ou "vendas 30 dias" → use: VENDA_30DD
+- "fabricante" → use: NomeFabricante
+
+**REGRAS CRÍTICAS:**
+1. NUNCA use "SEGMENTO", sempre use "NOMESEGMENTO"
+2. NUNCA use "CATEGORIA", sempre use "NomeCategoria"
+3. NUNCA use "CODIGO", sempre use "PRODUTO"
+4. Para estoque zero: filtre por ESTOQUE_UNE = 0
+5. Para campos de texto: use valores em MAIÚSCULAS
+"""
 
 
     prompt = f"""
     Você é um especialista em análise de dados com Pandas. Sua tarefa é gerar um objeto JSON representando filtros para um DataFrame Pandas, com base na pergunta do usuário, no schema do arquivo Parquet e nas descrições das colunas fornecidas.
 
+    {field_mapping_guide}
+
     **Instruções:**
     1.  Analise a pergunta do usuário para entender a informação solicitada e os filtros necessários.
-    2.  Use o schema do arquivo Parquet e as descrições das colunas para identificar as colunas corretas.
-    3.  Gere APENAS um objeto JSON válido. Não inclua explicações, comentários ou qualquer outro texto.
-    4.  O JSON deve ter o formato: `{{"coluna": "valor_exato"}}` para filtros de igualdade, ou `{{"coluna": ">valor"}}`, `{{"coluna": "<valor"}}`, etc., para comparações.
-    5.  Use os nomes de colunas EXATOS fornecidos no schema e nas descrições.
-    6.  **Mesmo que a pergunta seja para gerar um gráfico, se ela contiver condições de filtragem (ex: "produto X", "mês Y", "categoria Z"), você DEVE traduzir essas condições em filtros JSON.**
-    7.  Se não for possível gerar filtros a partir da pergunta, retorne um objeto JSON vazio: `{{}}`.
+    2.  Use o MAPEAMENTO DE CAMPOS acima para converter termos do usuário em nomes de colunas reais.
+    3.  Use o schema do arquivo Parquet e as descrições das colunas para validar os campos.
+    4.  Gere APENAS um objeto JSON válido. Não inclua explicações, comentários ou qualquer outro texto.
+    5.  O JSON deve ter o formato: `{{"coluna": "valor_exato"}}` para filtros de igualdade, ou `{{"coluna": ">valor"}}`, `{{"coluna": "<valor"}}`, etc., para comparações.
+    6.  Use os nomes de colunas EXATOS conforme o mapeamento.
+    7.  **Mesmo que a pergunta seja para gerar um gráfico, se ela contiver condições de filtragem (ex: "produto X", "mês Y", "categoria Z"), você DEVE traduzir essas condições em filtros JSON.**
+    8.  Se não for possível gerar filtros a partir da pergunta, retorne um objeto JSON vazio: `{{}}`.
 
     **Schema do Arquivo Parquet:**
     ```
@@ -174,9 +207,19 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
     **Pergunta do Usuário:**
     "{user_query}"
 
-    **Exemplo:**
+    **Exemplos Corretos:**
+    
+    Exemplo 1:
     Pergunta: "gere um gráfico de vendas do produto 123"
     Filtros JSON: `{{"PRODUTO": 123}}`
+    
+    Exemplo 2:
+    Pergunta: "quais são as categorias do segmento tecidos com estoque 0?"
+    Filtros JSON: `{{"NOMESEGMENTO": "TECIDO", "ESTOQUE_UNE": 0}}`
+    
+    Exemplo 3:
+    Pergunta: "liste produtos da categoria aviamentos"
+    Filtros JSON: `{{"NomeCategoria": "AVIAMENTOS"}}`
 
     **Filtros JSON:**
     """
@@ -201,7 +244,7 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
     return {"parquet_filters": parquet_filters}
 
 
-def execute_query(state: AgentState, parquet_adapter: Union[ParquetAdapter, HybridDataAdapter]) -> Dict[str, Any]:
+def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
     """
     Executa os filtros Parquet do estado.
     """
@@ -313,13 +356,8 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
         logger.info(f"📋 CodeGenAgent response output length: {len(str(code_gen_response.get('output', '')))}")
 
         if code_gen_response.get("type") == "chart":
-            # Se o CodeGenAgent retornou um gráfico, usa diretamente o objeto
-            plotly_fig = code_gen_response.get("output")
-            # Se for string JSON, parse; se for objeto, usa direto
-            if isinstance(plotly_fig, str):
-                plotly_spec = json.loads(plotly_fig)
-            else:
-                plotly_spec = plotly_fig
+            # Se o CodeGenAgent retornou um gráfico, extrai o JSON do Plotly
+            plotly_spec = json.loads(code_gen_response.get("output"))
             return {"plotly_spec": plotly_spec}
         elif code_gen_response.get("type") == "error":
             return {"final_response": {"type": "text", "content": code_gen_response.get("output")}}
@@ -345,13 +383,7 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
         response = {"type": "clarification", "content": state.get("clarification_options")}
         logger.info(f"💬 CLARIFICATION RESPONSE for query: '{user_query}'")
     elif state.get("plotly_spec"):
-        plotly_obj = state.get("plotly_spec")
-        # Se for objeto Plotly, converter para JSON para serialização
-        if hasattr(plotly_obj, 'to_dict'):
-            chart_content = plotly_obj.to_dict()
-        else:
-            chart_content = plotly_obj
-        response = {"type": "chart", "content": chart_content}
+        response = {"type": "chart", "content": state.get("plotly_spec")}
         logger.info(f"📈 CHART RESPONSE for query: '{user_query}'")
     elif state.get("retrieved_data"):
         response = {"type": "data", "content": _clean_json_values(state.get("retrieved_data"))}
