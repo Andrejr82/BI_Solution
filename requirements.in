@@ -28,7 +28,9 @@ alembic
 # --- Processamento de Dados ---
 dask[dataframe]
 fastparquet
-pandas>=2.0.0
+pandas==2.2.2
+pyarrow==16.1.0
+dask==2024.5.1
 numpy>=1.24.0,<2.0.0
 sentence-transformers>=2.3.0
 faiss-cpu
