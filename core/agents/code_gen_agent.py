@@ -31,13 +31,18 @@ class CodeGenAgent:
     """
     Agente especializado em gerar e executar código Python para análise de dados.
     """
-    def __init__(self, llm_adapter: BaseLLMAdapter, data_adapter: any):
+    def __init__(self, llm_adapter: BaseLLMAdapter, data_adapter: any = None):
         """
-        Inicializa o agente com o adaptador LLM e o adaptador de dados.
+        Inicializa o agente com o adaptador LLM e opcionalmente o adaptador de dados.
+
+        Args:
+            llm_adapter: Adaptador LLM para geração de código
+            data_adapter: (Opcional) Adaptador de dados para injeção de load_data()
+                         Se None, load_data() usará path padrão do Parquet
         """
         self.logger = logging.getLogger(__name__)
         self.llm = llm_adapter
-        self.data_adapter = data_adapter # Armazena o adaptador de dados
+        self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
         self.logger.info("CodeGenAgent inicializado.")
 
@@ -49,14 +54,23 @@ class CodeGenAgent:
 
         # Função helper para ser injetada no escopo de execução
         def load_data():
-            """Carrega o dataframe Dask usando o adaptador, garantindo eficiência."""
-            # O DirectQueryEngine tem o método _get_base_dask_df, vamos reusá-lo aqui
-            # de forma segura, assumindo que o data_adapter pode ser o próprio engine.
-            if hasattr(self.data_adapter, '_get_base_dask_df'):
-                return self.data_adapter._get_base_dask_df()
+            """Carrega o dataframe usando o adaptador ou fallback para path direto."""
+            if self.data_adapter:
+                # Usar adapter injetado (HybridDataAdapter, ParquetAdapter, etc)
+                if hasattr(self.data_adapter, '_get_base_dask_df'):
+                    return self.data_adapter._get_base_dask_df()
+                elif hasattr(self.data_adapter, 'load_dask_dataframe'):
+                    return self.data_adapter.load_dask_dataframe()
+                else:
+                    # Adapter customizado - tentar chamar diretamente
+                    return self.data_adapter.load_data()
             else:
-                # Fallback para o caso de ser um adaptador mais simples
-                return self.data_adapter.load_dask_dataframe()
+                # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
+                import os
+                parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
+                if not os.path.exists(parquet_path):
+                    raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_path}")
+                return pd.read_parquet(parquet_path)
 
         local_scope['load_data'] = load_data
 
@@ -227,12 +241,22 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
         try:
             # Função helper para ser injetada no escopo de execução
             def load_data():
-                parquet_file = os.path.join(self.parquet_dir, "admmat.parquet")
-                if not os.path.exists(parquet_file):
-                    raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_file}")
-                # Usamos pandas diretamente aqui para simplicidade, pois o Dask já foi usado na filtragem inicial
-                # ou a análise é complexa e será feita em memória.
-                df = pd.read_parquet(parquet_file)
+                """Carrega o dataframe usando o adaptador ou fallback para path direto."""
+                if self.data_adapter:
+                    # Usar adapter injetado (preferencial)
+                    if hasattr(self.data_adapter, '_get_base_dask_df'):
+                        df = self.data_adapter._get_base_dask_df()
+                    elif hasattr(self.data_adapter, 'load_dask_dataframe'):
+                        df = self.data_adapter.load_dask_dataframe()
+                    else:
+                        # Adapter customizado - tentar chamar diretamente
+                        df = self.data_adapter.load_data()
+                else:
+                    # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
+                    parquet_file = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
+                    if not os.path.exists(parquet_file):
+                        raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_file}")
+                    df = pd.read_parquet(parquet_file)
 
                 # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
                 column_mapping = {
