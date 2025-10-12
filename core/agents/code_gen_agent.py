@@ -44,6 +44,30 @@ class CodeGenAgent:
         self.llm = llm_adapter
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
+
+        # Inicializar dicionário de descrições de colunas
+        self.column_descriptions = {
+            "PRODUTO": "Código único do produto",
+            "NOME": "Nome/descrição do produto",
+            "NOMESEGMENTO": "Segmento do produto (TECIDOS, PAPELARIA, etc.)",
+            "NomeCategoria": "Categoria do produto",
+            "NOMEGRUPO": "Grupo do produto",
+            "NomeSUBGRUPO": "Subgrupo do produto",
+            "VENDA_30DD": "Total de vendas nos últimos 30 dias",
+            "ESTOQUE_UNE": "Quantidade em estoque",
+            "LIQUIDO_38": "Preço de venda",
+            "UNE_NOME": "Unidade de medida",
+            "NomeFabricante": "Fabricante do produto"
+        }
+
+        # Inicializar pattern_matcher e code_validator
+        from collections import defaultdict
+        self.pattern_matcher = None
+        self.code_validator = CodeValidator()
+        self.error_counts = defaultdict(int)
+        self.logs_dir = os.path.join(os.getcwd(), "data", "learning")
+        os.makedirs(self.logs_dir, exist_ok=True)
+
         self.logger.info("CodeGenAgent inicializado.")
 
     def _execute_generated_code(self, code: str, local_scope: Dict[str, Any]):
