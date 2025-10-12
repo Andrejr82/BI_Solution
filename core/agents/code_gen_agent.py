@@ -83,15 +83,40 @@ class CodeGenAgent:
                 # ParquetAdapter tem file_path
                 file_path = getattr(self.data_adapter, 'file_path', None)
                 if file_path:
-                    return pd.read_parquet(file_path)
-                raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem file_path")
+                    df = pd.read_parquet(file_path)
+                else:
+                    raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem file_path")
             else:
                 # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
                 import os
                 parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
                 if not os.path.exists(parquet_path):
                     raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_path}")
-                return pd.read_parquet(parquet_path)
+                df = pd.read_parquet(parquet_path)
+
+            # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
+            column_mapping = {
+                'nomesegmento': 'NOMESEGMENTO',
+                'codigo': 'PRODUTO',
+                'nome_produto': 'NOME',
+                'une_nome': 'UNE',
+                'nomegrupo': 'NOMEGRUPO',
+                'ean': 'EAN',
+                'preco_38_percent': 'LIQUIDO_38',
+                'venda_30_d': 'VENDA_30DD',
+                'estoque_atual': 'ESTOQUE_UNE',
+                'embalagem': 'EMBALAGEM',
+                'tipo': 'TIPO'
+            }
+
+            # Aplicar mapeamento apenas para colunas que existem
+            rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
+            df = df.rename(columns=rename_dict)
+
+            # Converter colunas restantes para MAIÚSCULAS
+            df.columns = [col.upper() if col.islower() else col for col in df.columns]
+
+            return df
 
         local_scope['load_data'] = load_data
 
