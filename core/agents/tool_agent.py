@@ -1,3 +1,11 @@
+"""
+Ficheiro com erro de sintaxe, não foi possível gerar docstring.
+"""
+
+"""
+Ficheiro com erro de sintaxe, não foi possível gerar docstring.
+"""
+
 # core/agents/tool_agent.py
 import logging
 import os

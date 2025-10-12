@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'debug server'.
+"""
+
 import logging
 import os
 import sys

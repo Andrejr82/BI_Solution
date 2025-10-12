@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'temp get product price'.
+"""
+
 import pandas as pd
 import os
 

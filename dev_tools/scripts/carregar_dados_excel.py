@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/carregar_dados_excel.py. Fornece as funções: ler_planilha. Interage com a base de dados usando SQLAlchemy.
+"""
+
 from urllib.parse import quote_plus
 
 import pandas as pd

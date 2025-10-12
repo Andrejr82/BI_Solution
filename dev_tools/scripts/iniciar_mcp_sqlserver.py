@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/iniciar_mcp_sqlserver.py. Define a classe principal 'McpSqlSetup'. Fornece as funções: main, run.
+"""
+
 import argparse
 import json
 import logging

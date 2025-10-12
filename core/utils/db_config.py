@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/db_config.py. Fornece as funções: get_query.
+"""
+
 import logging
 
 from dotenv import load_dotenv

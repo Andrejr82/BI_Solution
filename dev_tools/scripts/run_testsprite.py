@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/run_testsprite.py. Fornece as funções: run_testsprite.
+"""
+
 import os
 import sys
 

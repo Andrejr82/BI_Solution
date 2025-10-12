@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'check db'.
+"""
+
 # check_db.py
 import os
 import pyodbc

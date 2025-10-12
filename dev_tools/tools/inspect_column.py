@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/tools/inspect_column.py. Fornece as funções: inspect_column.
+"""
+
 import pandas as pd
 import os
 

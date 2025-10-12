@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/lint_automate.py. Fornece funções utilitárias, incluindo 'listar_pyfiles' e outras.
+"""
+
 import importlib.util
 import os
 import shutil

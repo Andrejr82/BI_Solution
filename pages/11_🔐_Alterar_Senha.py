@@ -1,3 +1,7 @@
+"""
+Módulo para pages/11_🔐_Alterar_Senha.py. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 from datetime import datetime
 import logging

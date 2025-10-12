@@ -1,0 +1,47 @@
+[
+  {
+    "query": "quais sao as categorias do segmento tecidos com estoque 0?",
+    "session_id": "7b69dc41-00f2-4978-8b18-8bb6a40a7453",
+    "timestamp": "2025-10-07T22:35:43.391999",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 3.9730191230773926
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "8080aa7e-2535-4101-a287-2a0c9f47ffdc",
+    "timestamp": "2025-10-07T22:59:44.570110",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.130541801452637
+  },
+  {
+    "query": "quais são os tecidos mais vendiso em todas as unes",
+    "session_id": "8080aa7e-2535-4101-a287-2a0c9f47ffdc",
+    "timestamp": "2025-10-07T23:01:58.481161",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.683915
+  },
+  {
+    "query": "\"quais são as categorias do segmento tecidos com estoque 0?\"",
+    "session_id": "09d64c2a-9fb9-448c-bbe5-6f4c6e4c5881",
+    "timestamp": "2025-10-07T23:33:35.696115",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.978154420852661
+  },
+  {
+    "query": "\"quais são as categorias do segmento tecidos com estoque 0?\"\n",
+    "session_id": "0a46bfce-c1e5-4ee3-9f6e-c7bbd44d10d7",
+    "timestamp": "2025-10-07T23:58:46.108324",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.011025428771973
+  }
+]

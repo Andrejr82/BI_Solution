@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'test db connection'.
+"""
+
 import os
 import pyodbc
 from dotenv import load_dotenv

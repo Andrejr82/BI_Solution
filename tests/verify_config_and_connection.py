@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'verify config and connection'.
+"""
+
 # tests/verify_config_and_connection.py
 import pyodbc
 from core.config.settings import settings

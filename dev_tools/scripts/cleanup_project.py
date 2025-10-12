@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/cleanup_project.py. Fornece as funções: get_project_root, identify_files_for_cleanup, generate_cleanup_script.
+"""
+
 import os
 
 def get_project_root():

@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/openai_config.py. Fornece as funções: configure_openai.
+"""
+
 import logging
 
 # Configura o logging para este módulo

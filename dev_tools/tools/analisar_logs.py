@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/tools/analisar_logs.py. Fornece as funções: parse_args, analisar_logs.
+"""
+
 import argparse
 import json
 import os

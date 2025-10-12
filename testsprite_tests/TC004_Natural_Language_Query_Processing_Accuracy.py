@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC004 Natural Language Query Processing Accuracy'.
+"""
+
 import asyncio
 from playwright import async_api
 

@@ -303,5 +303,15 @@ class HybridDataAdapter:
             return self.parquet_adapter._dataframe
         return None
 
+    @property
+    def file_path(self):
+        """
+        Propriedade para compatibilidade com DirectQueryEngine refatorado (Dask).
+        Retorna file_path do parquet_adapter interno.
+        """
+        if hasattr(self.parquet_adapter, 'file_path'):
+            return self.parquet_adapter.file_path
+        return None
+
     def __repr__(self):
         return f"HybridDataAdapter(source={self.current_source}, sql_available={self.sql_available})"

@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC012 Error Logging and Monitoring'.
+"""
+
 import asyncio
 from playwright import async_api
 

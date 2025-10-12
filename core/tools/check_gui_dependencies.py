@@ -1,3 +1,7 @@
+"""
+Módulo para core/tools/check_gui_dependencies.py. Fornece as funções: check_dependency, main.
+"""
+
 import subprocess
 import sys
 

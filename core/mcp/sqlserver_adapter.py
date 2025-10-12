@@ -1,3 +1,7 @@
+"""
+Módulo para core/mcp/sqlserver_adapter.py. Define a classe principal 'SQLServerMCPAdapter'. Fornece as funções: get_sqlserver_mcp_adapter, process_query.
+"""
+
 import json
 import logging
 import os

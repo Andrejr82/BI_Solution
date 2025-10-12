@@ -24,33 +24,47 @@ logger = logging.getLogger(__name__)
 
 def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
     """
-    Classifica a intenção do utilizador usando um LLM e extrai entidades.
+    Classifica a intenção do utilizador para roteamento do fluxo.
+    As intenções possíveis são:
+    - 'python_analysis': Para perguntas complexas que exigem análise, agregação ou ranking (ex: 'top 5', 'mais vendido').
+    - 'gerar_grafico': Para pedidos diretos de gráficos sem lógica complexa.
+    - 'resposta_simples': Para consultas que podem ser respondidas com filtros simples.
     """
-    logger.info("Nó: classify_intent")
-    user_query = state['messages'][-1].content
+    user_query = state['messages'][-1]['content']
+    logger.info(f"[NODE] classify_intent: Recebida query '{user_query}'")
     
     prompt = f"""
-    Analise a consulta do utilizador e classifique a intenção principal.
-    Responda APENAS com um objeto JSON válido contendo as chaves 'intent' e 'entities'.
-    Intenções possíveis: 'gerar_grafico', 'consulta_sql_complexa', 'resposta_simples'.
+    Analise a consulta do utilizador e classifique a intenção principal para guiar o fluxo de análise de dados. Responda APENAS com um objeto JSON.
 
-    **ATENÇÃO ESPECIAL PARA ANÁLISES TEMPORAIS:**
-    Se a consulta mencionar:
-    - "evolução", "tendência", "ao longo do tempo", "histórico"
-    - "últimos X meses", "mensais", "meses"
-    - "crescimento", "declínio", "variação temporal"
+    **Intenções Possíveis:**
 
-    SEMPRE classifique como 'gerar_grafico' e inclua nas entities:
-    - "temporal": true
-    - "periodo": "mensal" ou "multiplos_meses"
-    - "tipo_analise": "evolucao" ou "tendencia"
+    1.  **`python_analysis`**: Use esta intenção para perguntas que exigem **análise, ranking, agregação ou comparações**.
+        - Palavras-chave: "qual mais", "top", "maior", "menor", "evolução", "comparar", "análise de", "ranking de".
+        - **Exemplos:**
+            - "qual produto mais vende no segmento tecidos?" → `{{"intent": "python_analysis"}}`
+            - "top 5 categorias por venda" → `{{"intent": "python_analysis"}}`
+            - "mostre a evolução de vendas nos últimos 6 meses" → `{{"intent": "python_analysis"}}`
+            - "compare as vendas dos segmentos A e B" → `{{"intent": "python_analysis"}}`
 
-    **Exemplos:**
-    - "Gere um gráfico de vendas do produto 369947" → intent: "gerar_grafico", entities: {{"produto": 369947, "metrica": "vendas"}}
-    - "Mostre a evolução de vendas nos últimos 6 meses" → intent: "gerar_grafico", entities: {{"temporal": true, "periodo": "6_meses", "metrica": "vendas", "tipo_analise": "evolucao"}}
-    - "Tendência de vendas do produto 369947" → intent: "gerar_grafico", entities: {{"produto": 369947, "temporal": true, "metrica": "vendas", "tipo_analise": "tendencia"}}
+    2.  **`gerar_grafico`**: Use para pedidos **diretos e simples** de gráficos, onde a dimensão e a métrica são claras.
+        - **Exemplos:**
+            - "gere um gráfico de vendas por categoria" → `{{"intent": "gerar_grafico"}}`
+            - "gráfico de produtos por segmento" → `{{"intent": "gerar_grafico"}}`
 
-    Consulta: "{user_query}"
+    3.  **`resposta_simples`**: Use para perguntas que podem ser respondidas com uma **filtragem direta**, sem agregação complexa.
+        - **Exemplos:**
+            - "liste os produtos da categoria 'AVIAMENTOS'" → `{{"intent": "resposta_simples"}}`
+            - "qual o estoque do produto 12345?" → `{{"intent": "resposta_simples"}}`
+            - "produtos com estoque zero" → `{{"intent": "resposta_simples"}}`
+
+    **REGRAS:**
+    - Priorize `python_analysis` se a pergunta contiver qualquer forma de ranking ou agregação.
+    - Responda APENAS com o objeto JSON contendo a chave 'intent'.
+
+    **Consulta do Usuário:**
+    "{user_query}"
+
+    **JSON de Saída:**
     """
     
     # Use json_mode=True para forçar a resposta em JSON
@@ -59,8 +73,7 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     
     # Fallback para extrair JSON de blocos de markdown
     if "```json" in plan_str:
-        match = re.search(r"""```json
-(.*?)```""", plan_str, re.DOTALL)
+        match = re.search(r"""```json\n(.*?)```""", plan_str, re.DOTALL)
         if match:
             plan_str = match.group(1).strip()
 
@@ -68,52 +81,27 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
         plan = json.loads(plan_str)
     except json.JSONDecodeError:
         logger.warning(f"Não foi possível decodificar o JSON da intenção: {plan_str}")
-        plan = {"intent": "resposta_simples", "entities": {}}
+        # Fallback para a intenção mais poderosa em caso de erro de parsing
+        plan = {"intent": "python_analysis", "entities": {}}
 
-    logger.info(f"Intenção classificada: {plan.get('intent')}")
-    return {"plan": plan, "intent": plan.get('intent')}
+    intent = plan.get('intent', 'python_analysis')
+    logger.info(f"[NODE] classify_intent: Intenção classificada como '{intent}'")
+    
+    # Assegura que o plan sempre tenha a chave 'intent'
+    if 'intent' not in plan:
+        plan['intent'] = intent
+        
+    return {"plan": plan, "intent": intent}
 
 
-def clarify_requirements(state: AgentState) -> Dict[str, Any]:
-    """
-    Verifica se informações para um gráfico estão em falta.
-    """
-    logger.info("Nó: clarify_requirements")
-    plan = state.get("plan", {})
-    entities = plan.get("entities", {})
 
-    if state.get("intent") == "gerar_grafico":
-        missing_info = []
-
-        # ✅ Para análises temporais, menos clarificações são necessárias
-        if entities.get("temporal"):
-            logger.info("🕰️ TEMPORAL ANALYSIS - Skipping clarification for time-based charts")
-            return {"clarification_needed": False}
-
-        # Clarificações tradicionais apenas para gráficos não-temporais
-        if not entities.get("dimension") and not entities.get("temporal"):
-            missing_info.append("dimensão")
-        if not entities.get("metric") and not entities.get("metrica"):
-            missing_info.append("métrica")
-
-        if missing_info:
-            options = {
-                "message": f"Para gerar o gráfico, preciso que especifique: {', '.join(missing_info)}.",
-                "choices": {
-                    "dimensions": ["Por Categoria", "Por Segmento", "Por Produto"],
-                    "chart_types": ["Barras", "Linhas", "Evolução Temporal"]
-                }
-            }
-            return {"clarification_needed": True, "clarification_options": options}
-
-    return {"clarification_needed": False}
 
 def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
     """
     Gera um dicionário de filtros para consulta Parquet a partir da pergunta do utilizador, usando o schema do arquivo Parquet e descrições de colunas.
     """
-    logger.info("Nó: generate_parquet_query")
-    user_query = state['messages'][-1].content
+    user_query = state['messages'][-1]['content']
+    logger.info(f"[NODE] generate_parquet_query: Gerando filtros para '{user_query}'")
 
     # Importar field_mapper
     from core.utils.field_mapper import get_field_mapper
@@ -180,48 +168,44 @@ Quando o usuário mencionar:
 
 
     prompt = f"""
-    Você é um especialista em análise de dados com Pandas. Sua tarefa é gerar um objeto JSON representando filtros para um DataFrame Pandas, com base na pergunta do usuário, no schema do arquivo Parquet e nas descrições das colunas fornecidas.
+    Você é um especialista em traduzir perguntas de negócio em filtros de dados JSON. Sua tarefa é analisar a **NOVA Pergunta do Usuário** e convertê-la em um objeto JSON de filtros, usando o schema e as regras de mapeamento fornecidas.
 
     {field_mapping_guide}
 
-    **Instruções:**
-    1.  Analise a pergunta do usuário para entender a informação solicitada e os filtros necessários.
-    2.  Use o MAPEAMENTO DE CAMPOS acima para converter termos do usuário em nomes de colunas reais.
-    3.  Use o schema do arquivo Parquet e as descrições das colunas para validar os campos.
-    4.  Gere APENAS um objeto JSON válido. Não inclua explicações, comentários ou qualquer outro texto.
-    5.  O JSON deve ter o formato: `{{"coluna": "valor_exato"}}` para filtros de igualdade, ou `{{"coluna": ">valor"}}`, `{{"coluna": "<valor"}}`, etc., para comparações.
-    6.  Use os nomes de colunas EXATOS conforme o mapeamento.
-    7.  **Mesmo que a pergunta seja para gerar um gráfico, se ela contiver condições de filtragem (ex: "produto X", "mês Y", "categoria Z"), você DEVE traduzir essas condições em filtros JSON.**
-    8.  Se não for possível gerar filtros a partir da pergunta, retorne um objeto JSON vazio: `{{}}`.
+    **Instruções Críticas:**
+    1.  **FOCO TOTAL NA NOVA PERGUNTA:** Sua resposta DEVE ser uma tradução direta da **NOVA Pergunta do Usuário**.
+    2.  **EXTRAÇÃO DE CÓDIGOS:** Se a pergunta contiver um número que se pareça com um código de produto (geralmente com 5 ou mais dígitos), você DEVE extraí-lo como um filtro para a coluna `PRODUTO`.
+    3.  **NÃO COPIE OS EXEMPLOS:** Os exemplos abaixo são apenas um guia de estilo e formato. Não os use como base para a sua resposta.
+    4.  **GERE APENAS JSON:** Sua saída final deve ser um único e válido objeto JSON, sem nenhum texto ou explicação adicional.
+    5.  **CONSULTA VAZIA:** Se a pergunta não contiver nenhum filtro (ex: "liste todas as categorias"), retorne um objeto JSON vazio: `{{}}`.
 
-    **Schema do Arquivo Parquet:**
+    **Schema do Arquivo Parquet (para referência de colunas):**
     ```
     {schema}
     ```
 
-    **Descrições das Colunas:**
-    ```json
-    {column_descriptions_str}
-    ```
+    ---
 
-    **Pergunta do Usuário:**
+    **Exemplos de Formato (Use apenas como guia):**
+
+    - **Exemplo 1 (Filtro de Código de Produto):**
+      - Pergunta: "qual o estoque do produto 369947?"
+      - Filtros JSON: `{{"PRODUTO": 369947}}`
+
+    - **Exemplo 2 (Filtro Composto):**
+      - Pergunta: "quais são as categorias do segmento tecidos com estoque 0?"
+      - Filtros JSON: `{{"NOMESEGMENTO": "TECIDO", "ESTOQUE_UNE": 0}}`
+    
+    - **Exemplo 3 (Filtro de Texto):**
+      - Pergunta: "liste produtos da categoria aviamentos"
+      - Filtros JSON: `{{"NomeCategoria": "AVIAMENTOS"}}`
+
+    ---
+
+    **NOVA Pergunta do Usuário (TRADUZIR ESTA):**
     "{user_query}"
 
-    **Exemplos Corretos:**
-    
-    Exemplo 1:
-    Pergunta: "gere um gráfico de vendas do produto 123"
-    Filtros JSON: `{{"PRODUTO": 123}}`
-    
-    Exemplo 2:
-    Pergunta: "quais são as categorias do segmento tecidos com estoque 0?"
-    Filtros JSON: `{{"NOMESEGMENTO": "TECIDO", "ESTOQUE_UNE": 0}}`
-    
-    Exemplo 3:
-    Pergunta: "liste produtos da categoria aviamentos"
-    Filtros JSON: `{{"NomeCategoria": "AVIAMENTOS"}}`
-
-    **Filtros JSON:**
+    **Filtros JSON Resultantes:**
     """
 
     response_dict = llm_adapter.get_completion(messages=[{"role": "user", "content": prompt}], json_mode=True)
@@ -248,21 +232,16 @@ def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[st
     """
     Executa os filtros Parquet do estado.
     """
-    logger.info("Nó: execute_query")
-    parquet_filters = state.get("parquet_filters", {})
-    user_query = state['messages'][-1].content
+    user_query = state['messages'][-1]['content']
+    parquet_filters = state.get('parquet_filters', {})
 
+    logger.info(f"[NODE] execute_query: Executando com filtros {parquet_filters}")
     logger.info(f"📊 QUERY EXECUTION - User query: '{user_query}'")
     logger.info(f"📊 QUERY EXECUTION - Filters: {parquet_filters}")
 
-    # Se não há filtros específicos, executamos uma consulta que retorna uma amostra dos dados
-    # Isso é necessário para gráficos que precisam de dados gerais (ex: vendas por categoria)
-    if not parquet_filters:
-        logger.info("Nenhum filtro específico. Obtendo amostra de dados para análise.")
-        # Para gráficos gerais, precisamos de dados. Usamos filtros vazios que retornarão uma amostra
-        retrieved_data = fetch_data_from_query.invoke({"query_filters": {}, "parquet_adapter": parquet_adapter})
-    else:
-        retrieved_data = fetch_data_from_query.invoke({"query_filters": parquet_filters, "parquet_adapter": parquet_adapter})
+    # A lógica de fallback para filtros vazios foi removida, pois era a causa do MemoryError.
+    # Agora, a proteção no ParquetAdapter será acionada se os filtros estiverem vazios.
+    retrieved_data = fetch_data_from_query.invoke({"query_filters": parquet_filters, "parquet_adapter": parquet_adapter})
 
     # ✅ LOG DETALHADO DOS RESULTADOS
     if isinstance(retrieved_data, list):
@@ -279,103 +258,131 @@ def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[st
 
 def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_gen_agent: CodeGenAgent) -> Dict[str, Any]:
     """
-    Gera uma especificação JSON para Plotly usando o CodeGenAgent.
+    Gera uma especificação JSON para Plotly ou uma resposta textual usando o CodeGenAgent.
+    Este nó agora lida com dois cenários:
+    1.  **Com `raw_data`**: Gera um gráfico a partir de dados pré-filtrados.
+    2.  **Sem `raw_data` (fluxo `python_analysis`)**: Gera um script Python para fazer a análise completa (filtrar, agregar, etc.).
     """
     logger.info("Nó: generate_plotly_spec")
     raw_data = state.get("retrieved_data")
-    user_query = state['messages'][-1].content
+    user_query = state['messages'][-1]['content']
     plan = state.get("plan", {})
     intent = plan.get("intent")
-    entities = plan.get("entities", {})
 
-    logger.info(f"📈 CHART GENERATION - User query: '{user_query}'")
-    logger.info(f"📈 CHART GENERATION - Intent: {intent}")
-    logger.info(f"📈 CHART GENERATION - Data available: {len(raw_data) if raw_data else 0} rows")
+    logger.info(f"🐍 Python CodeGen - User query: '{user_query}'")
+    logger.info(f"🐍 Python CodeGen - Intent: {intent}")
+    logger.info(f"🐍 Python CodeGen - Data available: {len(raw_data) if raw_data else 'No pre-loaded data'}")
 
-    # 🔍 Detectar se é uma análise temporal
-    temporal_keywords = ['evolução', 'tendência', 'ao longo', 'mensais', 'últimos meses', 'histórico', 'temporal', 'meses']
-    is_temporal = any(keyword in user_query.lower() for keyword in temporal_keywords)
-    logger.info(f"📈 TEMPORAL ANALYSIS DETECTED: {is_temporal}")
-
-    if not raw_data or (isinstance(raw_data, list) and raw_data and "error" in raw_data[0]):
-        return {"final_response": {"type": "text", "content": "Não foi possível obter dados para gerar o gráfico."}}
+    # Verifica se o estado de erro já foi definido por um nó anterior
+    if raw_data and isinstance(raw_data, list) and raw_data and "error" in raw_data[0]:
+        return {"final_response": {"type": "text", "content": raw_data[0]["error"]}}
 
     try:
+        # Cenário 1: Análise complexa, sem dados pré-carregados.
+        # O CodeGenAgent deve fazer o trabalho completo.
         if not raw_data:
-            return {"final_response": {"type": "text", "content": "A consulta não retornou dados para visualização."}}
+            prompt_for_code_gen = f"""
+            **TAREFA:** Você deve escrever um script Python para responder à pergunta do usuário.
 
-        # Constrói um prompt para o CodeGenAgent para gerar código Python que produz um gráfico Plotly
-        # Inclui os dados brutos como contexto para o CodeGenAgent
-        # O CodeGenAgent já tem acesso ao parquet_dir e outras libs necessárias
-        prompt_for_code_gen = f"""
-        Com base na seguinte consulta do usuário e nos dados brutos fornecidos, gere um script Python
-        que utilize a biblioteca Plotly Express para criar um gráfico.
-        O script deve armazenar o objeto da figura Plotly resultante em uma variável chamada `result`.
-        Não inclua `fig.show()` ou `fig.write_json()`.
+            **INSTRUÇÕES OBRIGATÓRIAS:**
+            1. **CARREGUE OS DADOS:** Inicie seu script com a linha: `df = load_data()`
+            2. **RESPONDA À PERGUNTA:** Usando o dataframe `df`, escreva o código necessário para responder à seguinte pergunta: "{user_query}"
+            3. **SALVE O RESULTADO:** Armazene o resultado final (pode ser um DataFrame, um texto, ou um número) na variável `result`.
 
-        **Consulta do Usuário:** "{user_query}"
-        **Intenção Detectada:** "{intent}"
-        **Análise Temporal:** {'SIM - Use dados mensais mes_01 a mes_12' if is_temporal else 'NÃO - Use dados agregados'}
-        **Entidades Extraídas:** {json.dumps(entities, ensure_ascii=False)}
-        **Dados Brutos (primeiras 5 linhas para referência):**
-        ```json
-        {pd.DataFrame(raw_data).head(5).to_json(orient="records", indent=2)}
-        ```
-        **Dados Brutos Completos (para uso no script):**
-        A variável `df_raw_data` já contém um Pandas DataFrame com todos os dados brutos.
-        Você deve usar `df_raw_data` como sua fonte de dados para o gráfico.
+            **REGRAS PARA RANKINGS/TOP N:**
+            - Se a pergunta mencionar "ranking", "top", "maior", "mais vendido" → você DEVE fazer groupby + sum + sort_values
+            - Se mencionar "top 10", "top 5" → adicione .head(N) no final
+            - SEMPRE agrupe por NOME (nome do produto) para rankings de produtos
+            - SEMPRE ordene por VENDA_30DD (vendas em 30 dias) de forma DECRESCENTE (ascending=False)
+            - Use .reset_index() no final para criar um DataFrame limpo
 
-        **Exemplo de script Python para um gráfico de barras:**
-        ```python
-        import pandas as pd
-        import plotly.express as px
+            **EXEMPLOS CORRETOS:**
 
-        # df_raw_data já está disponível aqui como um Pandas DataFrame
-        # Exemplo:
-        # df_raw_data['coluna_numerica'] = pd.to_numeric(df_raw_data['coluna_numerica'], errors='coerce').fillna(0)
-        
-        # Crie seu gráfico Plotly Express aqui
-        fig = px.bar(df_raw_data, x="coluna_dimensao", y="coluna_metrica", title="Título do Gráfico")
-        result = fig
-        ```
-        Gere APENAS o script Python.
-        """
-        
-        # O CodeGenAgent espera um dicionário com a query e os dados brutos
-        # para que ele possa criar o DataFrame `df_raw_data` no escopo de execução.
+            1. **"ranking de vendas no segmento tecidos"** (SEM limite):
+            ```python
+            df = load_data()
+            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
+            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()
+            result = ranking
+            ```
+
+            2. **"top 10 segmento tecidos"** (COM limite de 10):
+            ```python
+            df = load_data()
+            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
+            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()
+            result = ranking
+            ```
+
+            3. **"produto mais vendido de tecidos"** (TOP 1):
+            ```python
+            df = load_data()
+            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
+            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(1).reset_index()
+            result = ranking
+            ```
+
+            **IMPORTANTE:** NÃO retorne apenas o filtro! Sempre faça o groupby quando houver ranking/top!
+
+            **Pergunta do Usuário:** "{user_query}"
+
+            **Seu Script Python:**
+            """
+        # Cenário 2: Geração de gráfico a partir de dados pré-carregados.
+        else:
+            prompt_for_code_gen = f"""
+            Com base na consulta do usuário e no DataFrame Pandas `df_raw_data` já disponível, gere um script Python para criar um gráfico com Plotly Express.
+            O objeto da figura Plotly resultante deve ser armazenado em uma variável chamada `result`.
+            Não inclua `fig.show()`.
+
+            **Consulta do Usuário:** "{user_query}"
+            **Dados Brutos (amostra):**
+            ```json
+            {pd.DataFrame(raw_data).head(3).to_json(orient="records", indent=2)}
+            ```
+
+            **Seu Script Python:**
+            """
+
+        # O CodeGenAgent espera um dicionário com a query e os dados brutos (se existirem)
         code_gen_input = {
             "query": prompt_for_code_gen,
-            "raw_data": raw_data # Passa os dados brutos completos
+            "raw_data": raw_data  # Passa os dados brutos ou None
         }
         
-        # Chama o CodeGenAgent para gerar e executar o código
-        # O CodeGenAgent retornará um dicionário com 'type' e 'output'
+        logger.info(f"\n--- PROMPT PARA CODEGENAGENT ---\n{prompt_for_code_gen}\n---------------------------------")
+        
         logger.info("🚀 Calling code_gen_agent.generate_and_execute_code...")
         code_gen_response = code_gen_agent.generate_and_execute_code(code_gen_input)
         logger.info(f"📋 CodeGenAgent response type: {code_gen_response.get('type')}")
-        logger.info(f"📋 CodeGenAgent response output length: {len(str(code_gen_response.get('output', '')))}")
 
+        # Processa a resposta do CodeGenAgent
         if code_gen_response.get("type") == "chart":
-            # Se o CodeGenAgent retornou um gráfico, extrai o JSON do Plotly
             plotly_spec = json.loads(code_gen_response.get("output"))
             return {"plotly_spec": plotly_spec}
+        elif code_gen_response.get("type") == "dataframe":
+            # Se o resultado for um dataframe, converte para uma lista de dicionários para a resposta final
+            df_result = code_gen_response.get("output")
+            return {"retrieved_data": df_result.to_dict(orient='records')}
+        elif code_gen_response.get("type") == "text":
+            # Se for texto, encapsula na estrutura de resposta final
+            return {"final_response": {"type": "text", "content": str(code_gen_response.get("output"))}}
         elif code_gen_response.get("type") == "error":
             return {"final_response": {"type": "text", "content": code_gen_response.get("output")}}
         else:
-            # Se o CodeGenAgent retornou texto ou dataframe, ou algo inesperado
-            return {"final_response": {"type": "text", "content": f"O agente gerou uma resposta inesperada ao tentar criar o gráfico: {code_gen_response.get('output')}"}}
+            return {"final_response": {"type": "text", "content": f"Resposta inesperada do agente de código: {code_gen_response.get('output')}"}}
 
     except Exception as e:
-        logger.error(f"Erro ao gerar especificação Plotly via CodeGenAgent: {e}", exc_info=True)
-        return {"final_response": {"type": "text", "content": f"Não consegui gerar o gráfico. Erro interno: {e}"}}
+        logger.error(f"Erro ao gerar script Python com CodeGenAgent: {e}", exc_info=True)
+        return {"final_response": {"type": "text", "content": f"Não consegui gerar a análise. Erro interno: {e}"}}
 
 
 def format_final_response(state: AgentState) -> Dict[str, Any]:
     """
     Formata a resposta final para o utilizador.
     """
-    logger.info("Nó: format_final_response")
-    user_query = state['messages'][-1].content
+    user_query = state['messages'][-1]['content']
+    logger.info(f"[NODE] format_final_response: Formatando resposta para '{user_query}'")
 
     # 📝 Construir resposta baseada no estado
     response = {}

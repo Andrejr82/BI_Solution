@@ -1,3 +1,7 @@
+"""
+Módulo para core/agents/caculinha_bi_agent.py. Fornece as funções: create_caculinha_bi_agent, generate_and_execute_python_code, agent_runnable_logic.
+"""
+
 import logging
 import re
 import json # Added import

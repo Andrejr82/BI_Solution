@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC001 User Authentication Success'.
+"""
+
 import asyncio
 from playwright import async_api
 

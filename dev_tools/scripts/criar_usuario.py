@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/criar_usuario.py. Fornece as funções: main.
+"""
+
 import argparse
 import getpass
 import sys

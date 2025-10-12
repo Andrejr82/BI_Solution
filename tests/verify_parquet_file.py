@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'verify parquet file'.
+"""
+
 # tests/verify_parquet_file.py
 import pandas as pd
 import logging

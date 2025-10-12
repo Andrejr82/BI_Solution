@@ -37,15 +37,20 @@ class GraphBuilder:
     def _decide_after_intent_classification(self, state: AgentState) -> str:
         """
         Aresta condicional que roteia o fluxo após a classificação da intenção.
+        - python_analysis e gerar_grafico vão para a geração de código Python.
+        - resposta_simples vai para a geração de filtros simples.
         """
         intent = state.get("intent")
         logger.info(f"Roteando com base na intenção: {intent}")
-        if intent == "gerar_grafico":
-            return "clarify_requirements"
-        elif intent == "consulta_parquet_complexa":
-            return "generate_parquet_query"
-        else: # resposta_simples ou fallback
-            return "generate_parquet_query"
+        
+        if intent in ["python_analysis", "gerar_grafico"]:
+            # Intenções que exigem análise de código (gráfico ou textual) vão direto para o CodeGenAgent.
+            logger.info(f"Intenção '{intent}' roteada para generate_plotly_spec.")
+            return "generate_plotly_spec"
+        
+        # Apenas as perguntas mais básicas seguem para o filtro simples.
+        logger.info(f"Intenção '{intent}' roteada para generate_parquet_query.")
+        return "generate_parquet_query"
 
     def _decide_after_clarification(self, state: AgentState) -> str:
         """
@@ -83,7 +88,7 @@ class GraphBuilder:
 
         # Adiciona os nós (estados) ao grafo
         workflow.add_node("classify_intent", classify_intent_node)
-        workflow.add_node("clarify_requirements", bi_agent_nodes.clarify_requirements)
+        
         workflow.add_node("generate_parquet_query", generate_parquet_query_node)
         # CORREÇÃO: O nó é adicionado com o nome correto, correspondendo à função.
         workflow.add_node("execute_query", execute_query_node)
@@ -99,15 +104,7 @@ class GraphBuilder:
             "classify_intent",
             self._decide_after_intent_classification,
             {
-                "clarify_requirements": "clarify_requirements",
-                "generate_parquet_query": "generate_parquet_query",
-            }
-        )
-        workflow.add_conditional_edges(
-            "clarify_requirements",
-            self._decide_after_clarification,
-            {
-                "format_final_response": "format_final_response",
+                "generate_plotly_spec": "generate_plotly_spec",
                 "generate_parquet_query": "generate_parquet_query",
             }
         )

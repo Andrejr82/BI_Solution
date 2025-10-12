@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/sql_utils.py. Fornece funções utilitárias, incluindo 'get_connection_string' e outras. Interage com a base de dados usando SQLAlchemy.
+"""
+
 import logging
 import os
 import re

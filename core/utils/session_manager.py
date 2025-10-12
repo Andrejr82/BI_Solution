@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/session_manager.py. Define a classe principal 'SessionManager'. Fornece funções utilitárias, incluindo 'create_session' e outras.
+"""
+
 import json
 import logging
 import os

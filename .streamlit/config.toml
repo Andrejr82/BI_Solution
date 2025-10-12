@@ -1,24 +1,38 @@
 [global]
-# Habilitar tema escuro por padrão
 developmentMode = false
 
 [server]
-# Configurações do servidor para Streamlit Cloud
+# Otimizado para Streamlit Cloud + 6 usuários
 headless = true
 enableCORS = false
-enableXsrfProtection = false
-maxUploadSize = 200
+enableXsrfProtection = true
+maxUploadSize = 50
+port = 8501
+runOnSave = false
+
+# Session management
+maxMessageSize = 200
 
 [browser]
-# Configurações do navegador
 gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8501
 
 [theme]
-# Tema personalizado para Agent_Solution_BI
 primaryColor = "#FF6B6B"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F0F2F6"
 textColor = "#262730"
 font = "sans serif"
 
-# Cache clearing trigger - Force redeploy timestamp: 2025-09-21 20:50
+[client]
+# Performance otimizada
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[runner]
+# Evita reruns desnecessários
+magicEnabled = false
+fastReruns = true
+
+# Cache trigger: 2025-10-12 - Deploy para 6 usuários

@@ -1,3 +1,7 @@
+"""
+Módulo para pages/6_Painel_de_Administração.py. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 from datetime import datetime
 import logging

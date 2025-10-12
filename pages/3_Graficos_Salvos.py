@@ -1,3 +1,7 @@
+"""
+Módulo para pages/3_Graficos_Salvos.py. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 import sys
 import os

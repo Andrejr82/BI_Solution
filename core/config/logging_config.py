@@ -1,3 +1,7 @@
+"""
+Módulo para core/config/logging_config.py. Fornece as funções: setup_logging.
+"""
+
 import logging
 import logging.config
 import os

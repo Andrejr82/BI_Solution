@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de '  init  '.
+"""
+
 import logging
 
 logging.basicConfig(level=logging.INFO)

@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/generate_db_html.py. Define a classe principal 'DbStructureGenerator'. Fornece as funções: get_db_structure, generate_html, run.
+"""
+
 import logging
 import sys
 from pathlib import Path

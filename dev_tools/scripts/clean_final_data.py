@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/clean_final_data.py. Fornece as funções: clean_numeric_columns.
+"""
+
 
 import pandas as pd
 import os

@@ -1,3 +1,7 @@
+"""
+Módulo para core/llm_adapter.py. Define as classes: GeminiLLMAdapter, DeepSeekLLMAdapter. Fornece funções utilitárias, incluindo 'get_completion' e outras.
+"""
+
 import logging
 from openai import OpenAI, RateLimitError
 from core.utils.response_cache import ResponseCache
@@ -25,7 +29,7 @@ class GeminiLLMAdapter:
         if enable_cache:
             self.cache = ResponseCache(ttl_hours=48)
             self.cache.clear_expired()
-            logger.info("✅ Cache de respostas ativado para Gemini - ECONOMIA DE CRÉDITOS")
+            logger.info("[OK] Cache de respostas ativado para Gemini - ECONOMIA DE CRÉDITOS")
         else:
             self.cache = None
 
@@ -55,7 +59,7 @@ class GeminiLLMAdapter:
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
 
-            logger.info(f"💰 Chamada API Gemini: {model_to_use} - tokens: {max_tokens}")
+            logger.info(f"[API] Chamada API Gemini: {model_to_use} - tokens: {max_tokens}")
             response = self.client.chat.completions.create(**params)
 
             if stream:
@@ -70,12 +74,14 @@ class GeminiLLMAdapter:
                 if finish_reason == 'length' and (content is None or not content):
                     completion_tokens = response.usage.completion_tokens if hasattr(response, 'usage') else 0
                     if completion_tokens == 0:
-                        logger.error(f"❌ max_tokens muito baixo! O modelo parou antes de gerar qualquer resposta. Tokens usados: {response.usage}")
-                        content = "⚠️ ERRO: max_tokens muito baixo. Aumente o valor de max_tokens para permitir que o modelo gere uma resposta."
+                        logger.error(f"[ERRO] max_tokens muito baixo! O modelo parou antes de gerar qualquer resposta. Tokens usados: {response.usage}")
+                        # Mensagem amigável para o usuário
+                        content = "Desculpe, não consegui processar sua solicitação no momento. Por favor, tente reformular sua pergunta de forma mais concisa ou entre em contato com o suporte."
                     else:
-                        logger.warning(f"⚠️ Resposta cortada por limite de tokens. Aumente max_tokens se necessário.")
+                        logger.warning(f"[AVISO] Resposta cortada por limite de tokens. Aumente max_tokens se necessário.")
+                        # Mensagem parcial está OK, não precisa alterar
                 elif content is None:
-                    logger.warning(f"⚠️ API retornou content=None. Response: {response}")
+                    logger.warning(f"[AVISO] API retornou content=None. Response: {response}")
                     # Tentar pegar de outro lugar se disponível
                     if hasattr(response.choices[0].message, 'text'):
                         content = response.choices[0].message.text
@@ -83,9 +89,9 @@ class GeminiLLMAdapter:
                         content = response.choices[0].text
                     else:
                         content = ""
-                        logger.error(f"❌ Não foi possível extrair conteúdo. Response completo: {response.model_dump() if hasattr(response, 'model_dump') else response}")
+                        logger.error(f"[ERRO] Não foi possível extrair conteúdo. Response completo: {response.model_dump() if hasattr(response, 'model_dump') else response}")
             except (IndexError, AttributeError) as e:
-                logger.error(f"❌ Erro ao extrair conteúdo da resposta: {e}")
+                logger.error(f"[ERRO] Erro ao extrair conteúdo da resposta: {e}")
                 content = ""
 
             result = {"content": content}
@@ -96,12 +102,12 @@ class GeminiLLMAdapter:
             return result
 
         except RateLimitError as e:
-            logger.error(f"🚨 Rate limit Gemini 2.5 Flash-Lite atingido: {e}", exc_info=True)
+            logger.error(f"[ALERTA] Rate limit Gemini 2.5 Flash-Lite atingido: {e}", exc_info=True)
             # ATIVA O FALLBACK AUTOMÁTICO PARA DEEPSEEK!
             try:
                 from core.factory.component_factory import ComponentFactory
                 ComponentFactory.set_gemini_unavailable(True)
-                logger.warning("🔄 Fallback ativado: Gemini → DeepSeek")
+                logger.warning("[FALLBACK] Fallback ativado: Gemini -> DeepSeek")
             except ImportError:
                 pass
             return {"error": "Rate limit exceeded", "fallback_activated": True, "retry_with": "deepseek"}
@@ -109,11 +115,11 @@ class GeminiLLMAdapter:
             error_msg = str(e).lower()
             # Detectar outros tipos de rate limit/quota exceeded
             if any(term in error_msg for term in ["quota", "limit", "429", "rate", "exceeded"]):
-                logger.error(f"🚨 Quota/Rate limit detectado no Gemini: {e}")
+                logger.error(f"[ALERTA] Quota/Rate limit detectado no Gemini: {e}")
                 try:
                     from core.factory.component_factory import ComponentFactory
                     ComponentFactory.set_gemini_unavailable(True)
-                    logger.warning("🔄 Fallback ativado por quota: Gemini → DeepSeek")
+                    logger.warning("[FALLBACK] Fallback ativado por quota: Gemini -> DeepSeek")
                 except ImportError:
                     pass
                 return {"error": "Quota exceeded", "fallback_activated": True, "retry_with": "deepseek"}
@@ -146,7 +152,7 @@ class DeepSeekLLMAdapter:
         if enable_cache:
             self.cache = ResponseCache(ttl_hours=48)
             self.cache.clear_expired()
-            logger.info("✅ Cache de respostas ativado para DeepSeek.")
+            logger.info("[OK] Cache de respostas ativado para DeepSeek.")
         else:
             self.cache = None
 
@@ -174,7 +180,7 @@ class DeepSeekLLMAdapter:
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
 
-            logger.info(f"💰 Chamada API DeepSeek: {model_to_use} - tokens: {max_tokens}")
+            logger.info(f"[API] Chamada API DeepSeek: {model_to_use} - tokens: {max_tokens}")
             response = self.client.chat.completions.create(**params)
 
             content = response.choices[0].message.content

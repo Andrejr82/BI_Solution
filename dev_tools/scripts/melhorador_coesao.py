@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/melhorador_coesao.py. Define a classe principal 'MelhoradorCoesao'. Fornece funções utilitárias, incluindo 'main' e outras.
+"""
+
 import json
 import logging
 import os

@@ -115,5 +115,32 @@
     "results_count": 10,
     "error": null,
     "processing_time": 4.92001
+  },
+  {
+    "query": "quais categorias no segmento tecidos estão com produtos estoque 0?",
+    "session_id": "c5df3e61-af3b-4250-9942-963d3e436bae",
+    "timestamp": "2025-10-05T23:33:18.883074",
+    "success": false,
+    "results_count": 0,
+    "error": "❌ 'nome_categoria'",
+    "processing_time": 0.0
+  },
+  {
+    "query": "quais sao as categorrias de tecidos estoque 0 na une CFR?",
+    "session_id": "92bb2f10-aa32-43ba-9449-e15fb94cf738",
+    "timestamp": "2025-10-05T23:44:05.389938",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.336162
+  },
+  {
+    "query": "top 10 tecidos une CFR",
+    "session_id": "92bb2f10-aa32-43ba-9449-e15fb94cf738",
+    "timestamp": "2025-10-05T23:45:20.445402",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 5.548318
   }
 ]

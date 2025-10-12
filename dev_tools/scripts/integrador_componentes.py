@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/integrador_componentes.py. Define a classe principal 'IntegradorComponentes'. Fornece funções utilitárias, incluindo 'main' e outras.
+"""
+
 import logging
 import os
 import re

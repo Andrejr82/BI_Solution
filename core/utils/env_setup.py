@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/env_setup.py. Fornece as funções: setup_environment.
+"""
+
 import logging
 from pathlib import Path
 

@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/db_fallback.py. Fornece funções utilitárias, incluindo 'with_db_retry' e outras. Interage com a base de dados usando SQLAlchemy.
+"""
+
 import logging
 import os
 import random

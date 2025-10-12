@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/evaluate_agent.py. Fornece as funções: main.
+"""
+
 # scripts/evaluate_agent.py
 import sys
 import os

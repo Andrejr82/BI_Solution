@@ -1,3 +1,10 @@
+"""
+Módulo para pages/10_🤖_Gemini_Playground.py. Define componentes da interface de utilizador (UI).
+"""
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 import streamlit as st
 from datetime import datetime
 import logging
@@ -54,6 +61,18 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
         with col2:
             st.subheader("⚙️ Configurações")
 
+            if st.button("🔄 Recarregar Configuração da API", use_container_width=True, help="Clique aqui se você atualizou sua chave de API no arquivo .env para forçar o recarregamento."):
+                from core.config.safe_settings import reset_safe_settings_cache
+                # Limpa o cache de settings para forçar a releitura do .env
+                reset_safe_settings_cache()
+                # Força a remoção do adaptador da sessão para que ele seja recriado com a nova chave
+                if 'gemini_adapter' in st.session_state:
+                    del st.session_state['gemini_adapter']
+                st.success("Configuração da API recarregada. Tente seu prompt novamente.")
+                st.rerun()
+            
+            st.markdown("---")
+
             # Parâmetros do modelo
             temperature = st.slider(
                 "Temperature",
@@ -72,6 +91,10 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                 step=256,
                 help="Número máximo de tokens na resposta (Gemini conta prompt + resposta)."
             )
+
+            # Aviso se max_tokens muito baixo
+            if max_tokens < 512:
+                st.warning("⚠️ Valor muito baixo! Respostas podem ser cortadas. Recomendado: ≥ 1024 tokens.")
 
             json_mode = st.checkbox(
                 "JSON Mode",

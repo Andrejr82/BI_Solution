@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'json utils'.
+"""
+
 import pandas as pd
 import numpy as np
 from decimal import Decimal

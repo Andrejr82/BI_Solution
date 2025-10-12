@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/formatador.py. Fornece as funções: run_formatter.
+"""
+
 import argparse
 import os
 import os.path

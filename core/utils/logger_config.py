@@ -64,10 +64,11 @@ class AgentBILogger:
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.DEBUG)
 
-        # Handler para console
+        # Handler para console - OTIMIZADO: Apenas WARNING+ para reduzir overhead
+        # Logs INFO/DEBUG vão apenas para arquivo
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.WARNING)  # Reduzido de INFO para WARNING
 
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)

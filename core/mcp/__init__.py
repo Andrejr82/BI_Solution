@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de '  init  '.
+"""
+
 # Módulo MCP (Multi-Cloud Processing)
 # Este módulo gerencia conexões e processamento distribuído em múltiplas nuvens
 

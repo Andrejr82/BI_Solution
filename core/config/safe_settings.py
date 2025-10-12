@@ -191,12 +191,21 @@ def get_safe_settings():
         return _cached_settings
 
     try:
-        logger.info("🔧 Carregando configurações simples...")
+        logger.info("[INFO] Carregando configurações simples...")
         _cached_settings = SafeSettings()
-        logger.info("✅ Configurações carregadas com sucesso")
+        logger.info("[OK] Configurações carregadas com sucesso")
         return _cached_settings
     except Exception as e:
         logger.error(f"Erro ao carregar configurações: {e}")
         # Retornar configuração mínima mesmo se houver erro
         _cached_settings = SafeSettings()
         return _cached_settings
+
+def reset_safe_settings_cache():
+    """
+    Força a limpeza do cache de configurações.
+    Útil em desenvolvimento quando o .env é alterado.
+    """
+    global _cached_settings
+    _cached_settings = None
+    logger.info("[INFO] Cache de configurações foi limpo.")

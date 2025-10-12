@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'debug product'.
+"""
+
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))

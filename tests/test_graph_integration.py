@@ -1,3 +1,7 @@
+"""
+Módulo para tests/test_graph_integration.py. Fornece funções utilitárias, incluindo 'mock_adapters' e outras.
+"""
+
 # tests/test_graph_integration.py
 import pytest
 from unittest.mock import MagicMock, patch

@@ -1,3 +1,7 @@
+"""
+Módulo para core/graph/agent.py. Define a classe principal 'GraphAgent'. Fornece as funções: process.
+"""
+
 import logging
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder

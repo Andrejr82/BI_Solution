@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/fix_parquet_encoding.py. Fornece as funções: fix_parquet_columns.
+"""
+
 import pandas as pd
 import os
 

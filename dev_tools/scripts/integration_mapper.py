@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/integration_mapper.py. Define a classe principal 'UsageVisitor'. Fornece funções utilitárias, incluindo 'analyze_file' e outras.
+"""
+
 import os
 import ast
 

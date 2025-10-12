@@ -1,3 +1,7 @@
+"""
+Módulo para pages/4_Monitoramento.py. Fornece funções utilitárias, incluindo 'get_settings' e outras. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 import os
 import time

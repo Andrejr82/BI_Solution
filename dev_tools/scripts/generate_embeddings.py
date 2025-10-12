@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/generate_embeddings.py. Fornece as funções: generate_embeddings.
+"""
+
 # scripts/generate_embeddings.py
 import json
 import os

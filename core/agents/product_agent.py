@@ -1,3 +1,7 @@
+"""
+Módulo para core/agents/product_agent.py. Define a classe principal 'ProductAgent'. Fornece funções utilitárias, incluindo 'search_products' e outras.
+"""
+
 import logging
 import re
 import sys # Adicionado para depuração

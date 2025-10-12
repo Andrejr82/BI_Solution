@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/inspect_segment.py. Fornece as funções: inspect_segment_categories.
+"""
+
 import pandas as pd
 import os
 

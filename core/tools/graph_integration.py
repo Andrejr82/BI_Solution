@@ -1,3 +1,7 @@
+"""
+Módulo para core/tools/graph_integration.py. Fornece as funções: processar_resposta_com_grafico.
+"""
+
 import logging
 import os
 from typing import Any, Dict

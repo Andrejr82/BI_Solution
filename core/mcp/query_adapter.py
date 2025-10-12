@@ -1,3 +1,7 @@
+"""
+Módulo para core/mcp/query_adapter.py. Define a classe principal 'MCPQueryAdapter'. Fornece funções utilitárias, incluindo 'get_mcp_adapter' e outras.
+"""
+
 import logging
 from typing import Any, Dict
 

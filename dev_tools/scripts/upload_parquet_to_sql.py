@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/upload_parquet_to_sql.py. Fornece as funções: treat_data. Interage com a base de dados usando SQLAlchemy.
+"""
+
 import pandas as pd
 from sqlalchemy import create_engine, types
 import urllib

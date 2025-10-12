@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC015 Edge Case Empty or Invalid Query Input'.
+"""
+
 import asyncio
 from playwright import async_api
 

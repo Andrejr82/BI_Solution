@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/gerar_limpeza.py. Fornece as funções: classificar_linha, gerar_relatorio.
+"""
+
 import os
 
 RELATORIO_ORIGEM = "relatorio_arquitetura_completo.md"

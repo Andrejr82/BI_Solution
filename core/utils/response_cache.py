@@ -50,7 +50,7 @@ class ResponseCache:
                 logger.info(f"Cache expirado removido: {cache_key}")
                 return None
 
-            logger.info(f"✅ Cache HIT - Economia de tokens: {cache_key[:8]}")
+            logger.info(f"[OK] Cache HIT - Economia de tokens: {cache_key[:8]}")
             return cached_data.get('response')
 
         except Exception as e:
@@ -76,7 +76,7 @@ class ResponseCache:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
 
-            logger.info(f"💾 Resposta cacheada: {cache_key[:8]}")
+            logger.info(f"[INFO] Resposta cacheada: {cache_key[:8]}")
 
         except Exception as e:
             logger.error(f"Erro ao salvar cache: {e}")
@@ -105,7 +105,7 @@ class ResponseCache:
                     removed_count += 1
 
         if removed_count > 0:
-            logger.info(f"🧹 Limpeza: {removed_count} caches expirados removidos")
+            logger.info(f"[INFO] Limpeza: {removed_count} caches expirados removidos")
 
     def get_stats(self) -> Dict[str, Any]:
         """Retorna estatísticas do cache"""

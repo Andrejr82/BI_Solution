@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/run_tests_modified.py. Fornece as funções: wait_for_server, main.
+"""
+
 import os
 import subprocess
 import sys

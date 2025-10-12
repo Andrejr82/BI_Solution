@@ -148,6 +148,9 @@ def main():
     print("TESTE DO GEMINI PLAYGROUND")
     print("=" * 60)
 
+    # Checar por argumento de linha de comando para rodar de forma não interativa
+    non_interactive = "--yes" in sys.argv
+
     results = []
 
     # Teste 1: Imports
@@ -163,14 +166,17 @@ def main():
     results.append(("GeminiLLMAdapter", test_gemini_adapter()))
 
     # Teste 5: Completion (opcional - pode consumir créditos)
-    print("\n[AVISO] O proximo teste fara uma chamada real a API do Gemini.")
-    user_input = input("Deseja executar o teste de completion? (s/n): ")
-
-    if user_input.lower() == 's':
+    if non_interactive:
+        print("\n[INFO] Executando teste de completion em modo não-interativo.")
         results.append(("Completion Simples", test_simple_completion()))
     else:
-        print("[INFO] Teste de completion pulado")
-        results.append(("Completion Simples", None))
+        print("\n[AVISO] O proximo teste fara uma chamada real a API do Gemini.")
+        user_input = input("Deseja executar o teste de completion? (s/n): ")
+        if user_input.lower() == 's':
+            results.append(("Completion Simples", test_simple_completion()))
+        else:
+            print("[INFO] Teste de completion pulado")
+            results.append(("Completion Simples", None))
 
     # Resumo
     print("\n" + "=" * 60)

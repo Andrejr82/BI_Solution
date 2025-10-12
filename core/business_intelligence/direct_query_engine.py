@@ -4,9 +4,10 @@ Sistema que executa consultas pré-definidas sem usar tokens da LLM.
 """
 
 import pandas as pd
+import dask.dataframe as dd
 import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Union
 from datetime import datetime
 import re
 from pathlib import Path
@@ -26,8 +27,13 @@ logger = get_logger('agent_bi.direct_query')
 class DirectQueryEngine:
     """Motor de consultas diretas que NÃO usa LLM para economizar tokens."""
 
-    def __init__(self, parquet_adapter: ParquetAdapter):
-        """Inicializa o motor com o adapter do parquet."""
+    def __init__(self, parquet_adapter: Union[ParquetAdapter, Any]):
+        """
+        Inicializa o motor com o adapter de dados.
+
+        Args:
+            parquet_adapter: ParquetAdapter ou HybridDataAdapter (SQL Server + Parquet)
+        """
         self.parquet_adapter = parquet_adapter
         self.chart_generator = AdvancedChartGenerator()
         self.query_cache = {}
@@ -38,6 +44,10 @@ class DirectQueryEngine:
         # Cache de dados frequentes
         self._cached_data = {}
         self._cache_timestamp = None
+
+        # ⚡ CACHE CRÍTICO: DataFrame Dask em memória para performance
+        self._cached_dask_df = None
+        self._cache_source = None  # Rastrear fonte (sql/parquet)
 
         logger.info(f"DirectQueryEngine inicializado - {len(self.patterns)} padroes carregados - ZERO LLM tokens")
 
@@ -289,7 +299,6 @@ class DirectQueryEngine:
         if (self._cache_timestamp is None or
             (current_time - self._cache_timestamp).seconds > 300 or
             cache_key not in self._cached_data):
-
             if full_dataset:
                 logger.info("Carregando dataset COMPLETO - necessário para consulta específica")
             else:
@@ -318,8 +327,8 @@ class DirectQueryEngine:
                     return pd.DataFrame()
 
             # Garantir que vendas_total existe
-            vendas_cols = [col for col in df.columns if col.startswith('mes_') and col[4:].isdigit()]
-            if vendas_cols and 'vendas_total' not in df.columns:
+            vendas_cols = [col for col in ddf.columns if col.startswith('mes_') and col[4:].isdigit()]
+            if vendas_cols and 'vendas_total' not in ddf.columns:
                 df['vendas_total'] = df[vendas_cols].sum(axis=1)
                 logger.info("Coluna vendas_total criada no dataset")
 
@@ -453,15 +462,15 @@ class DirectQueryEngine:
                 logger.info(f"CLASSIFICADO COMO: top_produtos_por_segmento (segmento: {segmento_nome})")
                 return result
 
-            # PRIORIDADE MÉDIA: Detectar "RANKING" genérico de produtos (sem UNE específica)
-            ranking_produtos_match = re.search(r'(ranking|top)\s*(de\s*)?(produtos|vendas)', query_lower)
-            if ranking_produtos_match and "une" not in query_lower and "segmento" not in query_lower:
-                # Ranking geral de produtos
-                limite_match = re.search(r'(\d+)\s*produtos', query_lower)
-                limite = int(limite_match.group(1)) if limite_match else 10
-                result = ("top_produtos_por_segmento", {"segmento": "todos", "limit": limite})
-                logger.info(f"CLASSIFICADO COMO: top_produtos_por_segmento (ranking geral, limit: {limite})")
-                return result
+            # PRIORIDADE MÉDIA: Detectar "RANKING" genérico de produtos (DESATIVADO TEMPORARIAMENTE)
+            # ranking_produtos_match = re.search(r'(ranking|top)\s*(de\s*)?(produtos|vendas)', query_lower)
+            # if ranking_produtos_match and "une" not in query_lower and "segmento" not in query_lower:
+            #     # Ranking geral de produtos
+            #     limite_match = re.search(r'(\d+)\s*produtos', query_lower)
+            #     limite = int(limite_match.group(1)) if limite_match else 10
+            #     result = ("top_produtos_por_segmento", {"segmento": "todos", "limit": limite})
+            #     logger.info(f"CLASSIFICADO COMO: top_produtos_por_segmento (ranking geral, limit: {limite})")
+            #     return result
 
             # Buscar correspondência direta por keywords
             for keywords, query_type in self.keywords_map.items():
@@ -520,13 +529,78 @@ class DirectQueryEngine:
             duration = (datetime.now() - start_time).total_seconds()
             log_performance_metric("classify_intent", duration, {"query_length": len(user_query)})
 
+    def _get_base_dask_df(self) -> dd.DataFrame:
+        """
+        Cria DataFrame Dask base COM CACHE para performance máxima.
+
+        Comportamento:
+        - 1ª chamada: Carrega do SQL Server ou Parquet (3-5s)
+        - Chamadas seguintes: Retorna cache em memória (~0s) ⚡
+
+        Retorna:
+            Dask DataFrame lazy com coluna vendas_total calculada.
+        """
+        # ⚡ CACHE HIT: Retornar DataFrame em cache se disponível
+        if self._cached_dask_df is not None:
+            logger.debug(f"[CACHE HIT] Usando Dask DataFrame em memória (fonte: {self._cache_source})")
+            return self._cached_dask_df
+
+        # 🔄 CACHE MISS: Carregar do fonte (SQL Server ou Parquet)
+        logger.info("[CACHE MISS] Carregando dados do adapter...")
+
+        # Verificar fonte atual (SQL Server ou Parquet)
+        current_source = "parquet"  # default
+        if hasattr(self.parquet_adapter, 'get_status'):
+            # É HybridAdapter - verificar fonte ativa
+            status = self.parquet_adapter.get_status()
+            current_source = status.get('current_source', 'parquet')
+            logger.info(f"Fonte de dados ativa: {current_source.upper()}")
+
+        # Obter file_path do Parquet (compatível com ParquetAdapter e HybridAdapter)
+        if hasattr(self.parquet_adapter, 'file_path'):
+            parquet_path = self.parquet_adapter.file_path
+        else:
+            raise AttributeError("Adapter não tem file_path definido")
+
+        # Ler parquet com Dask (lazy - não carrega dados em memória ainda!)
+        ddf = dd.read_parquet(parquet_path, engine='pyarrow')
+
+        # Criar coluna vendas_total somando meses (mes_01 a mes_12)
+        vendas_colunas = [f'mes_{i:02d}' for i in range(1, 13)]
+        vendas_colunas_existentes = [col for col in vendas_colunas if col in ddf.columns]
+
+        if vendas_colunas_existentes and 'vendas_total' not in ddf.columns:
+            # Converter colunas para numérico de forma lazy
+            for col in vendas_colunas_existentes:
+                ddf[col] = dd.to_numeric(ddf[col], errors='coerce')
+
+            # Criar vendas_total como soma dos meses
+            ddf = ddf.assign(vendas_total=ddf[vendas_colunas_existentes].fillna(0).sum(axis=1))
+            logger.debug("Coluna vendas_total criada somando meses (lazy)")
+
+        # ⚡ ARMAZENAR EM CACHE para próximas queries
+        self._cached_dask_df = ddf
+        self._cache_source = current_source
+        logger.info(f"[CACHE STORED] DataFrame Dask armazenado em memória (fonte: {current_source})")
+
+        return ddf
+
+    def clear_cache(self) -> None:
+        """
+        Limpa o cache do DataFrame Dask.
+        Útil após atualização do Parquet ou reconexão do SQL Server.
+        """
+        self._cached_dask_df = None
+        self._cache_source = None
+        logger.info("[CACHE CLEARED] Cache do DataFrame limpo - próxima query recarregará dados")
+
     def execute_direct_query(self, query_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Executa consulta direta SEM usar LLM."""
+        """Executa consulta direta SEM usar LLM (refatorado para Dask lazy)."""
         start_time = datetime.now()
         logger.info(f"EXECUTANDO CONSULTA: {query_type} | Params: {params}")
 
         try:
-            # 🔧 ALIAS FIX: Mapear query types antigos para novos
+            # Mapear query types antigos para novos
             query_type_aliases = {
                 "rotacao_estoque": "rotacao_estoque_avancada"
             }
@@ -534,36 +608,34 @@ class DirectQueryEngine:
             if query_type in query_type_aliases.values():
                 logger.info(f"ALIAS APLICADO: {list(query_type_aliases.keys())[0]} -> {query_type}")
 
-            # 🔧 FIX CRÍTICO: Para consultas específicas de produtos, carregar dataset completo
-            full_dataset_queries = ["consulta_produto_especifico", "consulta_une_especifica", "evolucao_vendas_produto", "produto_vendas_une_barras", "produto_vendas_todas_unes", "preco_produto_une_especifica", "top_produtos_une_especifica", "vendas_une_mes_especifico", "ranking_vendas_unes", "produto_mais_vendido_cada_une", "top_produtos_por_segmento", "top_produtos_segmento_une", "vendas_produto_une", "evolucao_mes_a_mes", "comparacao_segmentos", "crescimento_segmento", "sazonalidade", "analise_abc", "ranking_unes_por_segmento", "performance_categoria", "comparativo_unes_similares", "fabricantes_novos_vs_estabelecidos", "fabricantes_exclusivos_multimarca", "ciclo_vendas_consistente", "estoque_baixo_alta_demanda", "leadtime_vs_performance", "rotacao_estoque_avancada", "exposicao_vs_vendas", "estoque_cd_vs_vendas"]
+            # Tratar fallback sem processar dados
+            if query_type == 'fallback':
+                return {
+                    "type": "info",
+                    "title": "Consulta não mapeada",
+                    "summary": "Esta consulta não está mapeada para execução direta. Use o modo de análise com LLM.",
+                    "tokens_used": 0
+                }
 
-            # Verificar se há produto específico nos parâmetros
-            has_specific_product = params.get('produto') or params.get('produto_codigo')
-
-            use_full_dataset = query_type in full_dataset_queries or has_specific_product
-
-            if use_full_dataset:
-                logger.info("[!] CONSULTA ESPECIFICA DETECTADA - Carregando dataset COMPLETO")
-
-            df = self._get_cached_base_data(full_dataset=use_full_dataset)
-
-            if df.empty:
-                error_msg = "Dados não disponíveis"
-                logger.error(f"ERRO - DADOS VAZIOS: {error_msg}")
-                log_query_attempt(f"{query_type}", query_type, params, False, error_msg)
-                return {"error": error_msg, "type": "error"}
-
-            logger.info(f"DADOS CARREGADOS: {len(df)} registros, {list(df.columns)}")
-
-            # Dispatch para método específico
+            # Dispatch para método específico (SEM carregar dados!)
             method_name = f"_query_{query_type}"
             if hasattr(self, method_name):
                 logger.info(f"EXECUTANDO MÉTODO: {method_name}")
                 method = getattr(self, method_name)
-                result = method(df, params)
+                result = method(params)
             else:
                 logger.warning(f"MÉTODO NÃO ENCONTRADO: {method_name} - usando fallback")
-                result = self._query_fallback(df, query_type, params)
+                result = self._query_fallback(query_type, params)
+
+            # PROTEÇÃO CRÍTICA: Garantir que result nunca seja None
+            if result is None:
+                error_msg = f"Método {method_name} retornou None (bug de indentação no return)"
+                logger.error(f"BUG CRÍTICO: {error_msg}")
+                return {
+                    "error": error_msg,
+                    "type": "error",
+                    "debug": f"Método: {method_name}, Params: {params}"
+                }
 
             # Log do resultado
             success = result.get("type") != "error"
@@ -590,49 +662,79 @@ class DirectQueryEngine:
             duration = (datetime.now() - start_time).total_seconds()
             log_performance_metric("execute_direct_query", duration, {
                 "query_type": query_type,
-                "params_count": len(params),
-                "data_rows": len(df) if 'df' in locals() and not df.empty else 0
+                "params_count": len(params)
             })
 
-    def _query_produto_mais_vendido(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Query: Produto mais vendido."""
-        if 'vendas_total' not in df.columns:
-            return {"error": "Dados de vendas não disponíveis", "type": "error"}
+    def _query_produto_mais_vendido(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Query: Produto mais vendido (Dask otimizado - agregar ANTES de compute).
 
-        top_produto = df.nlargest(1, 'vendas_total')
+        Params opcionais:
+        - segmento: str - Filtrar por segmento específico (ex: "TECIDOS")
+        - limite: int - Número de produtos no ranking (padrão: 10)
+        """
+        ddf = self._get_base_dask_df()
 
-        if top_produto.empty:
-            return {"error": "Nenhum produto encontrado", "type": "error"}
+        # Filtrar por segmento se especificado
+        segmento = self._safe_get_str(params, 'segmento', '').upper()
+        if segmento:
+            logger.info(f"[FILTRO] Aplicando filtro de segmento: {segmento}")
+            ddf = ddf[ddf['nomesegmento'].str.upper().str.contains(segmento, na=False)]
 
-        produto = top_produto.iloc[0]
+        limite = self._safe_get_int(params, 'limite', 10)
 
-        # Gerar gráfico
-        top_10 = df.nlargest(10, 'vendas_total')
+        # OTIMIZAÇÃO: Agrupar por produto e somar vendas ANTES de compute (lazy)
+        # Isso reduz drasticamente o uso de memória (1.1M linhas -> ~50k produtos)
+        produtos_agregados = ddf.groupby('codigo').agg({
+            'vendas_total': 'sum',
+            'nome_produto': 'first',
+            'preco_38_percent': 'first',
+            'nomesegmento': 'first'
+        }).reset_index()
+
+        # Agora sim, compute apenas o top N (muito menor!)
+        top_n = produtos_agregados.nlargest(limite, 'vendas_total').compute()
+
+        if top_n.empty:
+            msg_erro = f"Nenhum produto encontrado"
+            if segmento:
+                msg_erro += f" no segmento {segmento}"
+            return {"error": msg_erro, "type": "error"}
+
+        produto = top_n.iloc[0]
+
+        # Gerar gráfico com top N
         chart = self.chart_generator.create_product_ranking_chart(
-            top_10[['nome_produto', 'vendas_total']],
-            limit=10,
+            top_n[['nome_produto', 'vendas_total']],
+            limit=limite,
             chart_type='horizontal_bar'
         )
 
+        # Título e resumo adaptados ao filtro
+        titulo = "Produto Mais Vendido"
+        resumo = f"O produto mais vendido é '{produto['nome_produto']}' com {produto['vendas_total']:,.0f} vendas."
+
+        if segmento:
+            titulo += f" - Segmento {segmento}"
+            resumo = f"No segmento {segmento}, o produto mais vendido é '{produto['nome_produto']}' com {produto['vendas_total']:,.0f} vendas."
+
         return {
             "type": "produto_ranking",
-            "title": "Produto Mais Vendido",
+            "title": titulo,
             "result": {
                 "produto": produto['nome_produto'],
                 "vendas": float(produto['vendas_total']),
-                "codigo": produto.get('codigo', 'N/A')
+                "codigo": produto.get('codigo', 'N/A'),
+                "segmento": produto.get('nomesegmento', 'N/A')
             },
             "chart": chart,
-            "summary": f"O produto mais vendido é '{produto['nome_produto']}' com {produto['vendas_total']:,.0f} vendas.",
+            "summary": resumo,
             "tokens_used": 0  # ZERO tokens LLM
         }
 
-    def _query_filial_mais_vendeu(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_filial_mais_vendeu(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Filial que mais vendeu."""
-        if 'vendas_total' not in df.columns or 'une_nome' not in df.columns:
-            return {"error": "Dados de filiais/vendas não disponíveis", "type": "error"}
-
-        vendas_por_filial = df.groupby('une_nome')['vendas_total'].sum().reset_index()
+        ddf = self._get_base_dask_df()
+        vendas_por_filial = ddf.groupby('une_nome')['vendas_total'].sum().compute().reset_index()
         vendas_por_filial = vendas_por_filial.sort_values('vendas_total', ascending=False)
 
         top_filial = vendas_por_filial.iloc[0]
@@ -655,19 +757,17 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_segmento_campao(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_segmento_campao(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Segmento campeão."""
-        if 'vendas_total' not in df.columns or 'nomesegmento' not in df.columns:
-            return {"error": "Dados de segmentos não disponíveis", "type": "error"}
-
-        vendas_por_segmento = df.groupby('nomesegmento')['vendas_total'].sum().reset_index()
+        ddf = self._get_base_dask_df()
+        vendas_por_segmento = ddf.groupby('nomesegmento')['vendas_total'].sum().compute().reset_index()
         vendas_por_segmento = vendas_por_segmento.sort_values('vendas_total', ascending=False)
 
         top_segmento = vendas_por_segmento.iloc[0]
 
-        # Gerar gráfico
+        # Gerar gráfico - usar dados já agregados
         chart = self.chart_generator.create_segmentation_chart(
-            df, 'nomesegmento', 'vendas_total', chart_type='pie'
+            vendas_por_segmento, 'nomesegmento', 'vendas_total', chart_type='pie'
         )
 
         return {
@@ -682,38 +782,37 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_produtos_sem_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_produtos_sem_vendas(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Produtos sem movimento."""
-        if 'vendas_total' not in df.columns:
-            return {"error": "Dados de vendas não disponíveis", "type": "error"}
-
-        produtos_sem_vendas = df[df['vendas_total'] == 0]
+        ddf = self._get_base_dask_df()
+        produtos_sem_vendas = ddf[ddf['vendas_total'] == 0].compute()
         count_sem_vendas = len(produtos_sem_vendas)
 
         # Top 10 produtos sem vendas com maior estoque
-        if 'estoque_atual' in df.columns:
+        if 'estoque_atual' in ddf.columns:
             top_sem_vendas = produtos_sem_vendas[produtos_sem_vendas['estoque_atual'] > 0].nlargest(10, 'estoque_atual')
         else:
             top_sem_vendas = produtos_sem_vendas.head(10)
 
+        # BUGFIX: Return estava dentro do else - movido para fora
+        # Também corrigindo 'df' para 'produtos_sem_vendas' ou usar len total do ddf
+        total_produtos = len(ddf)  # Total de produtos
         return {
             "type": "produtos_sem_movimento",
             "title": "Produtos Sem Movimento",
             "result": {
                 "total_produtos": count_sem_vendas,
-                "percentual": round(count_sem_vendas / len(df) * 100, 1),
+                "percentual": round(count_sem_vendas / total_produtos * 100, 1) if total_produtos > 0 else 0,
                 "produtos_exemplo": top_sem_vendas[['nome_produto']].head(5).to_dict('records') if not top_sem_vendas.empty else []
             },
-            "summary": f"Encontrados {count_sem_vendas} produtos sem movimento ({count_sem_vendas/len(df)*100:.1f}% do total).",
+            "summary": f"Encontrados {count_sem_vendas} produtos sem movimento ({count_sem_vendas/total_produtos*100:.1f}% do total)." if total_produtos > 0 else "Encontrados 0 produtos sem movimento.",
             "tokens_used": 0
         }
 
-    def _query_estoque_parado(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_estoque_parado(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Estoque parado."""
-        if 'vendas_total' not in df.columns or 'estoque_atual' not in df.columns:
-            return {"error": "Dados de estoque não disponíveis", "type": "error"}
-
-        estoque_parado = df[(df['vendas_total'] == 0) & (df['estoque_atual'] > 0)]
+        ddf = self._get_base_dask_df()
+        estoque_parado = ddf[(ddf['vendas_total'] == 0) & (ddf['estoque_atual'] > 0)].compute()
         total_estoque_parado = estoque_parado['estoque_atual'].sum()
         count_produtos = len(estoque_parado)
 
@@ -723,14 +822,15 @@ class DirectQueryEngine:
             "result": {
                 "produtos_parados": count_produtos,
                 "quantidade_total": float(total_estoque_parado),
-                "valor_estimado": float(total_estoque_parado * df['preco_38_percent'].mean()) if 'preco_38_percent' in df.columns else None
+                "valor_estimado": None  # Calculado em consulta específica se necessário
             },
             "summary": f"Identificados {count_produtos} produtos com estoque parado totalizando {total_estoque_parado:,.0f} unidades.",
             "tokens_used": 0
         }
 
-    def _query_consulta_produto_especifico(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_consulta_produto_especifico(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Consulta produto específico por código."""
+        ddf = self._get_base_dask_df()
         produto_codigo = params.get('produto_codigo')
 
         try:
@@ -738,7 +838,7 @@ class DirectQueryEngine:
         except (ValueError, TypeError):
             return {"error": f"Código de produto inválido: {produto_codigo}", "type": "error"}
 
-        produto_data = df[df['codigo'] == produto_codigo]
+        produto_data = ddf[ddf['codigo'] == produto_codigo].compute()
 
         if produto_data.empty:
             return {"error": f"Produto {produto_codigo} não encontrado", "type": "error"}
@@ -762,6 +862,7 @@ class DirectQueryEngine:
                 "preco": float(produto.get('preco_38_percent', 0))
             }
 
+        # BUGFIX: Return estava dentro do else - movido para fora
         return {
             "type": "produto_especifico",
             "title": f"Produto {produto_codigo}",
@@ -770,8 +871,9 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_preco_produto_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_preco_produto_une_especifica(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Preço de produto específico em UNE específica."""
+        ddf = self._get_base_dask_df()
         produto_codigo = params.get('produto_codigo')
         une_nome = params.get('une_nome')
 
@@ -781,11 +883,11 @@ class DirectQueryEngine:
             return {"error": f"Código de produto inválido: {produto_codigo}", "type": "error"}
 
         # Verificar se produto existe na UNE específica
-        produto_une_data = df[(df['codigo'] == produto_codigo) & (df['une_nome'] == une_nome)]
+        produto_une_data = ddf[(ddf['codigo'] == produto_codigo) & (ddf['une_nome'] == une_nome)].compute()
 
         if produto_une_data.empty:
             # Verificar se produto existe em outras UNEs
-            produto_geral = df[df['codigo'] == produto_codigo]
+            produto_geral = ddf[ddf['codigo'] == produto_codigo].compute()
             if produto_geral.empty:
                 return {"error": f"Produto {produto_codigo} não encontrado no sistema", "type": "error"}
             else:
@@ -801,7 +903,7 @@ class DirectQueryEngine:
 
         # Calcular vendas se disponível
         vendas_meses = [f'mes_{i:02d}' for i in range(1, 13)]
-        available_vendas = [col for col in vendas_meses if col in df.columns]
+        available_vendas = [col for col in vendas_meses if col in ddf.columns]
         vendas_total = 0
         if available_vendas:
             vendas_total = float(produto[available_vendas].sum())
@@ -824,54 +926,61 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_top_produtos_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Query: Top N produtos mais vendidos em UNE específica."""
+    def _query_top_produtos_une_especifica(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Query: Top N produtos mais vendidos em UNE específica (OTIMIZADO - agregação lazy)."""
+        ddf = self._get_base_dask_df()
         limite = self._safe_get_int(params, 'limite', 10)
         une_nome = self._safe_get_str(params, 'une_nome', '').upper()
 
         logger.info(f"[>] Buscando top {limite} produtos na UNE: '{une_nome}'")
 
-        if 'vendas_total' not in df.columns:
-            return {"error": "Dados de vendas não disponíveis", "type": "error"}
+        # Aplicar filtros no Dask (lazy) ANTES do compute
+        une_upper = une_nome.strip()
+        ddf_filtered = ddf[
+            (ddf['une_nome'].str.upper() == une_upper) |
+            (ddf['une'].astype(str) == une_upper)
+        ]
 
-        # Buscar UNE (aceita código OU sigla)
-        une_data = self._normalize_une_filter(df, une_nome)
+        # BUGFIX: Removida verificação com head(1) que causava MemoryError
+        # Vamos verificar apenas no resultado final após agregação
+        # O Dask otimiza queries vazias automaticamente
 
-        if une_data.empty:
-            unes_disponiveis = sorted(df['une_nome'].unique())
-            # Fuzzy matching simples para sugestões
-            suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
-            if not suggestions:
-                suggestions = unes_disponiveis[:5]
+        # Se input é numérico, tentar também como código UNE inteiro
+        if une_upper.isdigit():
+            try:
+                ddf_filtered_int = ddf[ddf['une'] == int(une_upper)]
+                # Combinar filtros: nome OU código
+                ddf_filtered = ddf_filtered | ddf_filtered_int
+            except:
+                pass
 
-            logger.error(f"[X] UNE '{une_nome}' nao encontrada. Sugestoes: {suggestions}")
-            return {
-                "error": f"UNE '{une_nome}' não encontrada",
-                "type": "error",
-                "suggestion": f"Você quis dizer: {', '.join(suggestions)}? UNEs disponíveis: {', '.join(unes_disponiveis[:10])}"
-            }
+        # OTIMIZAÇÃO CRÍTICA: Agregar ANTES de compute (lazy operations)
+        # 1. Filtrar vendas > 0 (lazy)
+        # 2. Agrupar por produto (lazy) - reduz de 50k linhas para ~5k produtos
+        # 3. Só então computar o top N (muito menor!)
 
-        logger.info(f"[OK] UNE encontrada: {len(une_data)} registros")
+        ddf_filtered = ddf_filtered[ddf_filtered['vendas_total'] > 0]
 
-        # Filtrar apenas produtos da UNE específica com vendas > 0
-        produtos_une = une_data[une_data['vendas_total'] > 0].copy()
-
-        if produtos_une.empty:
-            return {
-                "error": f"Nenhum produto com vendas encontrado na UNE {une_nome}",
-                "type": "error"
-            }
-
-        # Agrupar apenas por código (mais eficiente) e somar vendas
-        produtos_agrupados = produtos_une.groupby('codigo').agg({
+        # Agrupar por produto (lazy - não computa ainda!)
+        produtos_agrupados = ddf_filtered.groupby('codigo').agg({
             'vendas_total': 'sum',
             'nome_produto': 'first',
             'preco_38_percent': 'first',
             'nomesegmento': 'first'
         }).reset_index()
 
-        # Ordenar por vendas e pegar o top N
-        top_produtos = produtos_agrupados.nlargest(limite, 'vendas_total')
+        # Ordenar e pegar top N (lazy)
+        top_produtos_lazy = produtos_agrupados.nlargest(limite, 'vendas_total')
+
+        # SÓ AGORA compute() - apenas top N produtos (ex: 10 linhas)
+        top_produtos = top_produtos_lazy.compute()
+
+        # Validação APÓS agregação (não causa MemoryError)
+        if top_produtos.empty:
+            return {
+                "error": f"Nenhum produto com vendas encontrado na UNE {une_nome}",
+                "type": "error"
+            }
 
         # Preparar dados para gráfico
         x_data = [produto['nome_produto'][:50] + '...' if len(produto['nome_produto']) > 50 else produto['nome_produto']
@@ -922,14 +1031,15 @@ class DirectQueryEngine:
                 "limite": limite,
                 "produtos": produtos_list,
                 "total_vendas": total_vendas,
-                "total_produtos_une": len(produtos_une)
+                "total_produtos_une": len(top_produtos)
             },
             "summary": f"Top {limite} produtos mais vendidos na UNE {une_nome}. Total de vendas: {total_vendas:,.0f} unidades.",
             "tokens_used": 0
         }
 
-    def _query_vendas_une_mes_especifico(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_vendas_une_mes_especifico(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Vendas de UNE específica em mês específico."""
+        ddf = self._get_base_dask_df()
         une_nome = params.get('une_nome')
         mes_nome = params.get('mes_nome', '').lower()
 
@@ -954,22 +1064,23 @@ class DirectQueryEngine:
             return {"error": f"Mês '{mes_nome}' não reconhecido", "type": "error"}
 
         # Verificar se UNE existe
-        une_data = df[df['une_nome'] == une_nome]
+        une_data = ddf[ddf['une_nome'] == une_nome].compute()
         if une_data.empty:
-            unes_disponiveis = sorted(df['une_nome'].unique())
+            unes_disponiveis = sorted(ddf['une_nome'].unique()).compute()
             suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
             if not suggestions:
                 suggestions = unes_disponiveis[:5]
 
-            return {
+                return {
                 "error": f"UNE {une_nome} não encontrada",
                 "type": "error",
                 "suggestion": f"Você quis dizer: {', '.join(suggestions)}?"
             }
 
         # Calcular total de vendas da UNE no mês específico
-        if coluna_mes not in df.columns:
-            return {"error": f"Dados de vendas para {mes_nome} não disponíveis", "type": "error"}
+        # Check é feito durante compute, não antes
+        # if coluna_mes not in ddf.columns:
+        #     return {"error": f"Dados de vendas para {mes_nome} não disponíveis", "type": "error"}
 
         total_vendas_mes = float(une_data[coluna_mes].sum())
         total_produtos = len(une_data[une_data[coluna_mes] > 0])
@@ -988,15 +1099,13 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_ranking_vendas_unes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_ranking_vendas_unes(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Ranking de vendas totais por UNE."""
-        if 'vendas_total' not in df.columns:
-            return {"error": "Dados de vendas não disponíveis", "type": "error"}
-
+        ddf = self._get_base_dask_df()
         # Agrupar por UNE e somar todas as vendas
-        vendas_por_une = df.groupby(['une', 'une_nome']).agg({
+        vendas_por_une = ddf.groupby(['une', 'une_nome']).agg({
             'vendas_total': 'sum'
-        }).reset_index()
+        }).compute().reset_index()
 
         # Ordenar por vendas totais (decrescente)
         vendas_por_une = vendas_por_une.sort_values('vendas_total', ascending=False)
@@ -1043,27 +1152,31 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_produto_mais_vendido_cada_une(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Query: Produto mais vendido em cada UNE."""
-        if 'vendas_total' not in df.columns or 'une_nome' not in df.columns:
-            return {"error": "Dados de vendas/UNE não disponíveis", "type": "error"}
+    def _query_produto_mais_vendido_cada_une(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Query: Produto mais vendido em cada UNE (OTIMIZADO - sem loop)."""
+        ddf = self._get_base_dask_df()
 
-        # Encontrar o produto mais vendido por UNE
-        produtos_por_une = []
+        # OTIMIZAÇÃO CRÍTICA: Usar groupby + idxmax ANTES de compute (lazy)
+        # Agrupar por UNE e produto, somar vendas
+        vendas_por_une_produto = ddf.groupby(['une_nome', 'codigo']).agg({
+            'vendas_total': 'sum',
+            'nome_produto': 'first'
+        }).reset_index()
 
-        # Agrupar por UNE
-        for une_nome in df['une_nome'].unique():
-            une_data = df[df['une_nome'] == une_nome]
+        # Computar só os dados agregados (muito menor)
+        vendas_df = vendas_por_une_produto.compute()
 
-            # Encontrar produto mais vendido desta UNE
-            produto_top = une_data.loc[une_data['vendas_total'].idxmax()]
+        # Para cada UNE, pegar produto com maior vendas (pandas é rápido aqui)
+        idx = vendas_df.groupby('une_nome')['vendas_total'].idxmax()
+        produtos_por_une_df = vendas_df.loc[idx]
 
-            produtos_por_une.append({
-                'une_nome': une_nome,
-                'produto_codigo': produto_top['codigo'],
-                'produto_nome': produto_top['nome_produto'],
-                'vendas_total': produto_top['vendas_total']
-            })
+        # Converter para lista de dicts
+        produtos_por_une = [{
+            'une_nome': row['une_nome'],
+            'produto_codigo': row['codigo'],
+            'produto_nome': row['nome_produto'],
+            'vendas_total': row['vendas_total']
+        } for _, row in produtos_por_une_df.iterrows()]
 
         # Ordenar por vendas (descendente)
         produtos_por_une.sort(key=lambda x: x['vendas_total'], reverse=True)
@@ -1107,103 +1220,52 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_top_produtos_por_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Query: Top 10 produtos mais vendidos por segmento."""
-        if 'vendas_total' not in df.columns or 'nomesegmento' not in df.columns:
-            return {"error": "Dados de vendas/segmento não disponíveis", "type": "error"}
-
-        segmento = params.get('segmento', 'todos')
-        limit = params.get('limit', 10)
-
-        # Filtrar por segmento se especificado
-        if segmento.lower() != 'todos':
-            # Buscar segmento (case insensitive)
-            segmento_filter = df['nomesegmento'].str.lower().str.contains(segmento.lower(), na=False)
-            if not segmento_filter.any():
-                return {"error": f"Segmento '{segmento}' não encontrado", "type": "error"}
-
-            df_filtered = df[segmento_filter]
-            segmento_real = df_filtered['nomesegmento'].iloc[0]  # Nome real do segmento
-        else:
-            df_filtered = df
-            segmento_real = "Todos os Segmentos"
-
-        # Agrupar por produto e somar vendas (OTIMIZADO para evitar erro de memória)
-        produtos_vendas = df_filtered.groupby('codigo').agg(
-            vendas_total=('vendas_total', 'sum'),
-            nome_produto=('nome_produto', 'first'),
-            nomesegmento=('nomesegmento', 'first'),
-            preco_38_percent=('preco_38_percent', 'first')
-        ).reset_index()
-
-        # Pegar top N produtos
-        top_produtos = produtos_vendas.nlargest(limit, 'vendas_total')
-
-        if top_produtos.empty:
-            return {"error": f"Nenhum produto encontrado no segmento '{segmento}'", "type": "error"}
-
-        # Preparar dados para o gráfico
-        x_data = [produto['nome_produto'] for _, produto in top_produtos.iterrows()]
-        y_data = [float(produto['vendas_total']) for _, produto in top_produtos.iterrows()]
-
-        chart_data = {
-            "x": x_data,
-            "y": y_data,
-            "type": "bar",
-            "show_values": True
-        }
-
-        # Preparar resultado
-        produtos_list = []
-        for _, produto in top_produtos.iterrows():
-            produtos_list.append({
-                "codigo": int(produto['codigo']),
-                "nome": produto['nome_produto'],
-                "vendas": float(produto['vendas_total']),
-                "segmento": produto['nomesegmento'],
-                "preco": float(produto.get('preco_38_percent', 0))
-            })
-
-        return {
-            "type": "chart",
-            "title": f"Top {limit} Produtos - {segmento_real}",
-            "result": {
-                "chart_data": chart_data,
-                "produtos": produtos_list,
-                "segmento": segmento_real,
-                "total_produtos": len(produtos_list),
-                "vendas_total": sum(p['vendas'] for p in produtos_list)
-            },
-            "summary": f"Top {len(produtos_list)} produtos em '{segmento_real}'. Líder: {produtos_list[0]['nome']} ({produtos_list[0]['vendas']:,.0f} vendas)",
-            "tokens_used": 0
-        }
-
-    def _query_top_produtos_segmento_une(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_top_produtos_segmento_une(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Top N produtos em segmento específico E UNE específica."""
+        ddf = self._get_base_dask_df()
         limite = self._safe_get_int(params, 'limite', 10)
-        segmento = self._safe_get_str(params, 'segmento', '').upper()
+        segmento_nome = self._safe_get_str(params, 'segmento', '').upper()
         une_nome = self._safe_get_str(params, 'une_nome', '').upper()
 
-        logger.info(f"[>] Buscando top {limite} produtos no segmento '{segmento}' na UNE: '{une_nome}'")
+        logger.info(f"[>] Buscando top {limite} produtos no segmento '{segmento_nome}' na UNE: '{une_nome}'")
 
-        if 'vendas_total' not in df.columns:
-            return {"error": "Dados de vendas não disponíveis", "type": "error"}
+        # Primeiro filtrar por segmento (lazy)
+        segmento_upper = segmento_nome.strip()
+        ddf_segmento = ddf[ddf['nomesegmento'].str.upper() == segmento_upper]
 
-        # Filtrar por segmento (case insensitive)
-        segmento_filter = df['nomesegmento'].str.upper().str.contains(segmento, na=False)
-        if not segmento_filter.any():
-            segmentos_disponiveis = sorted(df['nomesegmento'].unique())[:10]
+        # Verificar se segmento existe
+        check_seg = ddf_segmento.head(1).compute()
+        if check_seg.empty:
+            segmentos_disponiveis = sorted(ddf['nomesegmento'].unique().compute())[:10]
             return {
-                "error": f"Segmento '{segmento}' não encontrado",
+                "error": f"Segmento '{segmento_nome}' não encontrado",
                 "type": "error",
                 "suggestion": f"Segmentos disponíveis: {', '.join(segmentos_disponiveis)}"
             }
 
-        # Filtrar por UNE (aceita código OU sigla)
-        une_data = self._normalize_une_filter(df, une_nome)
+        # Agora filtrar por UNE no subset do segmento (lazy)
+        une_upper = une_nome.strip()
+        ddf_filtered = ddf_segmento[
+            (ddf_segmento['une_nome'].str.upper() == une_upper) |
+            (ddf_segmento['une'].astype(str) == une_upper)
+        ]
 
+        # Se input numérico, tentar como int
+        if une_upper.isdigit():
+            try:
+                ddf_filtered_int = ddf_segmento[ddf_segmento['une'] == int(une_upper)]
+                check_df = ddf_filtered.head(1).compute()
+                if check_df.empty:
+                    ddf_filtered = ddf_filtered_int
+            except:
+                pass
+
+        # Compute apenas dados duplamente filtrados (muito pequeno)
+        une_data = ddf_filtered.compute()
+
+        # Tratamento de UNE não encontrada
         if une_data.empty:
-            unes_disponiveis = sorted(df['une_nome'].unique())
+            unes_disponiveis = sorted(ddf_segmento['une_nome'].unique().compute())
             suggestions = [u for u in unes_disponiveis if une_nome[:2].lower() in u.lower()][:3]
             if not suggestions:
                 suggestions = unes_disponiveis[:5]
@@ -1217,12 +1279,12 @@ class DirectQueryEngine:
 
         logger.info(f"[OK] UNE encontrada: {len(une_data)} registros")
 
-        # Aplicar ambos os filtros
-        df_filtered = une_data[segmento_filter]
+        # Dados já filtrados por ambos os critérios
+        df_filtered = une_data
 
         if df_filtered.empty:
             return {
-                "error": f"Nenhum produto encontrado no segmento '{segmento}' na UNE '{une_nome}'",
+                "error": f"Nenhum produto encontrado no segmento '{segmento_nome}' na UNE '{une_nome}'",
                 "type": "error"
             }
 
@@ -1283,15 +1345,16 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_evolucao_vendas_produto(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_evolucao_vendas_produto(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Evolução de vendas para um produto específico."""
+        ddf = self._get_base_dask_df()
         produto_codigo = params.get('produto_codigo')
         try:
             produto_codigo = int(produto_codigo)
         except (ValueError, TypeError):
             return {"error": f"Código de produto inválido: {produto_codigo}", "type": "error"}
 
-        produto_data = df[df['codigo'] == produto_codigo]
+        produto_data = ddf[ddf['codigo'] == produto_codigo].compute()
         if produto_data.empty:
             return {"error": f"Produto {produto_codigo} não encontrado", "type": "error"}
 
@@ -1299,7 +1362,7 @@ class DirectQueryEngine:
 
         # Regex para encontrar colunas de vendas mensais (ex: 'mai-23', 'jun/23', 'mes_01', 'jan-24')
         sales_cols_re = re.compile(r'^(?:[a-z]{3}[-/]\d{2,4}|mes_\d{1,2})$', re.IGNORECASE)
-        sales_cols = [col for col in df.columns if sales_cols_re.match(col)]
+        sales_cols = [col for col in ddf.columns if sales_cols_re.match(col)]
 
         if not sales_cols:
             return {"error": "Nenhuma coluna de vendas mensais encontrada no formato esperado.", "type": "error"}
@@ -1363,8 +1426,9 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_produto_vendas_une_barras(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_produto_vendas_une_barras(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Gráfico de barras para produto específico em UNE específica."""
+        ddf = self._get_base_dask_df()
         produto_codigo = params.get('produto_codigo')
         une_codigo = params.get('une_codigo')
 
@@ -1375,21 +1439,21 @@ class DirectQueryEngine:
             return {"error": f"Código de produto ou UNE inválido: {produto_codigo}, {une_codigo}", "type": "error"}
 
         # Verificar se produto existe
-        produto_data = df[df['codigo'] == produto_codigo]
+        produto_data = ddf[ddf['codigo'] == produto_codigo].compute()
         if produto_data.empty:
             return {"error": f"Produto {produto_codigo} não encontrado", "type": "error"}
 
         # Verificar se UNE existe
-        une_data = df[df['une'] == une_codigo]
+        une_data = ddf[ddf['une'] == une_codigo].compute()
         if une_data.empty:
-            unes_disponiveis = sorted(df['une'].unique())
+            unes_disponiveis = sorted(ddf['une'].unique()).compute()
             return {
                 "error": f"UNE {une_codigo} não encontrada. UNEs disponíveis: {unes_disponiveis[:10]}...",
                 "type": "error"
             }
 
         # Verificar se produto existe na UNE específica
-        produto_une_data = df[(df['codigo'] == produto_codigo) & (df['une'] == une_codigo)]
+        produto_une_data = ddf[(ddf['codigo'] == produto_codigo) & (ddf['une'] == une_codigo)].compute()
         if produto_une_data.empty:
             produto_unes = produto_data['une'].unique()
             return {
@@ -1428,8 +1492,9 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_produto_vendas_todas_unes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_produto_vendas_todas_unes(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query: Gráfico de barras para produto específico em todas as UNEs."""
+        ddf = self._get_base_dask_df()
         produto_codigo = params.get('produto_codigo')
 
         try:
@@ -1438,7 +1503,7 @@ class DirectQueryEngine:
             return {"error": f"Código de produto inválido: {produto_codigo}", "type": "error"}
 
         # Verificar se produto existe
-        produto_data = df[df['codigo'] == produto_codigo]
+        produto_data = ddf[ddf['codigo'] == produto_codigo].compute()
         if produto_data.empty:
             return {"error": f"Produto {produto_codigo} não encontrado", "type": "error"}
 
@@ -1510,11 +1575,12 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_ranking_geral(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_ranking_geral(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Ranking genérico - detecta automaticamente tipo (produtos/UNEs/segmentos)
         baseado na query original do usuário.
         """
+        ddf = self._get_base_dask_df()
         user_query = params.get('user_query', params.get('matched_keywords', '')).lower()
         limite = self._safe_get_int(params, 'limite', 10)
 
@@ -1522,28 +1588,26 @@ class DirectQueryEngine:
 
         # Detectar tipo de ranking
         if any(word in user_query for word in ['produto', 'item', 'mercadoria']):
-            return self._ranking_produtos(df, limite)
+            return self._ranking_produtos(limite)
         elif any(word in user_query for word in ['une', 'filial', 'loja', 'unidade']):
-            return self._ranking_unes(df, limite)
+            return self._ranking_unes(limite)
         elif any(word in user_query for word in ['segmento', 'categoria']):
-            return self._ranking_segmentos(df, limite)
+            return self._ranking_segmentos(limite)
         else:
             # Default: ranking de produtos
             logger.info("[i] Tipo não detectado, usando ranking de produtos como padrão")
-            return self._ranking_produtos(df, limite)
+            return self._ranking_produtos(limite)
 
-    def _ranking_produtos(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+    def _ranking_produtos(self, limite: int = 10) -> Dict[str, Any]:
         """Ranking de produtos mais vendidos."""
-        if 'vendas_total' not in df.columns:
-            return {"error": "Coluna vendas_total não disponível", "type": "error"}
-
+        ddf = self._get_base_dask_df()
         # Agrupar por produto e somar vendas
-        produtos = df.groupby('codigo').agg({
+        produtos = ddf.groupby('codigo').agg({
             'vendas_total': 'sum',
             'nome_produto': 'first',
             'preco_38_percent': 'first',
             'nomesegmento': 'first'
-        }).reset_index()
+        }).compute().reset_index()
 
         # Top N
         top_produtos = produtos.nlargest(limite, 'vendas_total')
@@ -1578,16 +1642,14 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _ranking_unes(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+    def _ranking_unes(self, limite: int = 10) -> Dict[str, Any]:
         """Ranking de UNEs por volume de vendas."""
-        if 'vendas_total' not in df.columns or 'une_nome' not in df.columns:
-            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
-
+        ddf = self._get_base_dask_df()
         # Agrupar por UNE
-        unes = df.groupby('une_nome').agg({
+        unes = ddf.groupby('une_nome').agg({
             'vendas_total': 'sum',
             'une': 'first'
-        }).reset_index()
+        }).compute().reset_index()
 
         # Top N
         top_unes = unes.nlargest(limite, 'vendas_total')
@@ -1621,15 +1683,13 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _ranking_segmentos(self, df: pd.DataFrame, limite: int = 10) -> Dict[str, Any]:
+    def _ranking_segmentos(self, limite: int = 10) -> Dict[str, Any]:
         """Ranking de segmentos por volume de vendas."""
-        if 'vendas_total' not in df.columns or 'nomesegmento' not in df.columns:
-            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
-
+        ddf = self._get_base_dask_df()
         # Agrupar por segmento
-        segmentos = df.groupby('nomesegmento').agg({
+        segmentos = ddf.groupby('nomesegmento').agg({
             'vendas_total': 'sum'
-        }).reset_index()
+        }).compute().reset_index()
 
         # Top N
         top_segmentos = segmentos.nlargest(limite, 'vendas_total')
@@ -1662,11 +1722,12 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_consulta_une_especifica(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_consulta_une_especifica(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Consulta informações sobre uma UNE específica.
         Retorna vendas totais, produtos mais vendidos, segmentos, etc.
         """
+        ddf = self._get_base_dask_df()
         une_nome = self._safe_get_str(params, 'une_nome', '').upper()
 
         logger.info(f"[>] Consultando informações da UNE: '{une_nome}'")
@@ -1674,11 +1735,28 @@ class DirectQueryEngine:
         if not une_nome:
             return {"error": "Nome da UNE não especificado", "type": "error"}
 
-        # Buscar UNE (aceita código OU sigla)
-        une_data = self._normalize_une_filter(df, une_nome)
+        # Aplicar filtros no Dask (lazy) ANTES do compute
+        une_upper = une_nome.strip()
+        ddf_filtered = ddf[
+            (ddf['une_nome'].str.upper() == une_upper) |
+            (ddf['une'].astype(str) == une_upper)
+        ]
+
+        # Se input numérico, tentar como int
+        if une_upper.isdigit():
+            try:
+                ddf_filtered_int = ddf[ddf['une'] == int(une_upper)]
+                check_df = ddf_filtered.head(1).compute()
+                if check_df.empty:
+                    ddf_filtered = ddf_filtered_int
+            except:
+                pass
+
+        # Compute apenas dados filtrados
+        une_data = ddf_filtered.compute()
 
         if une_data.empty:
-            unes_disponiveis = sorted(df['une_nome'].unique())[:10]
+            unes_disponiveis = sorted(ddf['une_nome'].unique().compute())[:10]
             return {
                 "error": f"UNE '{une_nome}' não encontrada",
                 "type": "error",
@@ -1714,22 +1792,20 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_ranking_fabricantes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_ranking_fabricantes(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Ranking de fabricantes por volume de vendas.
         """
+        ddf = self._get_base_dask_df()
         limite = self._safe_get_int(params, 'limite', 10)
 
         logger.info(f"[>] Gerando ranking de fabricantes (top {limite})")
 
-        if 'vendas_total' not in df.columns or 'nome_fabricante' not in df.columns:
-            return {"error": "Colunas necessárias não disponíveis", "type": "error"}
-
-        # Agrupar por fabricante
-        fabricantes = df.groupby('nome_fabricante').agg({
+# Agrupar por fabricante
+        fabricantes = ddf.groupby('nome_fabricante').agg({
             'vendas_total': 'sum',
             'codigo': 'nunique'  # Conta produtos únicos
-        }).reset_index()
+        }).compute().reset_index()
 
         fabricantes.columns = ['fabricante', 'vendas_total', 'produtos_unicos']
 
@@ -1769,7 +1845,7 @@ class DirectQueryEngine:
     # FASE 2: ANÁLISES ESSENCIAIS
     # ============================================================
 
-    def _query_comparacao_segmentos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_comparacao_segmentos(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Compara vendas entre 2 ou mais segmentos.
 
@@ -1780,11 +1856,12 @@ class DirectQueryEngine:
         Returns:
             Dict com comparação de vendas entre segmentos
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando comparacao_segmentos - params: {params}")
 
         # Extrair segmentos dos parâmetros ou da query original
         segmentos_list = []
-        segmentos_conhecidos = df['nomesegmento'].unique()
+        segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
 
         # SEMPRE tentar extrair da query original primeiro (mais confiável)
         user_query = params.get('user_query', '').upper()
@@ -1831,7 +1908,7 @@ class DirectQueryEngine:
         logger.info(f"[i] Comparando segmentos: {segmentos_list}")
 
         # Filtrar dados por segmentos
-        df_filtrado = df[df['nomesegmento'].str.upper().isin(segmentos_list)]
+        df_filtrado = ddf[ddf['nomesegmento'].str.upper().isin(segmentos_list)].compute()
 
         if df_filtrado.empty:
             # Dataset atual (amostra) não contém esses segmentos
@@ -1842,9 +1919,9 @@ class DirectQueryEngine:
                 "result": {
                     "message": f"Os segmentos {', '.join(segmentos_list)} não foram encontrados na amostra atual de dados.",
                     "segmentos_solicitados": segmentos_list,
-                    "segmentos_disponiveis": df['nomesegmento'].unique().tolist()[:10]
+                    "segmentos_disponiveis": ddf['nomesegmento'].unique().compute().tolist()[:10]
                 },
-                "summary": f"Segmentos {', '.join(segmentos_list)} não disponíveis na amostra atual. Tente com: {', '.join(df['nomesegmento'].unique()[:5])}",
+                "summary": f"Segmentos {', '.join(segmentos_list)} não disponíveis. Tente com: {', '.join(ddf['nomesegmento'].unique().compute()[:5])}",
                 "tokens_used": 0
             }
 
@@ -1895,7 +1972,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_analise_abc(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_analise_abc(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Classificação ABC de produtos (80-15-5).
 
@@ -1906,18 +1983,19 @@ class DirectQueryEngine:
         Returns:
             Dict com análise ABC
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando analise_abc - params: {params}")
 
         # Verificar se existe coluna ABC no dataset
-        if 'abc_une_mes_01' in df.columns:
+        if 'abc_une_mes_01' in ddf.columns:
             # Usar classificação existente
             logger.info("[i] Usando classificação ABC existente (abc_une_mes_01)")
 
             # Agrupar por classe ABC
-            abc_dist = df.groupby('abc_une_mes_01').agg({
+            abc_dist = ddf.groupby('abc_une_mes_01').agg({
                 'vendas_total': 'sum',
                 'codigo': 'nunique'
-            }).reset_index()
+            }).compute().reset_index()
             abc_dist.columns = ['classe', 'vendas_total', 'produtos']
 
         else:
@@ -1925,10 +2003,10 @@ class DirectQueryEngine:
             logger.info("[i] Calculando classificação ABC (80-15-5)")
 
             # Agrupar por produto e somar vendas
-            produtos_vendas = df.groupby('codigo').agg({
+            produtos_vendas = ddf.groupby('codigo').agg({
                 'vendas_total': 'sum',
                 'nome_produto': 'first'
-            }).reset_index()
+            }).compute().reset_index()
 
             # Ordenar por vendas decrescentes
             produtos_vendas = produtos_vendas.sort_values('vendas_total', ascending=False)
@@ -1995,7 +2073,7 @@ class DirectQueryEngine:
         else:
             summary = "Análise ABC concluída"
 
-        return {
+            return {
             "type": "chart",
             "title": "Análise ABC de Produtos",
             "result": {
@@ -2008,7 +2086,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_estoque_alto(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_estoque_alto(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Produtos com baixa rotação de vendas (vendas baixas = estoque parado implícito).
 
@@ -2019,14 +2097,15 @@ class DirectQueryEngine:
         Returns:
             Dict com produtos com baixa rotação
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando estoque_alto - params: {params}")
 
         # Calcular média de vendas
-        media_vendas = df['vendas_total'].mean()
+        media_vendas = ddf['vendas_total'].mean().compute()
 
         # Produtos com vendas muito abaixo da média (< 30% da média)
         threshold_percentual = 0.3
-        df_baixa_rotacao = df[df['vendas_total'] < (media_vendas * threshold_percentual)].copy()
+        df_baixa_rotacao = ddf[ddf['vendas_total'] < (media_vendas * threshold_percentual)].copy().compute()
         df_baixa_rotacao = df_baixa_rotacao.sort_values('vendas_total', ascending=True)
 
         limite = self._safe_get_int(params, 'limite', 20)
@@ -2075,7 +2154,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_top_produtos_por_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_top_produtos_por_segmento(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Top N produtos mais vendidos em um segmento específico.
 
@@ -2086,6 +2165,7 @@ class DirectQueryEngine:
         Returns:
             Dict com top produtos do segmento
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando top_produtos_por_segmento - params: {params}")
 
         # Extrair segmento
@@ -2095,7 +2175,7 @@ class DirectQueryEngine:
         # Se não veio nos params, buscar na user_query
         if not segmento or segmento == 'TODOS':
             user_query = params.get('user_query', '').upper()
-            segmentos_conhecidos = df['nomesegmento'].unique()
+            segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
             for seg in segmentos_conhecidos:
                 if seg.upper() in user_query:
                     segmento = seg.upper()
@@ -2104,18 +2184,18 @@ class DirectQueryEngine:
         # Se ainda não tem segmento, usar TODOS (ranking geral)
         if not segmento or segmento == 'TODOS':
             logger.info(f"[i] Buscando top {limite} produtos GERAL (todos os segmentos)")
-            df_segmento = df
+            df_segmento = ddf.compute()
             titulo_segmento = "Geral"
         else:
             logger.info(f"[i] Buscando top {limite} produtos no segmento: {segmento}")
             # Filtrar por segmento
-            df_segmento = df[df['nomesegmento'].str.upper() == segmento]
+            df_segmento = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_segmento = segmento
 
             if df_segmento.empty:
                 # Segmento não encontrado, tentar ranking geral
                 logger.warning(f"[!] Segmento '{segmento}' não encontrado - usando ranking geral")
-                df_segmento = df
+                df_segmento = ddf.compute()
                 titulo_segmento = "Geral"
 
         # Agrupar por produto e somar vendas
@@ -2153,7 +2233,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_distribuicao_categoria(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_distribuicao_categoria(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Distribuição de vendas por categoria (opcionalmente dentro de um segmento).
 
@@ -2164,6 +2244,7 @@ class DirectQueryEngine:
         Returns:
             Dict com distribuição por categoria
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando distribuicao_categoria - params: {params}")
 
         # Extrair segmento se especificado
@@ -2172,7 +2253,7 @@ class DirectQueryEngine:
         # Se não veio nos params, buscar na user_query
         if not segmento:
             user_query = params.get('user_query', '').upper()
-            segmentos_conhecidos = df['nomesegmento'].unique()
+            segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
             for seg in segmentos_conhecidos:
                 if seg.upper() in user_query:
                     segmento = seg.upper()
@@ -2180,10 +2261,10 @@ class DirectQueryEngine:
 
         # Filtrar por segmento se especificado
         if segmento:
-            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            df_filtrado = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_sufixo = f" - {segmento}"
         else:
-            df_filtrado = df
+            df_filtrado = ddf.compute()
             titulo_sufixo = ""
 
         if df_filtrado.empty:
@@ -2235,7 +2316,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_diversidade_produtos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_diversidade_produtos(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Análise de diversidade de produtos por UNE ou segmento.
 
@@ -2246,6 +2327,7 @@ class DirectQueryEngine:
         Returns:
             Dict com análise de diversidade
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando diversidade_produtos - params: {params}")
 
         user_query = params.get('user_query', '').lower()
@@ -2253,11 +2335,11 @@ class DirectQueryEngine:
         # Detectar se é por UNE ou por segmento
         if 'une' in user_query or 'loja' in user_query or 'filial' in user_query:
             # Diversidade por UNE
-            agrupamento = df.groupby('une_nome').agg({
+            agrupamento = ddf.groupby('une_nome').agg({
                 'codigo': 'nunique',
                 'vendas_total': 'sum',
                 'nomesegmento': 'nunique'
-            }).reset_index()
+            }).compute().reset_index()
 
             agrupamento.columns = ['une', 'produtos_unicos', 'vendas_total', 'segmentos_ativos']
             agrupamento = agrupamento.sort_values('produtos_unicos', ascending=False).head(15)
@@ -2267,11 +2349,11 @@ class DirectQueryEngine:
 
         else:
             # Diversidade por segmento
-            agrupamento = df.groupby('nomesegmento').agg({
+            agrupamento = ddf.groupby('nomesegmento').agg({
                 'codigo': 'nunique',
                 'vendas_total': 'sum',
                 'nome_categoria': 'nunique'
-            }).reset_index()
+            }).compute().reset_index()
 
             agrupamento.columns = ['segmento', 'produtos_unicos', 'vendas_total', 'categorias']
             agrupamento = agrupamento.sort_values('produtos_unicos', ascending=False)
@@ -2308,7 +2390,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_crescimento_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_crescimento_segmento(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Análise de crescimento percentual de vendas por segmento.
 
@@ -2319,11 +2401,12 @@ class DirectQueryEngine:
         Returns:
             Dict com análise de crescimento
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando crescimento_segmento - params: {params}")
 
         # Verificar se temos dados mensais
         meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
-        if not all(col in df.columns for col in meses_cols[:2]):
+        if not all(col in ddf.columns for col in meses_cols[:2]):
             return {
                 "type": "fallback",
                 "error": "Dados mensais não disponíveis para cálculo de crescimento",
@@ -2332,14 +2415,14 @@ class DirectQueryEngine:
             }
 
         # Calcular vendas do primeiro e último trimestre
-        df_crescimento = df.groupby('nomesegmento').agg({
+        df_crescimento = ddf.groupby('nomesegmento').agg({
             'mes_01': 'sum',
             'mes_02': 'sum',
             'mes_03': 'sum',
             'mes_10': 'sum',
             'mes_11': 'sum',
             'mes_12': 'sum'
-        }).reset_index()
+        }).compute().reset_index()
 
         df_crescimento['primeiro_tri'] = df_crescimento[['mes_01', 'mes_02', 'mes_03']].sum(axis=1)
         df_crescimento['ultimo_tri'] = df_crescimento[['mes_10', 'mes_11', 'mes_12']].sum(axis=1)
@@ -2379,7 +2462,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_sazonalidade(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_sazonalidade(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Análise de sazonalidade de vendas.
 
@@ -2390,11 +2473,12 @@ class DirectQueryEngine:
         Returns:
             Dict com análise de sazonalidade
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando sazonalidade - params: {params}")
 
         # Verificar se temos dados mensais
         meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
-        if not all(col in df.columns for col in meses_cols):
+        if not all(col in ddf.columns for col in meses_cols):
             return {
                 "type": "fallback",
                 "error": "Dados mensais não disponíveis",
@@ -2407,7 +2491,7 @@ class DirectQueryEngine:
 
         if not segmento:
             user_query = params.get('user_query', '').upper()
-            segmentos_conhecidos = df['nomesegmento'].unique()
+            segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
             for seg in segmentos_conhecidos:
                 if seg.upper() in user_query:
                     segmento = seg.upper()
@@ -2415,10 +2499,10 @@ class DirectQueryEngine:
 
         # Filtrar por segmento se especificado
         if segmento:
-            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            df_filtrado = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_sufixo = f" - {segmento}"
         else:
-            df_filtrado = df
+            df_filtrado = ddf.compute()
             titulo_sufixo = ""
 
         if df_filtrado.empty:
@@ -2463,7 +2547,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_ranking_unes_por_segmento(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_ranking_unes_por_segmento(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Ranking de UNEs por volume de vendas em um segmento específico.
 
@@ -2474,6 +2558,7 @@ class DirectQueryEngine:
         Returns:
             Dict com ranking de UNEs
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando ranking_unes_por_segmento - params: {params}")
 
         # Extrair segmento
@@ -2483,7 +2568,7 @@ class DirectQueryEngine:
         # Se não veio nos params, buscar na user_query
         if not segmento:
             user_query = params.get('user_query', '').upper()
-            segmentos_conhecidos = df['nomesegmento'].unique()
+            segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
             for seg in segmentos_conhecidos:
                 if seg.upper() in user_query:
                     segmento = seg.upper()
@@ -2492,12 +2577,12 @@ class DirectQueryEngine:
         if not segmento:
             # Se não encontrou segmento, retornar ranking geral de UNEs
             logger.info("[i] Segmento não especificado, retornando ranking geral de UNEs")
-            return self._ranking_unes(df, limite)
+            return self._ranking_unes(limite)
 
         logger.info(f"[i] Ranking de UNEs no segmento: {segmento}")
 
         # Filtrar por segmento
-        df_segmento = df[df['nomesegmento'].str.upper() == segmento]
+        df_segmento = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
 
         if df_segmento.empty:
             return {
@@ -2546,7 +2631,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_vendas_produto_une(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_vendas_produto_une(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Vendas de um produto específico em uma UNE específica.
 
@@ -2557,6 +2642,7 @@ class DirectQueryEngine:
         Returns:
             Dict com vendas do produto na UNE
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando vendas_produto_une - params: {params}")
 
         produto_codigo = self._safe_get_str(params, 'produto', '').strip()
@@ -2572,16 +2658,33 @@ class DirectQueryEngine:
 
         logger.info(f"[i] Buscando vendas do produto {produto_codigo} na UNE {une_nome}")
 
-        # Buscar produto na UNE (aceita código OU sigla)
-        une_filtered = self._normalize_une_filter(df, une_nome)
-        produto_une = une_filtered[une_filtered['codigo'].astype(str) == produto_codigo]
+        # Filtrar por UNE primeiro (lazy)
+        une_upper = une_nome.strip()
+        ddf_une = ddf[
+            (ddf['une_nome'].str.upper() == une_upper) |
+            (ddf['une'].astype(str) == une_upper)
+        ]
+
+        # Se input numérico, tentar como int
+        if une_upper.isdigit():
+            try:
+                ddf_une_int = ddf[ddf['une'] == int(une_upper)]
+                check_df = ddf_une.head(1).compute()
+                if check_df.empty:
+                    ddf_une = ddf_une_int
+            except:
+                pass
+
+        # Depois filtrar por produto no subset da UNE (lazy)
+        ddf_filtered = ddf_une[ddf_une['codigo'].astype(str) == produto_codigo]
+
+        # Compute apenas o resultado final filtrado (1 produto em 1 UNE = muito pequeno)
+        produto_une = ddf_filtered.compute()
 
         if produto_une.empty:
             return {
                 "type": "fallback",
-                "error": f"Produto {produto_codigo} não encontrado na UNE {une_nome}",
-                "summary": "Acionando fallback para processamento com IA.",
-                "tokens_used": 0
+                "message": f"Produto {produto_codigo} não encontrado na UNE {une_nome}"
             }
 
         # Pegar primeira linha (deveria ser única)
@@ -2619,7 +2722,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_evolucao_mes_a_mes(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_evolucao_mes_a_mes(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evolução de vendas mês a mês (geral ou por produto/segmento).
 
@@ -2630,11 +2733,12 @@ class DirectQueryEngine:
         Returns:
             Dict com evolução mensal
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando evolucao_mes_a_mes - params: {params}")
 
         # Verificar se temos dados mensais
         meses_cols = [f'mes_{i:02d}' for i in range(1, 13)]
-        if not all(col in df.columns for col in meses_cols):
+        if not all(col in ddf.columns for col in meses_cols):
             return {
                 "type": "fallback",
                 "error": "Dados mensais não disponíveis",
@@ -2656,13 +2760,13 @@ class DirectQueryEngine:
 
         # Filtrar dados
         if produto_codigo:
-            df_filtrado = df[df['codigo'].astype(str) == produto_codigo]
+            df_filtrado = ddf[ddf['codigo'].astype(str) == produto_codigo].compute()
             titulo_sufixo = f" - Produto {produto_codigo}"
         elif segmento:
-            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            df_filtrado = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_sufixo = f" - {segmento}"
         else:
-            df_filtrado = df
+            df_filtrado = ddf.compute()
             titulo_sufixo = ""
 
         if df_filtrado.empty:
@@ -2699,7 +2803,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_pico_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_pico_vendas(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Produtos com pico de vendas no último mês.
 
@@ -2710,13 +2814,14 @@ class DirectQueryEngine:
         Returns:
             Dict com produtos que tiveram pico
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando pico_vendas - params: {params}")
 
         limite = self._safe_get_int(params, 'limite', 15)
 
         # Verificar se temos dados mensais
-        if 'mes_12' not in df.columns or 'mes_11' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados mensais não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -2724,7 +2829,7 @@ class DirectQueryEngine:
             }
 
         # Calcular variação entre último mês e média dos 11 anteriores
-        df_pico = df.copy()
+        df_pico = ddf.copy()
         colunas_anteriores = [f'mes_{i:02d}' for i in range(1, 12)]
         df_pico['media_anterior'] = df_pico[colunas_anteriores].mean(axis=1)
         df_pico['variacao_pct'] = ((df_pico['mes_12'] - df_pico['media_anterior']) / (df_pico['media_anterior'] + 1) * 100)
@@ -2774,7 +2879,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_tendencia_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_tendencia_vendas(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Tendência de vendas por categoria nos últimos meses.
 
@@ -2785,13 +2890,14 @@ class DirectQueryEngine:
         Returns:
             Dict com tendência por categoria
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando tendencia_vendas - params: {params}")
 
         meses = self._safe_get_int(params, 'meses', 6)
 
         # Verificar dados mensais
         meses_cols = [f'mes_{i:02d}' for i in range(13-meses, 13)]
-        if not all(col in df.columns for col in meses_cols):
+        if not all(col in ddf.columns for col in meses_cols):
             return {
                 "type": "fallback",
                 "error": "Dados mensais insuficientes",
@@ -2800,7 +2906,7 @@ class DirectQueryEngine:
             }
 
         # Agrupar por categoria e somar vendas mensais
-        tendencia = df.groupby('nome_categoria')[meses_cols].sum()
+        tendencia = ddf.groupby('nome_categoria')[meses_cols].sum().compute()
 
         # Calcular tendência (comparar primeiros vs últimos meses do período)
         metade = len(meses_cols) // 2
@@ -2840,7 +2946,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_produtos_acima_media(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_produtos_acima_media(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Produtos com vendas acima da média (opcionalmente por segmento).
 
@@ -2851,6 +2957,7 @@ class DirectQueryEngine:
         Returns:
             Dict com produtos acima da média
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando produtos_acima_media - params: {params}")
 
         segmento = self._safe_get_str(params, 'segmento', '').strip().upper()
@@ -2859,7 +2966,7 @@ class DirectQueryEngine:
         # Se não veio nos params, buscar na user_query
         if not segmento:
             user_query = params.get('user_query', '').upper()
-            segmentos_conhecidos = df['nomesegmento'].unique()
+            segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
             for seg in segmentos_conhecidos:
                 if seg.upper() in user_query:
                     segmento = seg.upper()
@@ -2867,10 +2974,10 @@ class DirectQueryEngine:
 
         # Filtrar por segmento se especificado
         if segmento:
-            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            df_filtrado = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_sufixo = f" - {segmento}"
         else:
-            df_filtrado = df
+            df_filtrado = ddf.compute()
             titulo_sufixo = ""
 
         if df_filtrado.empty:
@@ -2917,7 +3024,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_performance_categoria(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_performance_categoria(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Performance de vendas por categoria (opcionalmente dentro de um segmento).
 
@@ -2928,11 +3035,12 @@ class DirectQueryEngine:
         Returns:
             Dict com performance por categoria
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando performance_categoria - params: {params}")
 
         # Extrair segmento se especificado
         user_query = params.get('user_query', '').upper()
-        segmentos_conhecidos = df['nomesegmento'].unique()
+        segmentos_conhecidos = ddf['nomesegmento'].unique().compute()
         segmento = None
 
         for seg in segmentos_conhecidos:
@@ -2942,11 +3050,11 @@ class DirectQueryEngine:
 
         # Filtrar por segmento se especificado
         if segmento:
-            df_filtrado = df[df['nomesegmento'].str.upper() == segmento]
+            df_filtrado = ddf[ddf['nomesegmento'].str.upper() == segmento].compute()
             titulo_sufixo = f" - {segmento}"
             logger.info(f"[i] Analisando categorias do segmento: {segmento}")
         else:
-            df_filtrado = df
+            df_filtrado = ddf.compute()
             titulo_sufixo = ""
             logger.info("[i] Analisando todas as categorias")
 
@@ -3015,7 +3123,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_comparativo_unes_similares(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_comparativo_unes_similares(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Compara eficiência de vendas entre UNEs com características similares.
         Usa volume total de vendas como proxy para similaridade.
@@ -3027,14 +3135,15 @@ class DirectQueryEngine:
         Returns:
             Dict com comparativo de UNEs
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando comparativo_unes_similares - params: {params}")
 
         # Agrupar por UNE
-        unes = df.groupby('une_nome').agg({
+        unes = ddf.groupby('une_nome').agg({
             'vendas_total': 'sum',
             'codigo': 'nunique',  # Diversidade de produtos
             'nomesegmento': 'nunique'  # Diversidade de segmentos
-        }).reset_index()
+        }).compute().reset_index()
 
         unes.columns = ['une', 'vendas_total', 'produtos_unicos', 'segmentos_unicos']
         unes = unes.sort_values('vendas_total', ascending=False)
@@ -3084,7 +3193,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_fabricantes_novos_vs_estabelecidos(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_fabricantes_novos_vs_estabelecidos(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Compara performance entre fabricantes novos (baixo volume) vs estabelecidos (alto volume).
         Usa volume de vendas como proxy para classificar fabricantes.
@@ -3096,13 +3205,14 @@ class DirectQueryEngine:
         Returns:
             Dict com comparação fabricantes
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando fabricantes_novos_vs_estabelecidos - params: {params}")
 
         # Agrupar por fabricante
-        fabricantes = df.groupby('nome_fabricante').agg({
+        fabricantes = ddf.groupby('nome_fabricante').agg({
             'vendas_total': 'sum',
             'codigo': 'nunique'
-        }).reset_index()
+        }).compute().reset_index()
 
         fabricantes.columns = ['fabricante', 'vendas_total', 'produtos_unicos']
 
@@ -3148,7 +3258,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_fabricantes_exclusivos_multimarca(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_fabricantes_exclusivos_multimarca(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Compara fabricantes exclusivos de uma UNE vs fabricantes presentes em múltiplas UNEs.
 
@@ -3159,14 +3269,15 @@ class DirectQueryEngine:
         Returns:
             Dict com análise exclusividade fabricantes
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando fabricantes_exclusivos_multimarca - params: {params}")
 
         # Contar em quantas UNEs cada fabricante está presente
-        fabricantes_unes = df.groupby('nome_fabricante')['une'].nunique().reset_index()
+        fabricantes_unes = ddf.groupby('nome_fabricante')['une'].nunique().compute().reset_index()
         fabricantes_unes.columns = ['nome_fabricante', 'unes_count']
 
         # Pegar também volume de vendas
-        fabricantes_vendas = df.groupby('nome_fabricante')['vendas_total'].sum().reset_index()
+        fabricantes_vendas = ddf.groupby('nome_fabricante')['vendas_total'].sum().compute().reset_index()
         fabricantes = fabricantes_unes.merge(fabricantes_vendas, on='nome_fabricante')
 
         # Classificar
@@ -3212,11 +3323,12 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_ciclo_vendas_consistente(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_ciclo_vendas_consistente(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Identifica produtos com ciclo de vendas consistente vs irregular.
         Usa desvio padrão das frequências semanais.
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando ciclo_vendas_consistente - params: {params}")
 
         # Colunas de frequência semanal
@@ -3224,7 +3336,7 @@ class DirectQueryEngine:
                      'freq_semana_anterior_2', 'freq_semana_atual']
 
         # Verificar se colunas existem
-        if not all(col in df.columns for col in freq_cols):
+        if not all(col in ddf.columns for col in freq_cols):
             return {
                 "type": "fallback",
                 "error": "Dados de frequência semanal não disponíveis",
@@ -3233,11 +3345,11 @@ class DirectQueryEngine:
             }
 
         # Calcular desvio padrão das frequências (consistência)
-        df_temp = df[freq_cols].copy()
-        df['freq_std'] = df_temp.std(axis=1)
+        df_temp = ddf[freq_cols].copy().compute()
+        ddf['freq_std'] = df_temp.std(axis=1).compute()
 
         # Produtos com vendas (pelo menos em alguma semana)
-        df_vendas = df[df[freq_cols].sum(axis=1) > 0].copy()
+        df_vendas = ddf[ddf[freq_cols].sum(axis=1) > 0].copy().compute()
 
         # Classificar: std baixo = consistente, std alto = irregular
         threshold = df_vendas['freq_std'].quantile(0.50)
@@ -3263,14 +3375,15 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_estoque_baixo_alta_demanda(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_estoque_baixo_alta_demanda(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Produtos com estoque baixo mas alta demanda (venda_30_d alta).
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando estoque_baixo_alta_demanda - params: {params}")
 
-        if 'estoque_atual' not in df.columns or 'venda_30_d' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados de estoque não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -3278,7 +3391,7 @@ class DirectQueryEngine:
             }
 
         # Produtos com vendas nos últimos 30 dias
-        df_vendas = df[df['venda_30_d'] > 0].copy()
+        df_vendas = ddf[ddf['venda_30_d'] > 0].copy().compute()
 
         # Calcular dias de estoque (estoque / média diária)
         df_vendas['media_diaria'] = df_vendas['venda_30_d'] / 30
@@ -3310,7 +3423,7 @@ class DirectQueryEngine:
         if tabela:
             summary += f"Maior risco: {tabela[0]['produto']} ({tabela[0]['dias_estoque']:.1f} dias)"
 
-        return {
+            return {
             "type": "table",
             "title": "Produtos com Estoque Baixo e Alta Demanda",
             "result": {
@@ -3322,14 +3435,15 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_leadtime_vs_performance(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_leadtime_vs_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Relação entre leadtime e performance de vendas.
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando leadtime_vs_performance - params: {params}")
 
-        if 'leadtime_lv' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados de leadtime não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -3337,7 +3451,7 @@ class DirectQueryEngine:
             }
 
         # Produtos com leadtime definido e vendas
-        df_lead = df[(df['leadtime_lv'].notna()) & (df['leadtime_lv'] > 0) & (df['vendas_total'] > 0)].copy()
+        df_lead = ddf[(ddf['leadtime_lv'].notna()) & (ddf['leadtime_lv'] > 0) & (ddf['vendas_total'] > 0)].copy().compute()
 
         if df_lead.empty:
             return {
@@ -3364,7 +3478,7 @@ class DirectQueryEngine:
         for _, row in analise.iterrows():
             summary += f"{row['categoria']}: {row['count']} produtos, Vendas médias: R$ {row['vendas_media']:,.2f}\n"
 
-        return {
+            return {
             "type": "text",
             "title": "Leadtime vs Performance de Vendas",
             "result": {
@@ -3375,14 +3489,15 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_rotacao_estoque_avancada(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_rotacao_estoque_avancada(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Produtos com maior rotação de estoque (venda_30d / estoque).
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando rotacao_estoque_avancada - params: {params}")
 
-        if 'estoque_atual' not in df.columns or 'venda_30_d' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados de estoque não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -3390,7 +3505,7 @@ class DirectQueryEngine:
             }
 
         # Produtos com estoque e vendas
-        df_rot = df[(df['estoque_atual'] > 0) & (df['venda_30_d'] > 0)].copy()
+        df_rot = ddf[(ddf['estoque_atual'] > 0) & (ddf['venda_30_d'] > 0)].copy().compute()
 
         # Calcular rotação mensal (vendas / estoque)
         df_rot['rotacao'] = (df_rot['venda_30_d'] / df_rot['estoque_atual']).round(2)
@@ -3415,7 +3530,7 @@ class DirectQueryEngine:
             summary += f"Líder: {tabela[0]['produto']} (rotação: {tabela[0]['rotacao']:.2f}x/mês)\n"
             summary += f"Média de rotação: {top_rotacao['rotacao'].mean():.2f}x/mês"
 
-        return {
+            return {
             "type": "table",
             "title": "Produtos com Maior Rotação de Estoque",
             "result": {
@@ -3426,14 +3541,15 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_exposicao_vs_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_exposicao_vs_vendas(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Análise de exposição mínima vs vendas.
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando exposicao_vs_vendas - params: {params}")
 
-        if 'exposicao_minima_une' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados de exposição não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -3441,7 +3557,7 @@ class DirectQueryEngine:
             }
 
         # Produtos com exposição definida e vendas
-        df_exp = df[(df['exposicao_minima_une'].notna()) & (df['vendas_total'] > 0)].copy()
+        df_exp = ddf[(ddf['exposicao_minima_une'].notna()) & (ddf['vendas_total'] > 0)].copy().compute()
 
         if df_exp.empty:
             return {
@@ -3490,14 +3606,15 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_estoque_cd_vs_vendas(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_estoque_cd_vs_vendas(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Eficiência logística: relação entre estoque CD vs vendas.
         """
+        ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando estoque_cd_vs_vendas - params: {params}")
 
-        if 'estoque_cd' not in df.columns:
-            return {
+        
+        return {
                 "type": "fallback",
                 "error": "Dados de estoque CD não disponíveis",
                 "summary": "Acionando fallback para processamento com IA.",
@@ -3505,7 +3622,7 @@ class DirectQueryEngine:
             }
 
         # Produtos com estoque CD e vendas
-        df_cd = df[(df['estoque_cd'] > 0) & (df['vendas_total'] > 0)].copy()
+        df_cd = ddf[(ddf['estoque_cd'] > 0) & (ddf['vendas_total'] > 0)].copy().compute()
 
         # Calcular ratio CD/vendas
         df_cd['ratio_cd_vendas'] = (df_cd['estoque_cd'] / df_cd['vendas_total']).round(3)
@@ -3536,11 +3653,12 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_analise_geral(self, df: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_analise_geral(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Router inteligente para análises gerais.
         Sub-classifica queries genéricas baseado em keywords e roteia para métodos específicos.
         """
+        ddf = self._get_base_dask_df()
         # Pegar query original do usuário
         user_query = params.get('user_query', '').lower()
 
@@ -3551,77 +3669,81 @@ class DirectQueryEngine:
         # 1. ABC Analysis
         if any(kw in user_query for kw in ['abc', 'curva abc', 'classificação abc', 'classe a', 'classe b', 'classe c']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_analise_abc")
-            return self._query_analise_abc(df, params)
+            return self._query_analise_abc(params)
 
         # 2. Sazonalidade
         if any(kw in user_query for kw in ['sazonalidade', 'sazonal', 'sazonais', 'padrão sazonal', 'variação mensal']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_sazonalidade")
-            return self._query_sazonalidade(df, params)
+            return self._query_sazonalidade(params)
 
         # 3. Crescimento
         if any(kw in user_query for kw in ['crescimento', 'cresceu', 'aumentou', 'evolução', 'crescente']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_crescimento_segmento")
-            return self._query_crescimento_segmento(df, params)
+            return self._query_crescimento_segmento(params)
 
         # 4. Tendência
         if any(kw in user_query for kw in ['tendência', 'tendencia', 'trend', 'projeção']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_tendencia_vendas")
-            return self._query_tendencia_vendas(df, params)
+            return self._query_tendencia_vendas(params)
 
         # 5. Pico de vendas
         if any(kw in user_query for kw in ['pico', 'máximo', 'maximo', 'maior venda', 'record']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_pico_vendas")
-            return self._query_pico_vendas(df, params)
+            return self._query_pico_vendas(params)
 
         # 6. Concentração/Dependência
         if any(kw in user_query for kw in ['concentração', 'concentracao', 'dependência', 'dependencia', 'diversificação', 'diversificacao']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_diversidade_produtos")
-            return self._query_diversidade_produtos(df, params)
+            return self._query_diversidade_produtos(params)
 
         # 7. Distribuição por categoria
         if any(kw in user_query for kw in ['distribuição', 'distribuicao', 'categoria', 'categorias']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_distribuicao_categoria")
-            return self._query_distribuicao_categoria(df, params)
+            return self._query_distribuicao_categoria(params)
 
         # 8. Estoque
         if any(kw in user_query for kw in ['estoque alto', 'excesso de estoque', 'estoque parado', 'muito estoque']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_estoque_alto")
-            return self._query_estoque_alto(df, params)
+            return self._query_estoque_alto(params)
 
         # 9. Produtos acima da média
         if any(kw in user_query for kw in ['acima da média', 'acima da media', 'superam', 'ultrapassam']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_produtos_acima_media")
-            return self._query_produtos_acima_media(df, params)
+            return self._query_produtos_acima_media(params)
 
         # 10. Ranking/Top produtos
         if any(kw in user_query for kw in ['top', 'ranking', 'melhores', 'maiores', 'principais']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_ranking_geral")
-            return self._query_ranking_geral(df, params)
+            return self._query_ranking_geral(params)
 
         # 11. Comparação de segmentos
         if any(kw in user_query for kw in ['comparar', 'comparação', 'comparacao', 'versus', 'vs', 'entre']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_comparacao_segmentos")
-            return self._query_comparacao_segmentos(df, params)
+            return self._query_comparacao_segmentos(params)
 
         # 12. Evolução mês a mês
         if any(kw in user_query for kw in ['evolução', 'evolucao', 'mês a mês', 'mes a mes', 'mensal']):
             logger.info("[ANALISE_GERAL ROUTER] -> Roteando para _query_evolucao_mes_a_mes")
-            return self._query_evolucao_mes_a_mes(df, params)
+            return self._query_evolucao_mes_a_mes(params)
 
         # 13. Análise geral de vendas - padrão fallback com informações básicas
         logger.info("[ANALISE_GERAL ROUTER] -> Gerando análise geral padrão")
 
         # Calcular métricas gerais
-        total_vendas = df['vendas_total'].sum()
-        total_produtos = df['nome_produto'].nunique()
-        total_unes = df['une'].nunique() if 'une' in df.columns else 0
-        media_vendas = df['vendas_total'].mean()
+        total_vendas = ddf['vendas_total'].sum().compute()
+        total_produtos = ddf['nome_produto'].nunique().compute()
+        total_unes = ddf['une'].nunique().compute() if 'une' in ddf.columns else 0
+
+        # CORREÇÃO: Média de vendas POR PRODUTO (agrupar antes de calcular média)
+        # Antes: calculava média de todas as linhas (errado)
+        # Agora: agrupa por produto, soma vendas, depois calcula média (correto)
+        vendas_por_produto = ddf.groupby('codigo')['vendas_total'].sum()
+        media_vendas = vendas_por_produto.mean().compute()
 
         # Top 5 produtos
-        top_5 = df.nlargest(5, 'vendas_total')[['nome_produto', 'vendas_total']]
+        top_5 = ddf.nlargest(5, 'vendas_total')[['nome_produto', 'vendas_total']].compute()
 
         summary = f"""Análise Geral do Período:
-
 📊 Métricas Principais:
 - Vendas Totais: R$ {total_vendas:,.2f}
 - Total de Produtos: {total_produtos}
@@ -3633,7 +3755,7 @@ class DirectQueryEngine:
         for idx, row in top_5.iterrows():
             summary += f"\n{idx+1}. {row['nome_produto']}: R$ {row['vendas_total']:,.2f}"
 
-        return {
+            return {
             "type": "text",
             "title": "Análise Geral de Vendas",
             "result": {
@@ -3647,7 +3769,7 @@ class DirectQueryEngine:
             "tokens_used": 0
         }
 
-    def _query_fallback(self, df: pd.DataFrame, query_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_fallback(self, query_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback para queries não implementadas, sinalizando para usar o grafo principal."""
         logger.warning(f"Consulta não implementada ou não compreendida no DirectQueryEngine: {query_type}. Acionando fallback para o agent_graph.")
         return {

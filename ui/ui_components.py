@@ -1,3 +1,7 @@
+"""
+Módulo para ui/ui_components.py. Fornece as funções: get_image_download_link, get_csv_download_link, apply_chart_customization. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 import base64
 import io

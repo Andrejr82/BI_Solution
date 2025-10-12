@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/tools/inspect_parquet.py. Fornece as funções: inspect_parquet_file.
+"""
+
 import pandas as pd
 import os
 

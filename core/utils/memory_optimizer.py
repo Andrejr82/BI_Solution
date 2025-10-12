@@ -27,7 +27,7 @@ class MemoryOptimizer:
     def log_memory_usage(operation: str):
         """Log do uso de memória para uma operação específica."""
         memory_info = MemoryOptimizer.get_memory_usage()
-        logger.info(f"🔬 MEMORY USAGE - {operation}: "
+        logger.info(f"[INFO] MEMORY USAGE - {operation}: "
                    f"RSS={memory_info['rss_mb']:.1f}MB, "
                    f"VMS={memory_info['vms_mb']:.1f}MB, "
                    f"Percent={memory_info['percent']:.1f}%")
@@ -37,16 +37,16 @@ class MemoryOptimizer:
         """Verifica se o uso de memória excede o limite."""
         memory_info = MemoryOptimizer.get_memory_usage()
         if memory_info['rss_mb'] > threshold_mb:
-            logger.warning(f"⚠️ MEMORY WARNING: Usage {memory_info['rss_mb']:.1f}MB exceeds threshold {threshold_mb}MB")
+            logger.warning(f"[AVISO] MEMORY WARNING: Usage {memory_info['rss_mb']:.1f}MB exceeds threshold {threshold_mb}MB")
             return True
         return False
 
     @staticmethod
     def optimize_dataframe_memory(df: pd.DataFrame) -> pd.DataFrame:
         """Otimiza o uso de memória de um DataFrame."""
-        logger.info(f"📊 DATAFRAME OPTIMIZATION - Original shape: {df.shape}")
+        logger.info(f"[INFO] DATAFRAME OPTIMIZATION - Original shape: {df.shape}")
         original_memory = df.memory_usage(deep=True).sum() / (1024 * 1024)
-        logger.info(f"📊 DATAFRAME OPTIMIZATION - Original memory: {original_memory:.2f}MB")
+        logger.info(f"[INFO] DATAFRAME OPTIMIZATION - Original memory: {original_memory:.2f}MB")
 
         # Otimizar tipos de dados
         for col in df.columns:
@@ -83,8 +83,8 @@ class MemoryOptimizer:
         optimized_memory = df.memory_usage(deep=True).sum() / (1024 * 1024)
         reduction = ((original_memory - optimized_memory) / original_memory) * 100
 
-        logger.info(f"📊 DATAFRAME OPTIMIZATION - Optimized memory: {optimized_memory:.2f}MB")
-        logger.info(f"📊 DATAFRAME OPTIMIZATION - Memory reduction: {reduction:.1f}%")
+        logger.info(f"[INFO] DATAFRAME OPTIMIZATION - Optimized memory: {optimized_memory:.2f}MB")
+        logger.info(f"[INFO] DATAFRAME OPTIMIZATION - Memory reduction: {reduction:.1f}%")
 
         return df
 
@@ -96,7 +96,7 @@ class MemoryOptimizer:
         after = MemoryOptimizer.get_memory_usage()
 
         freed_mb = before['rss_mb'] - after['rss_mb']
-        logger.info(f"🗑️ GARBAGE COLLECTION - Freed {freed_mb:.1f}MB of memory")
+        logger.info(f"[INFO] GARBAGE COLLECTION - Freed {freed_mb:.1f}MB of memory")
 
         return freed_mb
 
@@ -106,11 +106,11 @@ class MemoryOptimizer:
         if len(data) <= max_size:
             return data
 
-        logger.warning(f"🔽 DATASET SAMPLING - Reducing from {len(data)} to {max_size} rows")
+        logger.warning(f"[AVISO] DATASET SAMPLING - Reducing from {len(data)} to {max_size} rows")
 
         # Amostragem estratificada simples - pega elementos uniformemente distribuídos
         step = len(data) // max_size
         sampled_data = data[::step][:max_size]
 
-        logger.info(f"🔽 DATASET SAMPLING - Final sample size: {len(sampled_data)}")
+        logger.info(f"[INFO] DATASET SAMPLING - Final sample size: {len(sampled_data)}")
         return sampled_data

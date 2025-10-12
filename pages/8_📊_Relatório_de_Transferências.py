@@ -1,3 +1,7 @@
+"""
+Módulo para pages/8_📊_Relatório_de_Transferências.py. Fornece as funções: load_transfer_data, convert_df_to_csv. Define componentes da interface de utilizador (UI).
+"""
+
 
 import streamlit as st
 import pandas as pd

@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'check parquet schema'.
+"""
+
 # tests/check_parquet_schema.py
 import logging
 import os

@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC009 Data Pipeline Health Monitoring'.
+"""
+
 import asyncio
 from playwright import async_api
 

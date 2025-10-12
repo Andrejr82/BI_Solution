@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC005 Response Generation with Text and Visualizations'.
+"""
+
 import asyncio
 from playwright import async_api
 

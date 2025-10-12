@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/export_sqlserver_to_parquet.py. Fornece as funções: export_all_tables_to_parquet. Interage com a base de dados usando SQLAlchemy.
+"""
+
 import logging
 import os
 import sys

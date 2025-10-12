@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'inspect data relationship'.
+"""
+
 
 import pandas as pd
 import os

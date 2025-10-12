@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/tools/diagnose_data_types.py. Fornece as funções: diagnose_numeric_columns.
+"""
+
 
 import pandas as pd
 import os

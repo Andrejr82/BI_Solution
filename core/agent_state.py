@@ -1,3 +1,7 @@
+"""
+Módulo para core/agent_state.py. Define a classe principal 'AgentState'.
+"""
+
 from __future__ import annotations
 
 import operator

@@ -1,3 +1,7 @@
+"""
+Módulo para tests/test_agent_nodes.py. Define a classe principal 'TestAgentNodes'. Fornece funções utilitárias, incluindo 'setUp' e outras.
+"""
+
 # tests/test_agent_nodes.py
 import unittest
 from unittest.mock import Mock, MagicMock, patch

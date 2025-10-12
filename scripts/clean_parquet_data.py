@@ -1,3 +1,7 @@
+"""
+Módulo para scripts/clean_parquet_data.py. Fornece as funções: clean_column_name, clean_and_convert_datatypes, main.
+"""
+
 
 # scripts/clean_parquet_data.py
 import pandas as pd

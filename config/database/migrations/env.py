@@ -1,3 +1,7 @@
+"""
+Módulo para config/database/migrations/env.py. Fornece as funções: run_migrations_offline, run_migrations_online. Interage com a base de dados usando SQLAlchemy.
+"""
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, create_engine # Added create_engine

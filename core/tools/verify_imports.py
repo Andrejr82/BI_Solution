@@ -1,3 +1,7 @@
+"""
+Módulo para core/tools/verify_imports.py. Fornece as funções: check_import.
+"""
+
 import importlib
 
 """

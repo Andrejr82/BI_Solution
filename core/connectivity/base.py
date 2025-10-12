@@ -1,3 +1,7 @@
+"""
+Módulo para core/connectivity/base.py. Define a classe principal 'DatabaseAdapter'. Fornece funções utilitárias, incluindo 'connect' e outras.
+"""
+
 # core/connectivity/base.py
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List

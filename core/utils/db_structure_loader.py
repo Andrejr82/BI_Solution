@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/db_structure_loader.py. Fornece as funções: carregar_estrutura_banco.
+"""
+
 import json
 import logging
 import os

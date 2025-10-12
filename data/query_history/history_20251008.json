@@ -1,0 +1,83 @@
+[
+  {
+    "query": "\"quais são as categorias do segmento tecidos com estoque 0?\"\n",
+    "session_id": "51d2b3b9-5fbb-440f-a856-f374bf37d4b0",
+    "timestamp": "2025-10-08T00:36:32.292080",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.454110383987427
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "cc648922-7c80-4c40-b64d-7f1c05ebf519",
+    "timestamp": "2025-10-08T21:30:21.606883",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 1.586268
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "40a87b50-3228-4a57-a17c-34a9b37752be",
+    "timestamp": "2025-10-08T21:45:43.559498",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 2.036911
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "0cdb694e-a2ba-4a62-a5c4-d2245ebe13f6",
+    "timestamp": "2025-10-08T21:48:47.637469",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 1.833849
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "f5ba27ce-3d6b-4da9-b3cd-820dfb414620",
+    "timestamp": "2025-10-08T22:03:55.502374",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 1.977855
+  },
+  {
+    "query": "quais são as categorias do segmento tecidos com estoque 0?",
+    "session_id": "f5ba27ce-3d6b-4da9-b3cd-820dfb414620",
+    "timestamp": "2025-10-08T22:05:04.658520",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 1.630267
+  },
+  {
+    "query": "gere em gráfico de barras as categorias segmentos tecidos com estoque 0",
+    "session_id": "f5ba27ce-3d6b-4da9-b3cd-820dfb414620",
+    "timestamp": "2025-10-08T22:07:32.050867",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 1.367302
+  },
+  {
+    "query": "quais sao as categorias com ruptura do segmento tecidos",
+    "session_id": "f5ba27ce-3d6b-4da9-b3cd-820dfb414620",
+    "timestamp": "2025-10-08T22:11:01.707144",
+    "success": true,
+    "results_count": 85,
+    "error": null,
+    "processing_time": 0.843349
+  },
+  {
+    "query": "top 10 tecidos",
+    "session_id": "f5ba27ce-3d6b-4da9-b3cd-820dfb414620",
+    "timestamp": "2025-10-08T22:11:59.619268",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 2.207666
+  }
+]

@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/merge_parquets.py. Fornece as funções: standardize_boolean_column, standardize_integer_column, standardize_date_column.
+"""
+
 # scripts/merge_parquets.py
 
 import pandas as pd

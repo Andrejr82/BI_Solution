@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/correlation_id.py. Define a classe principal 'CorrelationIdFilter'. Fornece as funções: filter.
+"""
+
 import logging
 import uuid
 from .context import correlation_id_var

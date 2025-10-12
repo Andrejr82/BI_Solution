@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/query_history.py. Define a classe principal 'QueryHistory'. Fornece as funções: add_query, get_history.
+"""
+
 import json
 import logging
 import os

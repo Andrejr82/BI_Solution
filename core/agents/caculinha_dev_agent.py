@@ -1,3 +1,7 @@
+"""
+Módulo para core/agents/caculinha_dev_agent.py. Define a classe principal 'CaculinhaDevAgent'. Fornece as funções: process_query.
+"""
+
 import logging
 
 from .base_agent import BaseAgent

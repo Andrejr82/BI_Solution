@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/limpeza_avancada.py. Fornece as funções: classificar_linha, gerar_relatorio, excluir_arquivos.
+"""
+
 import os
 import shutil
 

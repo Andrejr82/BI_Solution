@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC014 Session Management and Logout'.
+"""
+
 import asyncio
 from playwright import async_api
 

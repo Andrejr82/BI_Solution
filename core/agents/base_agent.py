@@ -1,3 +1,7 @@
+"""
+Módulo para core/agents/base_agent.py. Define a classe principal 'BaseAgent'. Fornece as funções: process_query.
+"""
+
 import logging
 import re # Keep re for now, might be used elsewhere, but not for _convert_to_sql
 import pandas as pd

@@ -1,0 +1,99 @@
+
+================================================================================
+  TESTE ROBUSTO COMPLETO - SISTEMA AGENT_BI + GEMINI
+================================================================================
+Data/Hora: 11/10/2025 16:42:25
+
+================================================================================
+  TESTE 1: VERIFICACAO DE API KEYS
+================================================================================
+[OK] Gemini API Key configurada
+    Key: AIzaSyAKkOcOZMKGhbGV...
+[OK] DeepSeek API Key configurada
+    Key: sk-def59189c6ba45c38...
+
+================================================================================
+  TESTE 2: CONEXAO GEMINI API
+================================================================================
+[OK] Conexao Gemini API
+    Resposta: 'OK
+' em 1.82s
+
+================================================================================
+  TESTE 3: LLM ADAPTER (COM FALLBACK)
+================================================================================
+[FALHA] LLM Adapter
+    Resposta: '' em 0.91s
+    Modelo usado: gemini-2.5-flash-lite
+
+================================================================================
+  TESTE 4: DIRECT QUERY ENGINE (SEM LLM)
+================================================================================
+[OK] Produto mais vendido
+    7.33s - Produto Mais Vendido
+[OK] Top 5 segmentos
+    0.00s - Necessário Processamento Avançado
+[FALHA] Produto especifico (codigo 1000)
+    Erro: Produto 1000 não encontrado
+[OK] Total de vendas
+    0.01s - Necessário Processamento Avançado
+
+================================================================================
+  TESTE 5: PERFORMANCE CACHE DASK
+================================================================================
+[OK] Cache Miss (1a chamada)
+    0.41s
+[OK] Cache Hit (2a chamada)
+    0.00s
+[OK] Melhoria de performance
+    99.5%
+
+================================================================================
+  TESTE 6: CONEXAO SQL SERVER
+================================================================================
+[OK] SQL Server disponivel
+    Fonte: sqlserver
+[FALHA] Parquet fallback disponivel
+    [INFO] Sistema usando SQL Server (otimo!)
+
+================================================================================
+  TESTE 7: QUERY COMPLETA COM LLM
+================================================================================
+[OK] Query + LLM
+    0.37s
+    Query result: O produto mais vendido é 'PAPEL CHAMEX A4 75GRS 500FLS' com ...
+    LLM summary: ...
+
+================================================================================
+  TESTE 8: TRATAMENTO DE ERROS
+================================================================================
+[OK] Query inexistente
+    Retornou erro corretamente
+[OK] Produto inexistente
+    Type: error
+[OK] Parametros invalidos
+    Type: error
+
+================================================================================
+  RESUMO FINAL
+================================================================================
+[OK] Api Keys
+[OK] Gemini Connection
+[FALHA] Llm Adapter
+[FALHA] Direct Queries
+[OK] Cache Performance
+[OK] Sql Server
+[OK] Query With Llm
+[OK] Error Handling
+
+--------------------------------------------------------------------------------
+Total de testes: 8
+Passou: 6 (75.0%)
+Falhou: 2
+--------------------------------------------------------------------------------
+
+[AVISO] Sistema operacional com 2 problema(s)
+
+================================================================================
+RELATORIO SALVO EM: reports\tests\test_gemini_complete_20251011_164225.txt
+================================================================================
