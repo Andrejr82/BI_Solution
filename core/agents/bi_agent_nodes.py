@@ -222,10 +222,32 @@ Quando o usuário mencionar:
     except json.JSONDecodeError:
         logger.warning(f"Não foi possível decodificar o JSON dos filtros Parquet: {filters_str}")
         parquet_filters = {}
-    
-    logger.info(f"Filtros Parquet gerados: {parquet_filters}")
 
-    return {"parquet_filters": parquet_filters}
+    # ✅ MAPEAMENTO DE COLUNAS: LLM usa nomes padronizados, Parquet tem nomes reais
+    column_mapping = {
+        'PRODUTO': 'codigo',
+        'NOME': 'nome_produto',
+        'NOMESEGMENTO': 'nomesegmento',
+        'NomeCategoria': 'NOMECATEGORIA',
+        'NOMEGRUPO': 'nomegrupo',
+        'NomeSUBGRUPO': 'NOMESUBGRUPO',
+        'VENDA_30DD': 'venda_30_d',
+        'ESTOQUE_UNE': 'estoque_atual',
+        'LIQUIDO_38': 'preco_38_percent',
+        'UNE_NOME': 'une_nome',
+        'NomeFabricante': 'NOMEFABRICANTE'
+    }
+
+    # Aplicar mapeamento nos filtros
+    mapped_filters = {}
+    for key, value in parquet_filters.items():
+        mapped_key = column_mapping.get(key, key)
+        mapped_filters[mapped_key] = value
+
+    logger.info(f"Filtros originais: {parquet_filters}")
+    logger.info(f"Filtros mapeados: {mapped_filters}")
+
+    return {"parquet_filters": mapped_filters}
 
 
 def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
