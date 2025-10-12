@@ -3,6 +3,11 @@ Interface de Usuário (Frontend) para o Agent_BI.
 Versão integrada que não depende de API externa.
 Cache clear trigger: 2025-09-21 20:52 - ValidationError fix applied
 '''
+from dotenv import load_dotenv
+
+# Forçar o recarregamento das variáveis de ambiente do arquivo .env
+# Isso é crucial em desenvolvimento para evitar problemas de cache.
+load_dotenv(override=True)
 import streamlit as st
 import uuid
 import pandas as pd
@@ -10,16 +15,23 @@ import logging
 import sys
 from datetime import datetime
 
-# Configurar logging para exibir no console
+# Configurar logging - APENAS para logs de erro críticos
+# Usuários finais não veem logs técnicos
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.ERROR,  # Apenas erros
+    format='%(message)s',
     stream=sys.stdout
 )
 
-# Configurar logger específico para streamlit_app
+# Configurar logger específico
 logger = logging.getLogger("streamlit_app")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.ERROR)  # Apenas erros
+
+# Silenciar logs de bibliotecas externas
+logging.getLogger("faiss").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("core").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.ERROR)
 
 # Funções de autenticação com lazy loading
 AUTH_AVAILABLE = None
@@ -34,7 +46,7 @@ def get_auth_functions():
             from core.auth import login as _login, sessao_expirada as _sessao_expirada
             _auth_module = {"login": _login, "sessao_expirada": _sessao_expirada}
             AUTH_AVAILABLE = True
-            logging.info("✅ Autenticação carregada")
+            # Log removido - não visível para usuário
         except Exception as e:
             logging.error(f"❌ Erro ao carregar autenticação: {e}")
             AUTH_AVAILABLE = False
@@ -90,6 +102,9 @@ def get_backend_module(module_name):
         elif module_name == "QueryHistory":
             from core.utils.query_history import QueryHistory
             BACKEND_MODULES[module_name] = QueryHistory
+        elif module_name == "DirectQueryEngine":
+            from core.business_intelligence.direct_query_engine import DirectQueryEngine
+            BACKEND_MODULES[module_name] = DirectQueryEngine
 
         return BACKEND_MODULES[module_name]
     except Exception as e:
@@ -125,7 +140,7 @@ else:
     st.title("📊 Agent_BI - Assistente Inteligente")
 
     # --- Inicialização do Backend Integrado ---
-    @st.cache_resource(show_spinner="🚀 Inicializando backend...")
+    @st.cache_resource(show_spinner=False)
     def initialize_backend():
         """Inicializa os componentes do backend uma única vez"""
         debug_info = []
@@ -208,12 +223,9 @@ else:
                 # Usar o adapter para obter informações de forma mais eficiente
                 adapter_info = data_adapter.get_status()
                 if adapter_info.get('current_source') == 'parquet':
-                    schema_info = data_adapter.get_schema()
-                    # Extrair número de linhas e UNEs do schema ou de um método específico
-                    # Esta é uma aproximação, o ideal seria um método dedicado no adapter
-                    num_produtos = len(data_adapter._dataframe) if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None else 0
-                    num_unes = data_adapter._dataframe['une_nome'].nunique() if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None and 'une_nome' in data_adapter._dataframe.columns else 0
-                    debug_info.append(f"✅ Dataset: {num_produtos:,} produtos, {num_unes} UNEs")
+                    # ⚡ OTIMIZAÇÃO: NÃO chamar get_schema() pois carrega 1.1M linhas!
+                    # Apenas reportar que o Parquet está disponível
+                    debug_info.append(f"✅ Dataset: Parquet disponível em {parquet_path}")
                 else: # Se for SQL
                     debug_info.append("✅ Dataset: Conectado ao SQL Server")
             else:
@@ -233,7 +245,8 @@ else:
 
                     info_text += f"Parquet Fallback: {'✅ Ativo' if adapter_status['fallback_enabled'] else '❌ Desativado'}\n"
 
-                    # Tentar obter informações do dataset
+                    # ⚡ OTIMIZAÇÃO: Apenas mostrar informações se DataFrame já estiver carregado
+                    # NÃO forçar carregamento aqui para evitar travamentos
                     try:
                         if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None:
                             df = data_adapter._dataframe
@@ -242,6 +255,8 @@ else:
                             if 'une_nome' in df.columns:
                                 info_text += f"- {df['une_nome'].nunique()} UNEs\n\n"
                                 info_text += f"**UNEs:** {', '.join(sorted(df['une_nome'].unique())[:5])}..."
+                        else:
+                            info_text += f"\n**Dataset:** Não carregado ainda (lazy loading ativo)"
                     except Exception as e:
                         logger.debug(f"Não foi possível obter informações do dataset: {e}")
 
@@ -357,6 +372,53 @@ else:
             ]
             st.rerun()
 
+    # --- Painel de Controle (Admin) ---
+    user_role = st.session_state.get('role', '')
+    if user_role == 'admin':
+        with st.sidebar:
+            st.divider()
+            with st.expander("⚙️ Painel de Controle (Admin)", expanded=True):
+                st.subheader("🔀 Feature Toggles")
+
+                # Toggle DirectQueryEngine
+                use_direct_query = st.checkbox(
+                    "DirectQueryEngine",
+                    value=st.session_state.get('use_direct_query', True),
+                    help="Ativa/Desativa DirectQueryEngine (respostas rápidas, mas repetitivas)"
+                )
+                st.session_state['use_direct_query'] = use_direct_query
+
+                if use_direct_query:
+                    st.success("✅ DirectQueryEngine ATIVO (respostas rápidas)")
+                else:
+                    st.warning("⚠️ DirectQueryEngine DESLIGADO (apenas agent_graph)")
+
+                st.divider()
+                st.subheader("💾 Gerenciamento de Cache")
+
+                # Estatísticas do cache
+                try:
+                    from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
+                    cache = get_agent_graph_cache()
+                    stats = cache.get_stats()
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Cache Memória", stats['memory_entries'])
+                    with col2:
+                        st.metric("Cache Disco", stats['disk_entries'])
+
+                    st.caption(f"TTL: {stats['ttl_hours']}h")
+
+                    # Botão para limpar cache
+                    if st.button("🧹 Limpar Cache"):
+                        cache.clear_all()
+                        st.success("✅ Cache limpo com sucesso!")
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Erro ao carregar estatísticas do cache: {e}")
+
     # --- Quick Actions (Perguntas Rápidas) - Apenas para Admin ---
     user_role = st.session_state.get('role', '')
     if user_role == 'admin':
@@ -415,10 +477,30 @@ else:
             }
         ]
 
+    # --- Cache do DirectQueryEngine (⚡ PERFORMANCE BOOST) ---
+    @st.cache_resource(show_spinner=False)
+    def get_direct_query_engine():
+        """Inicializa DirectQueryEngine uma única vez - CACHE CRÍTICO para performance"""
+        DirectQueryEngine = get_backend_module("DirectQueryEngine")
+        if not DirectQueryEngine:
+            from core.business_intelligence.direct_query_engine import DirectQueryEngine
+
+        # Usar HybridDataAdapter do backend (já inicializado)
+        if st.session_state.backend_components and 'parquet_adapter' in st.session_state.backend_components:
+            adapter = st.session_state.backend_components['parquet_adapter']
+        else:
+            from core.connectivity.hybrid_adapter import HybridDataAdapter
+            adapter = HybridDataAdapter()
+
+        return DirectQueryEngine(adapter)
+
+    # --- Feature Toggle ---
+    USE_DIRECT_QUERY_ENGINE = st.session_state.get('use_direct_query', True)  # Pode ser controlado por admin
+
     # --- Funções de Interação ---
     def query_backend(user_input: str):
         '''Processa a query diretamente usando o backend integrado.'''
-        logger.info(f"[QUERY] User: {st.session_state.get('username', 'unknown')} | Query: {user_input[:100]}")
+        # Log removido - informação confidencial do usuário
 
         # 📝 GARANTIR que a pergunta do usuário seja sempre preservada
         user_message = {"role": "user", "content": {"type": "text", "content": user_input}}
@@ -426,108 +508,112 @@ else:
 
         with st.spinner("O agente está a pensar..."):
             try:
-                # 🚀 PRIORIDADE: Tentar DirectQueryEngine primeiro (mais rápido e eficiente)
-                # ⚡ Importações sob demanda
-                DirectQueryEngine = get_backend_module("DirectQueryEngine")
-                if not DirectQueryEngine:
-                    from core.business_intelligence.direct_query_engine import DirectQueryEngine
-
-                # Usar HybridDataAdapter do backend (já inicializado)
-                if backend_components and 'parquet_adapter' in backend_components:
-                    adapter = backend_components['parquet_adapter']  # Na verdade é HybridDataAdapter
-                else:
-                    # Fallback: criar novo adapter
-                    from core.connectivity.hybrid_adapter import HybridDataAdapter
-                    adapter = HybridDataAdapter()
-
-                engine = DirectQueryEngine(adapter)
-
-                # Log fonte de dados
-                adapter_status = adapter.get_status() if hasattr(adapter, 'get_status') else {}
-                fonte_dados = adapter_status.get('current_source', 'unknown')
-                logger.info(f"[PROCESSING] Fonte: {fonte_dados} | DirectQueryEngine iniciado")
-
-                start_time = datetime.now()
-                direct_result = engine.process_query(user_input)
-                elapsed = (datetime.now() - start_time).total_seconds()
-
-                logger.info(f"[RESULT] DirectQueryEngine completou em {elapsed:.2f}s | Type: {direct_result.get('type', 'unknown')}")
-
-                # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
-                result_type = direct_result.get("type") if direct_result else None
-
-                # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine (apenas para admins)
-                user_role = st.session_state.get('role', '')
-                if user_role == 'admin':
-                    with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
-                        st.write(f"**Result Type:** {result_type}")
-                        st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
-                        st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
-                        st.write(f"**Has Result:** {'result' in direct_result}")
-                        if 'result' in direct_result:
-                            result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
-                            st.write(f"**Result Keys:** {result_keys}")
-
                 # Inicializar agent_response
                 agent_response = None
+                start_time = datetime.now()
 
-                # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
-                if result_type == "error":
-                    # Mostrar erro do DirectQueryEngine ao usuário
-                    error_msg = direct_result.get("error", "Erro desconhecido")
-                    suggestion = direct_result.get("suggestion", "")
+                # 🔀 DECISÃO: DirectQueryEngine ON/OFF
+                if USE_DIRECT_QUERY_ENGINE:
+                    # 🚀 PRIORIDADE: Usar DirectQueryEngine em cache (mais rápido e eficiente)
+                    engine = get_direct_query_engine()
 
-                    logger.warning(f"[ERROR] DirectQueryEngine erro: {error_msg[:100]}")
+                    # Processamento silencioso - sem logs técnicos para usuário
+                    direct_result = engine.process_query(user_input)
+                    elapsed = (datetime.now() - start_time).total_seconds()
 
-                    agent_response = {
-                        "type": "error",
-                        "content": f"❌ {error_msg}\n\n💡 {suggestion}" if suggestion else f"❌ {error_msg}",
-                        "user_query": user_input,
-                        "method": "direct_query"
-                    }
-                    st.write("⚠️ DirectQueryEngine retornou erro de validação")
+                    # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
+                    result_type = direct_result.get("type") if direct_result else None
 
-                elif direct_result and result_type not in ["fallback", None]:
-                    # SUCESSO: Usar o resultado do DirectQueryEngine
-                    st.write("✅ Usando resultado do DirectQueryEngine")
-                    logger.info(f"[SUCCESS] DirectQuery | Type: {result_type} | Title: {direct_result.get('title', 'N/A')[:50]}")
-                    agent_response = {
-                        "type": direct_result.get("type", "text"),
-                        "title": direct_result.get("title", ""),
-                        "content": direct_result.get("summary", ""),
-                        "result": direct_result.get("result", {}),
-                        "user_query": user_input,
-                        "method": "direct_query",
-                        "processing_time": direct_result.get("processing_time", 0)
-                    }
-                else:
-                    # FALLBACK: Usar o agent_graph
-                    st.write("🔄 DirectQueryEngine não processou, usando fallback agent_graph...")
-                    st.warning(f"⚠️ Motivo do fallback: result_type={result_type}")
-                    logger.info(f"[FALLBACK] Usando agent_graph | Motivo: result_type={result_type}")
-                    if not backend_components or not backend_components.get("agent_graph"):
-                        # Caso de fallback onde o grafo não está disponível
+                    # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine (apenas para admins)
+                    user_role = st.session_state.get('role', '')
+                    if user_role == 'admin':
+                        with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
+                            st.write(f"**Result Type:** {result_type}")
+                            st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
+                            st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
+                            st.write(f"**Has Result:** {'result' in direct_result}")
+                            if 'result' in direct_result:
+                                result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
+                                st.write(f"**Result Keys:** {result_keys}")
+
+                    # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
+                    if result_type == "error":
+                        # Mostrar erro do DirectQueryEngine ao usuário
+                        error_msg = direct_result.get("error", "Erro desconhecido")
+                        suggestion = direct_result.get("suggestion", "")
+
                         agent_response = {
-                            "type": "text",
-                            "content": f"⚠️ Sistema está sendo inicializado. Tente novamente em alguns segundos.\n\nSe o problema persistir, contate o administrador.",
-                            "user_query": user_input
+                            "type": "error",
+                            "content": f"❌ {error_msg}\n\n💡 {suggestion}" if suggestion else f"❌ {error_msg}",
+                            "user_query": user_input,
+                            "method": "direct_query"
                         }
+                        # Erro de validação - não mostrar mensagem técnica
+
+                    elif direct_result and result_type not in ["fallback", None]:
+                        # SUCESSO: Usar o resultado do DirectQueryEngine
+                        # Mensagem de sucesso removida - não relevante para usuário
+                        agent_response = {
+                            "type": direct_result.get("type", "text"),
+                            "title": direct_result.get("title", ""),
+                            "content": direct_result.get("summary", ""),
+                            "result": direct_result.get("result", {}),
+                            "user_query": user_input,
+                            "method": "direct_query",
+                            "processing_time": elapsed
+                        }
+
+                # Se DirectQueryEngine falhou ou está desabilitado → agent_graph
+                if not agent_response:
+                    # 💾 CACHE: Verificar cache antes de processar
+                    try:
+                        from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
+                        cache = get_agent_graph_cache()
+                        cached_result = cache.get(user_input)
+                    except Exception as cache_error:
+                        logger.warning(f"Erro ao acessar cache: {cache_error}")
+                        cached_result = None
+
+                    if cached_result:
+                        # ✅ CACHE HIT!
+                        agent_response = cached_result
+                        agent_response["method"] = "agent_graph_cached"
+                        agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
+
+                        # Debug para admins
+                        user_role = st.session_state.get('role', '')
+                        if user_role == 'admin':
+                            with st.expander("💾 Cache Hit!"):
+                                st.success(f"✅ Resposta recuperada do cache")
+                                st.write(f"**Fonte:** {cached_result.get('cache_source', 'unknown')}")
                     else:
-                        # Chamar o agent_graph principal com medição de tempo
-                        import time
-                        start_time = time.time()
-                        HumanMessage = get_backend_module("HumanMessage")
-                        initial_state = {"messages": [HumanMessage(content=user_input)]}
-                        final_state = backend_components["agent_graph"].invoke(initial_state)
-                        end_time = time.time()
+                        # ❌ CACHE MISS: Processar com agent_graph
+                        logger.info("Cache miss. Processando com agent_graph...")
+                        if st.session_state.backend_components and 'agent_graph' in st.session_state.backend_components:
+                            agent_graph = st.session_state.backend_components['agent_graph']
+                            graph_input = {"messages": [{"role": "user", "content": user_input}]}
+                            final_state = agent_graph.invoke(graph_input)
+                            agent_response = final_state.get("final_response", {})
+                            agent_response["method"] = "agent_graph"
+                            agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
 
-                        agent_response = final_state.get("final_response", {})
-                        agent_response["method"] = "agent_graph"
-                        agent_response["processing_time"] = end_time - start_time
+                            # 💾 Salvar no cache para futuras queries similares
+                            try:
+                                cache.set(user_input, agent_response, metadata={"timestamp": datetime.now().isoformat()})
+                            except Exception as cache_save_error:
+                                logger.warning(f"Erro ao salvar no cache: {cache_save_error}")
 
-                        # Garantir que a resposta inclui informações da pergunta
-                        if "user_query" not in agent_response:
-                            agent_response["user_query"] = user_input
+                            # Debug para admins
+                            user_role = st.session_state.get('role', '')
+                            if user_role == 'admin':
+                                with st.expander("🔍 Debug: agent_graph"):
+                                    st.write(f"**Tempo de processamento:** {agent_response['processing_time']:.2f}s")
+                                    st.write(f"**Tipo de resposta:** {agent_response.get('type', 'unknown')}")
+                        else:
+                            agent_response = {
+                                "type": "error",
+                                "content": "O agente de IA avançado não está disponível."
+                            }
 
                 # ✅ GARANTIR estrutura correta da resposta
                 if agent_response:
@@ -545,18 +631,21 @@ else:
                     }
                     st.session_state.messages.append(error_message)
 
-                # 🔍 LOG da resposta
-                logging.info(f"AGENT RESPONSE ADDED: Type={agent_response.get('type', 'unknown')}")
+                # Resposta processada silenciosamente
 
             except Exception as e:
-                # Tratamento de erro local
-                logger.error(f"[EXCEPTION] Erro grave ao processar query: {str(e)[:200]}", exc_info=True)
-                logging.exception("Ocorreu um erro grave ao processar a consulta do usuário.")
+                # Erro fatal na invocação do agente. Parar a execução e notificar o usuário.
+                logger.critical(f"Erro fatal ao invocar o backend: {e}", exc_info=True)
+                st.error("🚨 Desculpe, ocorreu um erro crítico no sistema.")
+                st.info("A equipe de desenvolvimento foi notificada. Por favor, atualize a página e tente novamente.")
+                
+                # Adiciona uma mensagem de erro clara ao chat para o usuário
                 error_content = {
-                    "type": "error",
-                    "content": f"❌ Erro ao processar consulta: {str(e)}\n\nUm erro inesperado ocorreu. A equipe de desenvolvimento foi notificada."
+                    "type": "text",
+                    "content": "❌ **Erro Interno**\n\nOcorreu uma falha inesperada ao processar sua solicitação. A equipe de suporte já foi notificada."
                 }
                 st.session_state.messages.append({"role": "assistant", "content": error_content})
+                # Não fazer st.rerun() aqui para que o erro seja visível.
 
         # Log the query and its outcome
         if st.session_state.backend_components and st.session_state.backend_components.get("query_history"):
@@ -648,11 +737,15 @@ else:
                         y_data = chart_data.get("y", [])
                         colors = chart_data.get("colors", None)
 
-                        if chart_type == "bar" and x_data and y_data:
-                            # Gráfico de barras com melhorias visuais
-                            fig = go.Figure()
+                        # Configurações comuns
+                        height = chart_data.get("height", 500)
+                        margin = chart_data.get("margin", {"l": 60, "r": 60, "t": 80, "b": 100})
 
-                            # Adicionar barras com cores personalizadas
+                        # Criar figura baseado no tipo
+                        fig = go.Figure()
+
+                        if chart_type == "bar" and x_data and y_data:
+                            # Gráfico de barras
                             fig.add_trace(go.Bar(
                                 x=x_data,
                                 y=y_data,
@@ -663,33 +756,153 @@ else:
                                 hovertemplate='<b>%{x}</b><br>Vendas: %{y:,.0f}<extra></extra>'
                             ))
 
-                            # Configurações de layout melhoradas
-                            height = chart_data.get("height", 500)
-                            margin = chart_data.get("margin", {"l": 60, "r": 60, "t": 80, "b": 100})
+                            fig.update_layout(
+                                xaxis_title="Categoria",
+                                yaxis_title="Valor",
+                                xaxis=dict(tickangle=-45),
+                                yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
+                            )
+
+                        elif chart_type == "pie" and x_data and y_data:
+                            # Gráfico de pizza
+                            fig.add_trace(go.Pie(
+                                labels=x_data,
+                                values=y_data,
+                                textinfo='label+percent',
+                                hovertemplate='<b>%{label}</b><br>Vendas: %{value:,.0f}<br>Percentual: %{percent}<extra></extra>'
+                            ))
+                            height = 600
+
+                        elif chart_type == "line" and x_data and y_data:
+                            # Gráfico de linha
+                            fig.add_trace(go.Scatter(
+                                x=x_data,
+                                y=y_data,
+                                mode='lines+markers',
+                                line=dict(color=colors if colors else '#1f77b4', width=2),
+                                marker=dict(size=8),
+                                name='Tendência',
+                                hovertemplate='<b>%{x}</b><br>Valor: %{y:,.0f}<extra></extra>'
+                            ))
 
                             fig.update_layout(
-                                title={
-                                    'text': response_data.get("title", "Gráfico"),
-                                    'x': 0.5,
-                                    'xanchor': 'center',
-                                    'font': {'size': 16, 'family': 'Arial Black'}
-                                },
-                                xaxis_title="UNE",
-                                yaxis_title="Vendas",
-                                height=height,
-                                margin=margin,
-                                showlegend=False,
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif", size=12, color="#333"),
-                                xaxis=dict(tickangle=-45),
-                                yaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
-                                hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                                xaxis_title="Período",
+                                yaxis_title="Valor",
+                                yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
                             )
+
+                        elif chart_type == "scatter" and x_data and y_data:
+                            # Gráfico de dispersão
+                            fig.add_trace(go.Scatter(
+                                x=x_data,
+                                y=y_data,
+                                mode='markers',
+                                marker=dict(
+                                    size=10,
+                                    color=colors if colors else y_data,
+                                    colorscale='Viridis',
+                                    showscale=True
+                                ),
+                                hovertemplate='<b>%{x}</b><br>Valor: %{y:,.0f}<extra></extra>'
+                            ))
+
+                            fig.update_layout(
+                                xaxis_title="X",
+                                yaxis_title="Y"
+                            )
+
+                        elif chart_type == "area" and x_data and y_data:
+                            # Gráfico de área
+                            fig.add_trace(go.Scatter(
+                                x=x_data,
+                                y=y_data,
+                                fill='tozeroy',
+                                mode='lines',
+                                line=dict(color=colors if colors else '#1f77b4'),
+                                name='Área',
+                                hovertemplate='<b>%{x}</b><br>Valor: %{y:,.0f}<extra></extra>'
+                            ))
+
+                            fig.update_layout(
+                                xaxis_title="Período",
+                                yaxis_title="Valor",
+                                yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
+                            )
+
+                        elif chart_type == "histogram" and y_data:
+                            # Histograma
+                            fig.add_trace(go.Histogram(
+                                x=y_data,
+                                marker_color=colors if colors else '#1f77b4',
+                                name='Distribuição'
+                            ))
+
+                            fig.update_layout(
+                                xaxis_title="Valor",
+                                yaxis_title="Frequência"
+                            )
+
+                        elif chart_type == "box" and y_data:
+                            # Box plot
+                            fig.add_trace(go.Box(
+                                y=y_data,
+                                name='Distribuição',
+                                marker_color=colors if colors else '#1f77b4',
+                                boxmean='sd'
+                            ))
+
+                            fig.update_layout(
+                                yaxis_title="Valor"
+                            )
+
+                        elif chart_type == "heatmap" and x_data and y_data:
+                            # Heatmap (requer dados em formato matriz)
+                            z_data = chart_data.get("z", [[]])
+                            fig.add_trace(go.Heatmap(
+                                x=x_data,
+                                y=y_data,
+                                z=z_data,
+                                colorscale='Viridis'
+                            ))
+
+                            fig.update_layout(
+                                xaxis_title="X",
+                                yaxis_title="Y"
+                            )
+
+                        elif chart_type == "funnel" and x_data and y_data:
+                            # Funil
+                            fig.add_trace(go.Funnel(
+                                x=y_data,
+                                y=x_data,
+                                textinfo="value+percent total",
+                                marker=dict(color=colors if colors else None)
+                            ))
+
+                        elif x_data and y_data:
+                            # Fallback: tentar renderizar como barra
+                            st.warning(f"⚠️ Tipo '{chart_type}' usando renderização padrão (barras)")
+                            fig.add_trace(go.Bar(x=x_data, y=y_data))
                         else:
-                            # Fallback para formato personalizado sem dados
                             st.error("Dados do gráfico não disponíveis")
                             continue
+
+                        # Layout comum para todos os gráficos
+                        fig.update_layout(
+                            title={
+                                'text': response_data.get("title", "Gráfico"),
+                                'x': 0.5,
+                                'xanchor': 'center',
+                                'font': {'size': 16, 'family': 'Arial Black'}
+                            },
+                            height=height,
+                            margin=margin,
+                            showlegend=chart_type in ["line", "area", "scatter"],
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            font=dict(family="Arial, sans-serif", size=12, color="#333"),
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        )
                     else:
                         # Formato Plotly padrão (já completo)
                         if isinstance(content, str):
@@ -809,6 +1022,26 @@ else:
                     st.caption(f"📝 Pergunta: {user_query}")
 
                 st.write(content)
+
+                # ========================================
+                # 🎯 FASE 1: FEEDBACK SYSTEM
+                # ========================================
+                if msg["role"] == "assistant" and response_type not in ["error", "clarification"]:
+                    try:
+                        from ui.feedback_component import render_feedback_buttons
+
+                        render_feedback_buttons(
+                            query=response_data.get("user_query", ""),
+                            code=response_data.get("code", ""),
+                            result_rows=response_data.get("result_rows", 0),
+                            session_id=st.session_state.session_id,
+                            user_id=st.session_state.get('username', 'anonymous'),
+                            key_suffix=f"msg_{i}"
+                        )
+                    except Exception as feedback_error:
+                        # Feedback não crítico - não bloquear UI
+                        if st.session_state.get('role') == 'admin':
+                            st.caption(f"⚠️ Feedback indisponível: {feedback_error}")
 
         except Exception as e:
             # ❌ Tratamento de erro na renderização
