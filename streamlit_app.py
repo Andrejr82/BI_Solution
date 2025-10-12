@@ -102,9 +102,10 @@ def get_backend_module(module_name):
         elif module_name == "QueryHistory":
             from core.utils.query_history import QueryHistory
             BACKEND_MODULES[module_name] = QueryHistory
-        elif module_name == "DirectQueryEngine":
-            from core.business_intelligence.direct_query_engine import DirectQueryEngine
-            BACKEND_MODULES[module_name] = DirectQueryEngine
+        # DirectQueryEngine desabilitado - 100% IA (12/10/2025)
+        # elif module_name == "DirectQueryEngine":
+        #     from core.business_intelligence.direct_query_engine import DirectQueryEngine
+        #     BACKEND_MODULES[module_name] = DirectQueryEngine
 
         return BACKEND_MODULES[module_name]
     except Exception as e:
@@ -340,7 +341,7 @@ else:
             else:
                 with st.sidebar:
                     st.error("❌ Sistema temporariamente indisponível")
-                    st.info("💡 Tente usar o **Modo Rápido** (Respostas Rápidas)")
+                    st.info("💡 Tente recarregar a página ou entre em contato com o suporte")
 
             return None
 
@@ -380,44 +381,20 @@ else:
             ]
             st.rerun()
 
-    # --- Modo de Consulta (Todos os Usuários) ---
+    # --- Modo de Consulta: 100% IA ---
     with st.sidebar:
         st.divider()
-        st.subheader("⚙️ Configurações")
+        st.subheader("🤖 Análise Inteligente com IA")
 
-        # Inicializar valor padrão se não existir
-        if 'use_direct_query' not in st.session_state:
-            st.session_state['use_direct_query'] = True
+        st.info("""
+            ✨ **Sistema 100% IA Ativo**
+            - Análise inteligente de dados
+            - Qualquer tipo de pergunta
+            - Respostas precisas e confiáveis
+            - Processamento otimizado
+        """)
 
-        # Toggle para todos os usuários
-        query_mode = st.radio(
-            "Modo de Consulta:",
-            options=["Respostas Rápidas", "IA Completa"],
-            index=0 if st.session_state.get('use_direct_query', True) else 1,
-            help="Escolha o modo de processamento das suas consultas"
-        )
-
-        # Atualizar session state baseado na escolha
-        st.session_state['use_direct_query'] = (query_mode == "Respostas Rápidas")
-
-        # Explicação do modo selecionado
-        if query_mode == "Respostas Rápidas":
-            st.info("""
-                ⚡ **Modo Rápido Ativo**
-                - Respostas em segundos
-                - Perguntas padrão (rankings, tops, etc)
-                - Ideal para consultas do dia-a-dia
-            """)
-        else:
-            st.warning("""
-                🤖 **IA Completa Ativa**
-                - Respostas mais elaboradas
-                - Qualquer tipo de pergunta
-                - Pode demorar até 30s
-                - Usa créditos de IA
-            """)
-
-        st.caption("💡 Mude o modo a qualquer momento")
+        st.caption("💡 Alimentado por IA avançada (Gemini 2.5)")
 
     # --- Painel de Controle (Admin) ---
     user_role = st.session_state.get('role', '')
@@ -508,25 +485,9 @@ else:
             }
         ]
 
-    # --- Cache do DirectQueryEngine (⚡ PERFORMANCE BOOST) ---
-    @st.cache_resource(show_spinner=False)
-    def get_direct_query_engine():
-        """Inicializa DirectQueryEngine uma única vez - CACHE CRÍTICO para performance"""
-        DirectQueryEngine = get_backend_module("DirectQueryEngine")
-        if not DirectQueryEngine:
-            from core.business_intelligence.direct_query_engine import DirectQueryEngine
-
-        # Usar HybridDataAdapter do backend (já inicializado)
-        if st.session_state.backend_components and 'parquet_adapter' in st.session_state.backend_components:
-            adapter = st.session_state.backend_components['parquet_adapter']
-        else:
-            from core.connectivity.hybrid_adapter import HybridDataAdapter
-            adapter = HybridDataAdapter()
-
-        return DirectQueryEngine(adapter)
-
-    # --- Feature Toggle ---
-    USE_DIRECT_QUERY_ENGINE = st.session_state.get('use_direct_query', True)  # Pode ser controlado por admin
+    # --- NOTA: DirectQueryEngine removido - 100% IA ---
+    # get_direct_query_engine() foi removido - sistema usa apenas agent_graph
+    # Data: 12/10/2025
 
     # --- Funções de Interação ---
     def query_backend(user_input: str):
@@ -537,65 +498,18 @@ else:
         user_message = {"role": "user", "content": {"type": "text", "content": user_input}}
         st.session_state.messages.append(user_message)
 
-        with st.spinner("O agente está a pensar..."):
+        with st.spinner("🤖 Processando com IA..."):
             try:
                 # Inicializar agent_response
                 agent_response = None
                 start_time = datetime.now()
 
-                # 🔀 DECISÃO: DirectQueryEngine ON/OFF
-                if USE_DIRECT_QUERY_ENGINE:
-                    # 🚀 PRIORIDADE: Usar DirectQueryEngine em cache (mais rápido e eficiente)
-                    engine = get_direct_query_engine()
+                # NOTA: DirectQueryEngine desabilitado - usando 100% IA (agent_graph)
+                # Motivo: Taxa de acerto ~25% vs 100% com IA
+                # Data: 12/10/2025
 
-                    # Processamento silencioso - sem logs técnicos para usuário
-                    direct_result = engine.process_query(user_input)
-                    elapsed = (datetime.now() - start_time).total_seconds()
-
-                    # Verificar se o DirectQueryEngine conseguiu processar ou se precisa de fallback
-                    result_type = direct_result.get("type") if direct_result else None
-
-                    # 🔍 DEBUG: Mostrar resultado do DirectQueryEngine (apenas para admins)
-                    user_role = st.session_state.get('role', '')
-                    if user_role == 'admin':
-                        with st.expander("🔍 Debug: Resultado do DirectQueryEngine"):
-                            st.write(f"**Result Type:** {result_type}")
-                            st.write(f"**Title:** {direct_result.get('title', 'N/A')}")
-                            st.write(f"**Summary:** {direct_result.get('summary', 'N/A')[:200]}")
-                            st.write(f"**Has Result:** {'result' in direct_result}")
-                            if 'result' in direct_result:
-                                result_keys = list(direct_result['result'].keys()) if isinstance(direct_result.get('result'), dict) else []
-                                st.write(f"**Result Keys:** {result_keys}")
-
-                    # ✅ FIX: Tratar erros explicitamente - não fazer fallback em erros de validação
-                    if result_type == "error":
-                        # Mostrar erro do DirectQueryEngine ao usuário
-                        error_msg = direct_result.get("error", "Erro desconhecido")
-                        suggestion = direct_result.get("suggestion", "")
-
-                        agent_response = {
-                            "type": "error",
-                            "content": f"❌ {error_msg}\n\n💡 {suggestion}" if suggestion else f"❌ {error_msg}",
-                            "user_query": user_input,
-                            "method": "direct_query"
-                        }
-                        # Erro de validação - não mostrar mensagem técnica
-
-                    elif direct_result and result_type not in ["fallback", None]:
-                        # SUCESSO: Usar o resultado do DirectQueryEngine
-                        # Mensagem de sucesso removida - não relevante para usuário
-                        agent_response = {
-                            "type": direct_result.get("type", "text"),
-                            "title": direct_result.get("title", ""),
-                            "content": direct_result.get("summary", ""),
-                            "result": direct_result.get("result", {}),
-                            "user_query": user_input,
-                            "method": "direct_query",
-                            "processing_time": elapsed
-                        }
-
-                # Se DirectQueryEngine falhou ou está desabilitado → agent_graph
-                if not agent_response:
+                # ✅ SEMPRE usar agent_graph (100% IA)
+                if True:  # Simplificado para sempre processar com IA
                     # 💾 CACHE: Verificar cache antes de processar
                     try:
                         from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
@@ -652,7 +566,7 @@ else:
                                                f"O processamento da sua consulta demorou muito tempo (>{timeout_seconds}s).\n\n"
                                                f"**Sugestões:**\n"
                                                f"- Tente uma consulta mais específica\n"
-                                               f"- Use o DirectQueryEngine (painel de controle)\n"
+                                               f"- Simplifique a pergunta\n"
                                                f"- Verifique sua conexão de internet",
                                     "user_query": user_input,
                                     "method": "agent_graph_timeout"
@@ -710,11 +624,11 @@ else:
                                 available_keys = list(st.session_state.backend_components.keys())
                                 error_details.append(f"Componentes disponíveis: {', '.join(available_keys)}")
 
-                            error_msg = "🤖 **Modo IA Completa Indisponível**\n\n"
-                            error_msg += "O sistema não conseguiu inicializar o agente de IA avançado.\n\n"
+                            error_msg = "🤖 **Sistema de IA Indisponível**\n\n"
+                            error_msg += "O sistema não conseguiu inicializar o agente de IA.\n\n"
                             error_msg += "**💡 Solução:**\n"
-                            error_msg += "1. Use o modo **Respostas Rápidas** (sidebar → Configurações)\n"
-                            error_msg += "2. Recarregue a página (F5)\n"
+                            error_msg += "1. Recarregue a página (F5)\n"
+                            error_msg += "2. Verifique sua conexão de internet\n"
                             error_msg += "3. Se o problema persistir, entre em contato com o suporte"
 
                             # Adicionar detalhes técnicos apenas para admins
