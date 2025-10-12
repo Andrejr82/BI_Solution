@@ -10,8 +10,6 @@ from langchain_core.messages import HumanMessage # Import HumanMessage
 
 # Import the functions to be tested
 from core.agents.bi_agent_nodes import (
-    classify_intent,
-    generate_sql_query,
     execute_query,
     format_final_response,
 )
