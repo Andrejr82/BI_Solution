@@ -31,54 +31,34 @@ class CodeGenAgent:
     """
     Agente especializado em gerar e executar código Python para análise de dados.
     """
-    def __init__(self, llm_adapter: BaseLLMAdapter):
+    def __init__(self, llm_adapter: BaseLLMAdapter, data_adapter: any):
         """
-        Inicializa o agente, carregando o LLM, o catálogo de dados e o diretório de dados.
+        Inicializa o agente com o adaptador LLM e o adaptador de dados.
         """
         self.logger = logging.getLogger(__name__)
-        self.llm = llm_adapter # Use o adaptador injetado
-        self.parquet_dir = os.path.join(os.getcwd(), "data", "parquet")
+        self.llm = llm_adapter
+        self.data_adapter = data_adapter # Armazena o adaptador de dados
         self.code_cache = {}
-
-        # Carregar catálogo com descrições das colunas
-        catalog_path = os.path.join(os.getcwd(), "data", "catalog_focused.json")
-        try:
-            with open(catalog_path, 'r', encoding='utf-8') as f:
-                catalog_data = json.load(f)
-                # Obter descrições das colunas do primeiro arquivo (admatao.parquet)
-                self.column_descriptions = catalog_data[0].get("column_descriptions", {})
-                self.logger.info(f"✅ Catálogo carregado com {len(self.column_descriptions)} colunas descritas")
-        except Exception as e:
-            self.logger.warning(f"⚠️ Erro ao carregar catálogo: {e}")
-            self.column_descriptions = {}
-
-        # 🚀 QUICK WIN 1: Diretórios para logs e contadores
-        self.logs_dir = os.path.join(os.getcwd(), "data", "learning")
-        os.makedirs(self.logs_dir, exist_ok=True)
-
-        # 🚀 QUICK WIN 2: Contador de erros por tipo
-        from collections import defaultdict
-        self.error_counts = defaultdict(int)
-
-        # 🎯 FASE 1: Pattern Matcher para exemplos contextuais
-        try:
-            self.pattern_matcher = PatternMatcher()
-            self.logger.info("✅ PatternMatcher inicializado")
-        except Exception as e:
-            self.logger.warning(f"⚠️ PatternMatcher não disponível: {e}")
-            self.pattern_matcher = None
-
-        # ✅ FASE 1: Code Validator para validação pré-execução
-        self.code_validator = CodeValidator()
-        self.logger.info("✅ CodeValidator inicializado")
-
-        self.logger.info("CodeGenAgent inicializado com cache de código e sistema de aprendizado.")
+        self.logger.info("CodeGenAgent inicializado.")
 
     def _execute_generated_code(self, code: str, local_scope: Dict[str, Any]):
         q = Queue()
         output_capture = io.StringIO()
         original_stdout = sys.stdout
         original_stderr = sys.stderr
+
+        # Função helper para ser injetada no escopo de execução
+        def load_data():
+            """Carrega o dataframe Dask usando o adaptador, garantindo eficiência."""
+            # O DirectQueryEngine tem o método _get_base_dask_df, vamos reusá-lo aqui
+            # de forma segura, assumindo que o data_adapter pode ser o próprio engine.
+            if hasattr(self.data_adapter, '_get_base_dask_df'):
+                return self.data_adapter._get_base_dask_df()
+            else:
+                # Fallback para o caso de ser um adaptador mais simples
+                return self.data_adapter.load_dask_dataframe()
+
+        local_scope['load_data'] = load_data
 
         def worker():
             sys.stdout = output_capture

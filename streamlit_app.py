@@ -372,28 +372,51 @@ else:
             ]
             st.rerun()
 
+    # --- Modo de Consulta (Todos os Usuários) ---
+    with st.sidebar:
+        st.divider()
+        st.subheader("⚙️ Configurações")
+
+        # Inicializar valor padrão se não existir
+        if 'use_direct_query' not in st.session_state:
+            st.session_state['use_direct_query'] = True
+
+        # Toggle para todos os usuários
+        query_mode = st.radio(
+            "Modo de Consulta:",
+            options=["Respostas Rápidas", "IA Completa"],
+            index=0 if st.session_state.get('use_direct_query', True) else 1,
+            help="Escolha o modo de processamento das suas consultas"
+        )
+
+        # Atualizar session state baseado na escolha
+        st.session_state['use_direct_query'] = (query_mode == "Respostas Rápidas")
+
+        # Explicação do modo selecionado
+        if query_mode == "Respostas Rápidas":
+            st.info("""
+                ⚡ **Modo Rápido Ativo**
+                - Respostas em segundos
+                - Perguntas padrão (rankings, tops, etc)
+                - Ideal para consultas do dia-a-dia
+            """)
+        else:
+            st.warning("""
+                🤖 **IA Completa Ativa**
+                - Respostas mais elaboradas
+                - Qualquer tipo de pergunta
+                - Pode demorar até 30s
+                - Usa créditos de IA
+            """)
+
+        st.caption("💡 Mude o modo a qualquer momento")
+
     # --- Painel de Controle (Admin) ---
     user_role = st.session_state.get('role', '')
     if user_role == 'admin':
         with st.sidebar:
             st.divider()
-            with st.expander("⚙️ Painel de Controle (Admin)", expanded=True):
-                st.subheader("🔀 Feature Toggles")
-
-                # Toggle DirectQueryEngine
-                use_direct_query = st.checkbox(
-                    "DirectQueryEngine",
-                    value=st.session_state.get('use_direct_query', True),
-                    help="Ativa/Desativa DirectQueryEngine (respostas rápidas, mas repetitivas)"
-                )
-                st.session_state['use_direct_query'] = use_direct_query
-
-                if use_direct_query:
-                    st.success("✅ DirectQueryEngine ATIVO (respostas rápidas)")
-                else:
-                    st.warning("⚠️ DirectQueryEngine DESLIGADO (apenas agent_graph)")
-
-                st.divider()
+            with st.expander("⚙️ Painel de Controle (Admin)", expanded=False):
                 st.subheader("💾 Gerenciamento de Cache")
 
                 # Estatísticas do cache
