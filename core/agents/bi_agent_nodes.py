@@ -286,47 +286,23 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
 
             **INSTRUÇÕES OBRIGATÓRIAS:**
             1. **CARREGUE OS DADOS:** Inicie seu script com a linha: `df = load_data()`
-            2. **RESPONDA À PERGUNTA:** Usando o dataframe `df`, escreva o código necessário para responder à seguinte pergunta: "{user_query}"
-            3. **SALVE O RESULTADO:** Armazene o resultado final (pode ser um DataFrame, um texto, ou um número) na variável `result`.
+            2. **RESPONDA À PERGUNTA:** Usando o dataframe `df`, escreva o código para responder à seguinte pergunta: "{user_query}"
+            3. **SALVE O RESULTADO NA VARIÁVEL `result`:** A última linha do seu script DEVE ser a atribuição do resultado final à variável `result`. Esta é a única forma que o sistema tem para ver sua resposta. NÃO use `print()`.
 
-            **REGRAS PARA RANKINGS/TOP N:**
-            - Se a pergunta mencionar "ranking", "top", "maior", "mais vendido" → você DEVE fazer groupby + sum + sort_values
-            - Se mencionar "top 10", "top 5" → adicione .head(N) no final
-            - SEMPRE agrupe por NOME (nome do produto) para rankings de produtos
-            - SEMPRE ordene por VENDA_30DD (vendas em 30 dias) de forma DECRESCENTE (ascending=False)
-            - Use .reset_index() no final para criar um DataFrame limpo
-
-            **EXEMPLOS CORRETOS:**
-
-            1. **"ranking de vendas no segmento tecidos"** (SEM limite):
+            **Exemplo de Script:**
             ```python
+            # Passo 1: Carregar dados
             df = load_data()
-            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
+
+            # Passo 2: Responder à pergunta (ex: "ranking de vendas do segmento tecidos")
+            tecidos_df = df[df['NOMESEGMENTO'].str.upper() == 'TECIDO']
             ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()
+
+            # Passo 3: Salvar resultado
             result = ranking
             ```
 
-            2. **"top 10 segmento tecidos"** (COM limite de 10):
-            ```python
-            df = load_data()
-            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
-            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()
-            result = ranking
-            ```
-
-            3. **"produto mais vendido de tecidos"** (TOP 1):
-            ```python
-            df = load_data()
-            tecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']
-            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(1).reset_index()
-            result = ranking
-            ```
-
-            **IMPORTANTE:** NÃO retorne apenas o filtro! Sempre faça o groupby quando houver ranking/top!
-
-            **Pergunta do Usuário:** "{user_query}"
-
-            **Seu Script Python:**
+            **Seu Script Python (Lembre-se, a última linha deve ser `result = ...`):**
             """
         # Cenário 2: Geração de gráfico a partir de dados pré-carregados.
         else:
