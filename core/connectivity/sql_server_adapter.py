@@ -1,3 +1,7 @@
+"""
+Módulo para core/connectivity/sql_server_adapter.py. Define a classe principal 'SQLServerAdapter'. Fornece funções utilitárias, incluindo 'connect' e outras.
+"""
+
 # core/connectivity/sql_server_adapter.py
 import logging
 from typing import Any, Dict, List

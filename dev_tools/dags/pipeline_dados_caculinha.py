@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/dags/pipeline_dados_caculinha.py. Fornece as funções: run_script, main_pipeline.
+"""
+
 # Este script serve como um blueprint para a orquestração futura dos pipelines de dados.
 # Ele define a sequência lógica de execução dos scripts, mas não os executa diretamente.
 # Em uma implementação real com ferramentas como Airflow ou Mage, cada "passo" aqui

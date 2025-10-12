@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'inspect admat parquet'.
+"""
+
 import pandas as pd
 import os
 

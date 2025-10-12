@@ -90,3 +90,6 @@ maintenance/
 credentials.json
 secrets/
 .secrets/
+
+# Arquivo inválido do Windows
+nul

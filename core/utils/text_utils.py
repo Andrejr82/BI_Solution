@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/text_utils.py. Fornece as funções: format_currency, format_number, format_date.
+"""
+
 import locale
 import logging
 from datetime import datetime

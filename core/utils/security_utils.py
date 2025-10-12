@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/security_utils.py. Fornece as funções: verify_password, get_password_hash.
+"""
+
 from passlib.context import CryptContext
 
 # Contexto para hashing de senhas

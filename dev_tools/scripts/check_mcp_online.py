@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/check_mcp_online.py. Fornece as funções: check_mcp_online.
+"""
+
 # import os  # Remove this line if present
 import sys
 

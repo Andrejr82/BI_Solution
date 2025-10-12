@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/chart_generator.py. Define a classe principal 'ChartGenerator'. Fornece funções utilitárias, incluindo 'create_sales_chart' e outras.
+"""
+
 import logging
 import os
 

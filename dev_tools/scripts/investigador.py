@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/investigador.py. Fornece funções utilitárias, incluindo 'listar_arquivos' e outras.
+"""
+
 import os
 import ast
 from pathlib import Path

@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC011 System Uptime Verification'.
+"""
+
 import asyncio
 from playwright import async_api
 

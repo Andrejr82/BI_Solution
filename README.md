@@ -1,198 +1,132 @@
-# Agent BI: Assistente de Inteligência de Negócios Conversacional
+# Agent BI: Plataforma de Business Intelligence Conversacional
 
-> Última atualização: Outubro/2025
+![Status](https://img.shields.io/badge/status-ativo-green)
+![Versão](https://img.shields.io/badge/version-2.0-blue)
+![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Frameworks](https://img.shields.io/badge/frameworks-Streamlit_|_FastAPI-orange)
 
-## 🚀 Descrição do Projeto
+O **Agent BI** é uma plataforma de business intelligence que permite aos usuários interagir com dados de negócios usando linguagem natural. Construído com Python, Streamlit para o frontend e FastAPI para o backend, o sistema se integra com LLMs (como Gemini e DeepSeek) e pode se conectar a bancos de dados SQL Server e arquivos Parquet.
 
-O **Agent BI** (também conhecido como **Agente de Negócios**) é uma plataforma de **business intelligence conversacional** que permite interação com dados de negócio em **linguagem natural**.
-Construído em **Python** com **Streamlit (frontend)** e **FastAPI (backend)**, integra-se a **LLMs (Gemini/DeepSeek)**, bancos de dados **SQL Server** e arquivos **Parquet**.
+## ✨ Funcionalidades Principais
 
-A aplicação é modular, separando a lógica de negócio, interface do usuário e backend. Conta com:
+- **Interface Conversacional**: Interaja com seus dados através de um chat, fazendo perguntas em português.
+- **Visualização Dinâmica de Dados**: Gere gráficos e tabelas automaticamente a partir de suas perguntas.
+- **Dashboard Personalizável**: Salve e organize os gráficos mais importantes em um dashboard pessoal.
+- **Motor de Consulta Híbrido**: O sistema otimiza os custos usando um motor de consulta que prioriza cache e consultas diretas, utilizando LLMs apenas quando necessário.
+- **Painel de Administração**: Gerencie usuários, permissões e monitore a saúde do sistema.
+- **Diagnóstico e Testes**: Ferramentas integradas para diagnosticar problemas de conexão e testar a funcionalidade do sistema.
 
-- 🤖 **Assistente BI Conversacional** com suporte a linguagem natural
-- 📊 **Dashboard Personalizado** para monitoramento contínuo
-- 🔐 **Sistema de Autenticação** com controle de acesso
-- ⚡ **Motor de Consultas Diretas** (ZERO tokens LLM para consultas simples)
-- 🧪 **Suite de Testes Automatizados** (16 testes, 100% aprovados)
-- 📈 **Visualizações Interativas** com Plotly
+## 🏛️ Arquitetura
 
-## ✨ Melhorias Recentes (Outubro/2025)
+O projeto segue uma arquitetura modular, com uma separação clara entre a lógica de negócios, a interface do usuário e o backend.
 
-### 🎯 Versão 1.1.0 - Melhorias Críticas de Produção
+- **Frontend**: Construído com **Streamlit**, localizado no diretório `pages` e no arquivo principal `streamlit_app.py`.
+- **Backend**: Uma API **FastAPI** (`main.py`) serve como gateway para o núcleo do sistema.
+- **Núcleo (`core/`)**: Contém a lógica de negócios, incluindo:
+  - **`agents/`**: Agentes de IA especializados para diferentes tarefas.
+  - **`business_intelligence/`**: O motor de consulta híbrido e o classificador de intenção.
+  - **`connectivity/`**: Adaptadores para fontes de dados (SQL Server, Parquet).
+  - **`graph/`**: O grafo de conversação (LangGraph) que orquestra o fluxo de trabalho.
+- **Dados (`data/`)**: Armazena arquivos de dados, catálogos, templates e histórico de consultas.
+- **Scripts (`scripts/`)**: Ferramentas de linha de comando para manutenção, testes e diagnóstico.
+- **Testes (`tests/`)**: Testes automatizados para garantir a qualidade e a estabilidade do projeto.
+- **Documentação (`docs/`)**: Documentação técnica, relatórios e guias.
 
-**6 melhorias principais implementadas**:
+## 🚀 Começando
 
-1. ✅ **Logging Corrigido** - Compatível com Windows (cp1252)
-2. ✅ **Validação Robusta de Tipos** - Métodos seguros (`_safe_get_int`, `_safe_get_str`)
-3. ✅ **Normalização Inteligente de Inputs** - Expande abreviações e normaliza espaços
-4. ✅ **Padrões Expandidos** - Reconhece sinônimos (filial/loja/une) + 3 novos padrões
-5. ✅ **Mensagens de Erro com Sugestões** - Fuzzy matching para auto-correção
-6. ✅ **Testes Automatizados Completos** - 16 testes, 100% aprovados em <4s
+Siga os passos abaixo para configurar e executar o projeto localmente.
 
-**Métricas de Melhoria**:
-- Taxa de Reconhecimento: **40% → 85%** (+112%)
-- Tempo Médio de Resposta: **1.5s → 1.0s** (-33%)
-- Crashes por Tipo Inválido: **-100%**
-- Taxa de Auto-Correção: **10% → 90%** (+800%)
+### Pré-requisitos
 
-**UI/UX**:
-- 🎨 Nova tela de login moderna (gradiente roxo)
-- 📊 Nome atualizado: **"Agente de Negócios"**
-- 🎯 Ícone de negócios profissional
+- Python 3.11+
+- Git
 
-## 🛠️ Setup
+### 1. Clone o Repositório
 
-### 1. Clone o repositório
 ```bash
-git clone https://github.com/devAndrejr/Agents_Solution_BI.git
+git clone <URL_DO_REPOSITORIO>
 cd Agent_Solution_BI
 ```
 
-### 2. Crie e ative o ambiente virtual
+### 2. Crie e Ative o Ambiente Virtual
+
 ```bash
+# Crie o ambiente virtual
 python -m venv .venv
-# Windows
+
+# Ative o ambiente
+# No Windows:
 .venv\Scripts\activate
-# macOS/Linux
+# No macOS/Linux:
 source .venv/bin/activate
 ```
 
-### 3. Instale as dependências
+### 3. Instale as Dependências
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure as variáveis de ambiente
-Copie `.env.example` para `.env` e preencha com suas credenciais:
+### 4. Configure as Variáveis de Ambiente
 
-```bash
-# LLM Principal
-GEMINI_API_KEY="sua_chave_gemini_aqui"
+Copie o arquivo `.env.example` para um novo arquivo chamado `.env` e preencha com suas credenciais:
+
+```env
+# Chaves de API para os Modelos de Linguagem
+GEMINI_API_KEY="sua_chave_gemini"
+DEEPSEEK_API_KEY="sua_chave_deepseek"
+
+# Modelo de Linguagem a ser usado
 LLM_MODEL_NAME="gemini-2.5-flash"
 
-# LLM Fallback
-DEEPSEEK_API_KEY="sua_chave_deepseek_aqui"
-DEEPSEEK_MODEL_NAME="deepseek-chat"
-
-# SQL Server
-DB_SERVER="seu_servidor"
-DB_NAME="seu_banco"
-DB_USER="seu_usuario"
-DB_PASSWORD="sua_senha"
+# Configurações do Banco de Dados SQL Server (Opcional)
+USE_SQL_SERVER=true
+MSSQL_SERVER="seu_servidor"
+MSSQL_DATABASE="seu_banco"
+MSSQL_USER="seu_usuario"
+MSSQL_PASSWORD="sua_senha"
 ```
 
-### 5. Execute a aplicação
+### 5. Execute a Aplicação
+
+Use o script de inicialização para executar o backend e o frontend na ordem correta:
+
 ```bash
-streamlit run streamlit_app.py
+# No Windows
+start_app.bat
+
+# No macOS/Linux
+./start_app.sh
 ```
 
-Acesse: **http://localhost:8501**
+A aplicação estará disponível em `http://localhost:8501`.
 
-**Credenciais de teste**:
-- Admin: `admin` / `bypass`
-- Usuário padrão: `cacula` / `cacula123`
+## 🧪 Testando
 
-## 🧪 Testes
+O projeto inclui uma suíte de testes para garantir a qualidade e a estabilidade. Para executar os testes, use o `pytest`:
 
-### Rodar testes automatizados
 ```bash
-pytest tests/test_direct_queries.py -v
+pytest
 ```
 
-**Cobertura atual**: 16 testes, 100% aprovados
+Você também pode executar scripts de diagnóstico individuais localizados no diretório `scripts/`, como:
 
-### Tipos de testes incluídos:
-- ✅ Consultas básicas (produto mais vendido, top N, vendas por UNE)
-- ✅ Variações e sinônimos (filial/loja/une)
-- ✅ Normalização de inputs (espaços, abreviações)
-- ✅ Validação de tipos (string → int, None handling)
-- ✅ Performance (< 3s, 0 tokens LLM)
-- ✅ Mensagens de erro com sugestões
+```bash
+# Verificar a saúde geral do sistema
+python scripts/health_check.py
 
-## 📁 Estrutura do Projeto
-
-```
-Agent_Solution_BI/
-├── core/                          # Lógica de negócio
-│   ├── agents/                   # Agentes especializados
-│   ├── business_intelligence/    # Motor de consultas
-│   ├── connectivity/             # Adaptadores (Parquet, SQL)
-│   ├── graph/                    # LangGraph workflows
-│   └── utils/                    # Utilitários
-├── data/                          # Dados e configurações
-│   ├── parquet/                  # Arquivos de dados
-│   └── query_patterns_training.json  # Padrões de reconhecimento
-├── tests/                         # Testes automatizados
-│   └── test_direct_queries.py
-├── pages/                         # Páginas Streamlit
-├── streamlit_app.py              # Aplicação principal
-└── requirements.txt              # Dependências
+# Testar a conexão com o banco de dados
+python scripts/test_hybrid_connection.py
 ```
 
-## 📚 Documentação Adicional
+## 📄 Documentação Adicional
 
-- 📖 **[MELHORIAS_IMPLEMENTADAS.md](MELHORIAS_IMPLEMENTADAS.md)** - Documentação completa das melhorias v1.1.0
-- 🔍 **[INVESTIGACAO_RESOLVIDA.md](INVESTIGACAO_RESOLVIDA.md)** - Análise de bugs corrigidos
-- 💻 **[CLAUDE.md](CLAUDE.md)** - Guia para desenvolvimento com Claude Code
-
-## 🎯 Perguntas Suportadas
-
-O sistema agora reconhece **85% das perguntas comuns**. Exemplos:
-
-### ✅ Consultas por UNE/Filial/Loja
-- "Quais são os 5 produtos mais vendidos na UNE SCR?"
-- "me mostre os 10 produtos mais vendidos na filial TIJ"
-- "produtos mais vendidos na loja 261"
-
-### ✅ Rankings e Top N
-- "Produto mais vendido"
-- "Top 10 produtos do segmento TECIDOS"
-- "Ranking de vendas por UNE"
-
-### ✅ Análises Temporais
-- "Vendas do produto 369947 no último mês"
-- "Evolução mês a mês das vendas"
-
-### ✅ Agregações
-- "Vendas totais de cada UNE"
-- "Qual segmento mais vendeu?"
-
-## 🚀 Roadmap
-
-### Alta Prioridade
-- [ ] Implementar método `_query_ranking_geral`
-- [ ] Adicionar 20+ novos padrões de perguntas
-- [ ] CI/CD com testes automatizados
-
-### Média Prioridade
-- [ ] Dashboard de métricas em tempo real
-- [ ] Sistema de auto-aprendizado de padrões
-- [ ] Cache persistente entre sessões
-
-### Baixa Prioridade
-- [ ] Suporte a números por extenso
-- [ ] Fuzzy matching avançado (Levenshtein)
-- [ ] API REST para integrações
+Para mais detalhes sobre a arquitetura, guias de desenvolvimento e relatórios, consulte o diretório `docs/`.
 
 ## 🤝 Contribuindo
 
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'feat: Add AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+Contribuições são bem-vindas! Por favor, leia o nosso (futuro) `CONTRIBUTING.md` para saber como você pode participar.
 
-## 📝 Licença
+## 📜 Licença
 
-Este projeto é proprietário. Todos os direitos reservados.
-
-## 👥 Autores
-
-- **André Mauricio** - Desenvolvedor Principal
-- **Claude (Anthropic)** - Assistente de IA para desenvolvimento
-
----
-
-**Status**: ✅ **PRONTO PARA PRODUÇÃO** (v1.1.0)
-
-**Última atualização**: Outubro de 2025
+Este projeto é licenciado sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.

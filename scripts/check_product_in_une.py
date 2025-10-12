@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'check product in une'.
+"""
+
 
 import sys
 from pathlib import Path

@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/run_tests_with_server.py. Fornece as funções: wait_for_server, main.
+"""
+
 import subprocess
 import sys
 import time

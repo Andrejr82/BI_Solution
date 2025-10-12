@@ -1,3 +1,7 @@
+"""
+Módulo para core/agents/prompt_loader.py. Define a classe principal 'PromptLoader'. Fornece as funções: load_prompt, list_available_prompts, save_prompt.
+"""
+
 import json
 import logging
 import os

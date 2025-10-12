@@ -1,3 +1,7 @@
+"""
+Módulo para pages/9_Diagnostico_DB.py. Define componentes da interface de utilizador (UI).
+"""
+
 import streamlit as st
 import logging
 

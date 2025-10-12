@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'inspect admmatao data'.
+"""
+
 import pandas as pd
 import os
 

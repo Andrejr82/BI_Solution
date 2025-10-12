@@ -1,3 +1,11 @@
+"""
+Ficheiro com erro de sintaxe, não foi possível gerar docstring.
+"""
+
+"""
+Ficheiro com erro de sintaxe, não foi possível gerar docstring.
+"""
+
 import asyncio
 from playwright import async_api
 

@@ -1,3 +1,7 @@
+"""
+Módulo para core/tools/mcp_sql_server_tools.py. Fornece funções utilitárias, incluindo 'get_product_data' e outras.
+"""
+
 # core/tools/mcp_sql_server_tools.py
 import os
 import pandas as pd

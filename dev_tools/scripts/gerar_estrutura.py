@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/gerar_estrutura.py. Fornece as funções: gerar_estrutura_diretorio, main.
+"""
+
 import logging
 import sys
 from pathlib import Path

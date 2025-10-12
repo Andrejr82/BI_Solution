@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/clean_parquet_data.py. Fornece as funções: normalize_column_name, clean_parquet_file, main.
+"""
+
 import pandas as pd
 import glob
 import os

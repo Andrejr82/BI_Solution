@@ -1,0 +1,85 @@
+================================================================================
+  TESTE END-TO-END: SISTEMA PRONTO PARA USUARIO REAL?
+================================================================================
+Data/Hora: 11/10/2025 16:48:29
+
+================================================================================
+  TESTE END-TO-END: PERGUNTAS REAIS DE USUARIO
+================================================================================
+
+[INFO] Inicializando sistema...
+[INFO] Fonte de dados: SQLSERVER
+[INFO] SQL Server: OK
+
+================================================================================
+  EXECUTANDO PERGUNTAS REAIS
+================================================================================
+
+--------------------------------------------------------------------------------
+TESTE 1/8
+
+[PERGUNTA] Qual produto mais vendeu?
+[TEMPO] 9.66s
+[STATUS] OK
+[TITULO] Produto Mais Vendido
+[RESUMO] O produto mais vendido é 'PAPEL CHAMEX A4 75GRS 500FLS' com 603,989 vendas....
+[DADOS] ['produto', 'vendas', 'codigo']
+
+--------------------------------------------------------------------------------
+TESTE 2/8
+
+[PERGUNTA] Quais os 10 produtos mais vendidos?
+[TEMPO] 8.05s
+[STATUS] OK
+[TITULO] Produto Mais Vendido
+[RESUMO] O produto mais vendido é 'PAPEL CHAMEX A4 75GRS 500FLS' com 603,989 vendas....
+[DADOS] ['produto', 'vendas', 'codigo']
+
+--------------------------------------------------------------------------------
+TESTE 3/8
+
+[PERGUNTA] Qual segmento vendeu mais?
+[TEMPO] 6.58s
+[STATUS] OK
+[TITULO] Segmento Campeão
+[RESUMO] O segmento campeão é 'PAPELARIA' com 13,127,259 vendas....
+[DADOS] ['segmento', 'vendas']
+
+--------------------------------------------------------------------------------
+TESTE 4/8
+
+[PERGUNTA] Quais os top 5 produtos na filial SCR?
+[TEMPO] 19.18s
+[STATUS] OK
+[TITULO] Top 5 Produtos Mais Vendidos - UNE SCR
+[RESUMO] Top 5 produtos mais vendidos na UNE SCR. Total de vendas: 174,442 unidades....
+[DADOS] ['chart_data', 'une_nome', 'limite', 'produtos', 'total_vendas', 'total_produtos_une']
+
+--------------------------------------------------------------------------------
+TESTE 5/8
+
+[PERGUNTA] Mostre os 10 produtos mais vendidos na UNE 261
+[TEMPO] 10.87s
+[STATUS] ERRO
+[ERRO] Unable to allocate 76.5 MiB for an array with shape (9, 1113822) and data type datetime64[ns]
+
+--------------------------------------------------------------------------------
+TESTE 6/8
+
+[PERGUNTA] Quantos produtos temos cadastrados?
+[TEMPO] 0.00s
+[STATUS] OK
+[TITULO] Necessário Processamento Avançado
+[RESUMO] Acionando fallback para processamento com IA....
+
+--------------------------------------------------------------------------------
+TESTE 7/8
+
+[PERGUNTA] Quantas UNEs existem?
+[TEMPO] 0.00s
+[STATUS] OK
+[TITULO] Necessário Processamento Avançado
+[RESUMO] Acionando fallback para processamento com IA....
+
+--------------------------------------------------------------------------------
+TESTE 8/8

@@ -1,3 +1,7 @@
+"""
+Módulo para core/database/models.py. Define a classe principal 'User'. Interage com a base de dados usando SQLAlchemy.
+"""
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 

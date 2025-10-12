@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC002 User Authentication Failure'.
+"""
+
 import asyncio
 from playwright import async_api
 

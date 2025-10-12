@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760264307.062222,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta (qual é o ranking de vendas no segmento tecidos?)\n# Filtra o DataFrame para incluir apenas o segmento 'TECIDO'\ntecidos_df = df[df['NOMESEGMENTO'] == 'TECIDO']\n\n# Agrupa por nome do produto, soma as vendas e ordena em ordem decrescente\nranking_tecidos = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\n\n# Passo 3: Salvar resultado\nresult = ranking_tecidos\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "8b2695996063d8600dc32237956adcf2"
+  }
+}

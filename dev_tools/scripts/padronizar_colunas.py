@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/padronizar_colunas.py. Fornece as funções: to_snake_case, standardize_parquet_columns.
+"""
+
 import os
 import pandas as pd
 import re

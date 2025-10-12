@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'venv audit'.
+"""
+
 import json, subprocess, networkx as nx, plotly.graph_objects as go
 import pandas as pd
 

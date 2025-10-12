@@ -24,7 +24,6 @@ def print_header():
     """Exibe cabeçalho da aplicação."""
     print("\n" + "="*50)
     print("   AGENT_BI - AGENTE DE NEGÓCIOS")
-    print("   Inicializando aplicação...")
     print("="*50 + "\n")
 
 def check_file_exists(filepath: str) -> bool:
@@ -33,9 +32,7 @@ def check_file_exists(filepath: str) -> bool:
 
 def check_backend_health(delay: int = 5) -> bool:
     """Aguarda backend inicializar."""
-    print(f"[3/4] Aguardando Backend inicializar...")
     time.sleep(delay)
-    print(f"   - Backend deve estar pronto! [OK]")
     return True
 
 def start_process(command: list, window_title: str = None) -> subprocess.Popen:
@@ -70,19 +67,15 @@ def main():
         print("Execute: python -m venv .venv")
         sys.exit(1)
 
-    print("[1/4] Ambiente virtual detectado [OK]")
-
     # Determinar comandos baseado no sistema
     system = platform.system()
     python_cmd = sys.executable
 
-    # Verificar se backend existe
+    # Verificar se backend FastAPI separado existe (modo opcional)
     backend_exists = check_file_exists("main.py")
     backend_process = None
 
     if backend_exists:
-        print("[2/4] Iniciando Backend FastAPI...")
-
         # Iniciar backend em background (sem nova janela)
         backend_process = subprocess.Popen(
             [python_cmd, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
@@ -92,25 +85,13 @@ def main():
 
         # Aguardar backend estar pronto
         time.sleep(3)
-        backend_ready = check_backend_health()
-
-        if not backend_ready:
-            print("   [AVISO] Continuando sem confirmação do backend...")
-    else:
-        print("[2/4] Backend FastAPI não encontrado. Pulando...")
-
-    # Iniciar Frontend Streamlit (mesma janela)
-    print("[4/4] Iniciando Frontend Streamlit...")
-    time.sleep(1)
+        check_backend_health()
 
     # Mensagem de sucesso
     print("\n" + "="*50)
     print("   APLICAÇÃO INICIADA COM SUCESSO!")
     print("")
-    if backend_exists:
-        print("   Backend:  http://localhost:8000")
-        print("   Docs API: http://localhost:8000/docs")
-    print("   Frontend: http://localhost:8501")
+    print("   Acesse: http://localhost:8501")
     print("")
     print("   Pressione Ctrl+C para encerrar")
     print("="*50 + "\n")
@@ -139,7 +120,6 @@ def main():
     # Encerrar backend ao sair
     if backend_process:
         backend_process.terminate()
-        print("   - Backend encerrado")
 
     print("\nAplicação encerrada com sucesso!")
     sys.exit(0)

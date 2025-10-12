@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/generate_data_catalog.py. Fornece as funções: generate_catalog_for_file, main.
+"""
+
 import pandas as pd
 import glob
 import os

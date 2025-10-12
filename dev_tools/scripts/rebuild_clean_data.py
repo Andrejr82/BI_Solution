@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/rebuild_clean_data.py. Fornece as funções: rebuild_and_clean_data.
+"""
+
 
 import pandas as pd
 import os

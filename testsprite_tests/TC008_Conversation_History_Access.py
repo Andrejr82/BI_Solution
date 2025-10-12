@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC008 Conversation History Access'.
+"""
+
 import asyncio
 from playwright import async_api
 

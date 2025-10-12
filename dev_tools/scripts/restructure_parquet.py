@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/restructure_parquet.py. Fornece as funções: restructure_parquet.
+"""
+
 # scripts/restructure_parquet.py
 
 import pandas as pd

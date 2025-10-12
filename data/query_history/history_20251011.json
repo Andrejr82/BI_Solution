@@ -1,0 +1,101 @@
+[
+  {
+    "query": "gere o ranking de vendas do segmento tecidos",
+    "session_id": "d0ad421b-b096-4b7c-a44b-16be47d6e200",
+    "timestamp": "2025-10-11T00:21:13.444949",
+    "success": false,
+    "results_count": 0,
+    "error": "❌ name 'df' is not defined",
+    "processing_time": 0.0
+  },
+  {
+    "query": "gere o ranking de vendas do segmento tecidos",
+    "session_id": "cbc812f8-43a8-448a-b5ed-cb438e866719",
+    "timestamp": "2025-10-11T00:42:11.604960",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 23.046765
+  },
+  {
+    "query": "quais sao os top 10 do ssegmento tecidos ?",
+    "session_id": "26599350-b7c2-4901-84a2-42fbe05a7118",
+    "timestamp": "2025-10-11T01:10:57.878305",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 8.229292
+  },
+  {
+    "query": "qual é o preço do produto 59294",
+    "session_id": "5e3f7c2d-4d7e-4872-9237-8e1306c4da9d",
+    "timestamp": "2025-10-11T10:41:01.026192",
+    "success": false,
+    "results_count": 0,
+    "error": "❌ 'NoneType' object has no attribute 'get'",
+    "processing_time": 0.0
+  },
+  {
+    "query": "Qual produto mais vendeu?",
+    "session_id": "3d60850b-d680-4979-a6b7-69bfb16c2f18",
+    "timestamp": "2025-10-11T17:00:18.327853",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 30.31724
+  },
+  {
+    "query": "qual produto mais vendeu no segmento tecidos?",
+    "session_id": "3d60850b-d680-4979-a6b7-69bfb16c2f18",
+    "timestamp": "2025-10-11T17:26:00.653094",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 62.620887
+  },
+  {
+    "query": "qual ranking de vendas de todos os segmentos",
+    "session_id": "22367e17-247d-46ab-a600-7d656a2f6657",
+    "timestamp": "2025-10-11T17:29:10.411062",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 12.187057
+  },
+  {
+    "query": "top 5 segmento tecidos",
+    "session_id": "b5ba8e61-d429-4e0b-a529-4964de8c27a3",
+    "timestamp": "2025-10-11T18:04:58.882510",
+    "success": true,
+    "results_count": 10,
+    "error": null,
+    "processing_time": 21.679355
+  },
+  {
+    "query": "qual produto mais venda no segmento tecidos ?",
+    "session_id": "82f93746-1464-4100-9ec0-6f881affc76b",
+    "timestamp": "2025-10-11T19:53:13.930771",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 68.67104
+  },
+  {
+    "query": "qual é o preço do produto 59294",
+    "session_id": "82f93746-1464-4100-9ec0-6f881affc76b",
+    "timestamp": "2025-10-11T19:54:31.255073",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 21.370311
+  },
+  {
+    "query": "qual é o estoque do produto 369947 em todas as unes?",
+    "session_id": "82f93746-1464-4100-9ec0-6f881affc76b",
+    "timestamp": "2025-10-11T19:55:34.724329",
+    "success": false,
+    "results_count": 0,
+    "error": "❌ Unable to allocate 255. MiB for an array with shape (30, 1113822) and data type float64",
+    "processing_time": 0.0
+  }
+]

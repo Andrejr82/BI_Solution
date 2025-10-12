@@ -1,3 +1,7 @@
+"""
+Módulo para tests/test_api_key.py. Fornece as funções: test_gemini_api_key.
+"""
+
 
 import os
 import sys

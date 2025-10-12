@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC010 Business Metadata Catalog Management'.
+"""
+
 import asyncio
 from playwright import async_api
 

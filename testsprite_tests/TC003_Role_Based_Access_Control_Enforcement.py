@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC003 Role Based Access Control Enforcement'.
+"""
+
 import asyncio
 from playwright import async_api
 

@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/agente_atualizador.py. Fornece as funções: run_export_script.
+"""
+
 import schedule
 import time
 import logging

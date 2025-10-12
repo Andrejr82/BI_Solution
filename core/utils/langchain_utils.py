@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/langchain_utils.py. Fornece as funções: get_llm_adapter, get_langchain_model.
+"""
+
 import logging
 import os
 

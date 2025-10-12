@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/data_pipeline.py. Define a classe principal 'DataPipeline'. Fornece as funções: main, run. Interage com a base de dados usando SQLAlchemy.
+"""
+
 # scripts/data_pipeline.py
 import os
 import logging

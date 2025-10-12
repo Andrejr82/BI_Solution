@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/directory_setup.py. Fornece as funções: setup_directories.
+"""
+
 import logging
 
 # Configura o logging para o módulo

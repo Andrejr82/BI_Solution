@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'debug schema'.
+"""
+
 
 import sys
 from pathlib import Path

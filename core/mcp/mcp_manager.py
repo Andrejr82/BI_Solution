@@ -1,3 +1,7 @@
+"""
+Módulo para core/mcp/mcp_manager.py. Define a classe principal 'MCPManager'. Fornece funções utilitárias, incluindo 'get_mcp_manager' e outras.
+"""
+
 import json
 import logging
 import os

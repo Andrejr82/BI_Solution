@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760228352.6072564,
+  "response": {
+    "content": "```python\n# Carrega os dados como um Dask DataFrame\nddf = load_data()\n\n# Filtra o segmento 'TECIDO'\ntecidos_ddf = ddf[ddf['NOMESEGMENTO'] == 'TECIDO']\n\n# Agrupa por produto e soma as vendas, selecionando os 5 maiores\ntop_5_produtos_tecidos_lazy = tecidos_ddf.groupby('NOME')['VENDA_30DD'].sum().nlargest(5)\n\n# Executa o cálculo e armazena o resultado em um DataFrame Pandas\nresult = top_5_produtos_tecidos_lazy.compute().reset_index()\n\n# Renomeia as colunas para clareza\nresult.columns = ['Produto', 'Vendas']\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "5523e792b79543e7bda713f1f03be168"
+  }
+}

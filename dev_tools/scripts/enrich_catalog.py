@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/enrich_catalog.py. Fornece as funções: generate_description_from_name, enrich_catalog, main.
+"""
+
 
 import json
 import os

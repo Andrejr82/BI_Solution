@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'test logging flow'.
+"""
+
 
 # tests/test_logging_flow.py
 import logging

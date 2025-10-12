@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/security.py. Fornece as funções: sanitize_query.
+"""
+
 import re
 
 

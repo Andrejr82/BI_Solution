@@ -1,3 +1,7 @@
+"""
+Módulo para core/utils/db_utils.py. Fornece as funções: get_table_df, prepare_chart_data.
+"""
+
 import os
 import pandas as pd
 import logging

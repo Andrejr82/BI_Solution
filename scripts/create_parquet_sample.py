@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'create parquet sample'.
+"""
+
 
 # scripts/create_parquet_sample.py
 import pandas as pd

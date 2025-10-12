@@ -1,3 +1,7 @@
+"""
+Módulo para scripts/clean_catalog.py. Fornece as funções: clean_column_name, main.
+"""
+
 
 # scripts/clean_catalog.py
 import json

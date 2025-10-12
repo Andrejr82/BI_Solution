@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/merge_catalogs.py. Fornece as funções: to_snake_case, merge_catalogs.
+"""
+
 import json
 import os
 import re

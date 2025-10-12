@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/rename_all_columns_final.py. Fornece as funções: rename_all_columns.
+"""
+
 
 import pandas as pd
 import os

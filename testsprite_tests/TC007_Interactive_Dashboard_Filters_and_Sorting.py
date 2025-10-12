@@ -1,3 +1,7 @@
+"""
+Script Python para a finalidade de 'TC007 Interactive Dashboard Filters and Sorting'.
+"""
+
 import asyncio
 from playwright import async_api
 

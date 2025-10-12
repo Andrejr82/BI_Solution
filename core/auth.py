@@ -1,3 +1,7 @@
+"""
+Módulo para core/auth.py. Fornece funções utilitárias, incluindo 'get_auth_db' e outras. Define componentes da interface de utilizador (UI).
+"""
+
 # Este arquivo lida com a autenticação de usuários. É crucial que as senhas nunca sejam armazenadas em texto plano.
 # Em vez disso, utilizamos funções de hash seguras (como bcrypt, implementado em sql_server_auth_db.py)
 # para converter as senhas em um formato ilegível e irreversível. Isso protege as informações dos usuários

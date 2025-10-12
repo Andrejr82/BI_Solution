@@ -1,3 +1,7 @@
+"""
+Módulo para dev_tools/scripts/inspect_parquet_quality.py. Fornece as funções: analyze_parquet_file, main.
+"""
+
 
 import pandas as pd
 import glob

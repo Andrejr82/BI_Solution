@@ -1,0 +1,13 @@
+{
+  "16cdde41d5793fe257ccf5357753147a": {
+    "query": "top 10 produtos",
+    "normalized": "top 10 produtos",
+    "intent": {
+      "operation": "ranking_produtos",
+      "confidence": 0.95,
+      "filters": {}
+    },
+    "timestamp": "2025-10-06T22:48:41.407985",
+    "hit_count": 0
+  }
+}
