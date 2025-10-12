@@ -312,7 +312,14 @@ else:
             }
 
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             debug_info.append(f"❌ ERRO: {str(e)}")
+            debug_info.append(f"📍 Tipo do erro: {type(e).__name__}")
+
+            # Log do erro completo para debugging
+            logging.error(f"Backend initialization failed: {str(e)}")
+            logging.error(f"Traceback: {error_traceback}")
 
             # Mostrar debug completo na sidebar APENAS para admins
             user_role = st.session_state.get('role', '')
@@ -328,11 +335,12 @@ else:
                         else:
                             st.info(info)
 
-                    st.write("**Erro Completo:**")
-                    st.code(str(e))
+                    with st.expander("🐛 Erro Completo (Traceback)"):
+                        st.code(error_traceback)
             else:
                 with st.sidebar:
                     st.error("❌ Sistema temporariamente indisponível")
+                    st.info("💡 Tente usar o **Modo Rápido** (Respostas Rápidas)")
 
             return None
 
@@ -692,9 +700,34 @@ else:
                                         "method": "agent_graph_empty"
                                     }
                         else:
+                            # 🔧 DIAGNÓSTICO: Verificar por que agent_graph não está disponível
+                            error_details = []
+
+                            if not st.session_state.backend_components:
+                                error_details.append("❌ Backend não inicializado")
+                            elif 'agent_graph' not in st.session_state.backend_components:
+                                error_details.append("❌ Agent Graph não encontrado no backend")
+                                available_keys = list(st.session_state.backend_components.keys())
+                                error_details.append(f"Componentes disponíveis: {', '.join(available_keys)}")
+
+                            error_msg = "🤖 **Modo IA Completa Indisponível**\n\n"
+                            error_msg += "O sistema não conseguiu inicializar o agente de IA avançado.\n\n"
+                            error_msg += "**💡 Solução:**\n"
+                            error_msg += "1. Use o modo **Respostas Rápidas** (sidebar → Configurações)\n"
+                            error_msg += "2. Recarregue a página (F5)\n"
+                            error_msg += "3. Se o problema persistir, entre em contato com o suporte"
+
+                            # Adicionar detalhes técnicos apenas para admins
+                            user_role = st.session_state.get('role', '')
+                            if user_role == 'admin' and error_details:
+                                error_msg += "\n\n**🔧 Detalhes Técnicos (Admin):**\n"
+                                error_msg += "\n".join(error_details)
+
                             agent_response = {
                                 "type": "error",
-                                "content": "O agente de IA avançado não está disponível."
+                                "content": error_msg,
+                                "user_query": user_input,
+                                "method": "agent_graph_unavailable"
                             }
 
                 # ✅ GARANTIR estrutura correta da resposta
