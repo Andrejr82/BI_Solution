@@ -6,12 +6,17 @@ import logging
 import logging.config
 import os
 from datetime import datetime
+from pathlib import Path
 
 def setup_logging():
     """
     Configures file-based and stream-based logging for the application.
+    Uses absolute paths to be environment-agnostic.
     """
-    logs_dir = "logs"
+    # Constrói um caminho absoluto para o diretório raiz do projeto (um nível acima de `core`)
+    project_root = Path(__file__).parent.parent.parent
+    logs_dir = project_root / "logs"
+    
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
