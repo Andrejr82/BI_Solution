@@ -80,14 +80,15 @@ class CodeGenAgent:
         def load_data():
             """Carrega o dataframe usando o adaptador ou fallback para path direto."""
             if self.data_adapter:
-                # Usar adapter injetado (HybridDataAdapter, ParquetAdapter, etc)
+                # Usar adapter injetado (ParquetAdapter tem _get_base_dask_df)
                 if hasattr(self.data_adapter, '_get_base_dask_df'):
                     return self.data_adapter._get_base_dask_df()
-                elif hasattr(self.data_adapter, 'load_dask_dataframe'):
-                    return self.data_adapter.load_dask_dataframe()
                 else:
-                    # Adapter customizado - tentar chamar diretamente
-                    return self.data_adapter.load_data()
+                    # Fallback: carregar path do adapter
+                    parquet_path = getattr(self.data_adapter, 'parquet_path', None)
+                    if parquet_path:
+                        return pd.read_parquet(parquet_path)
+                    raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem _get_base_dask_df() nem parquet_path")
             else:
                 # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
                 import os
@@ -267,14 +268,16 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             def load_data():
                 """Carrega o dataframe usando o adaptador ou fallback para path direto."""
                 if self.data_adapter:
-                    # Usar adapter injetado (preferencial)
+                    # Usar adapter injetado (ParquetAdapter tem _get_base_dask_df)
                     if hasattr(self.data_adapter, '_get_base_dask_df'):
                         df = self.data_adapter._get_base_dask_df()
-                    elif hasattr(self.data_adapter, 'load_dask_dataframe'):
-                        df = self.data_adapter.load_dask_dataframe()
                     else:
-                        # Adapter customizado - tentar chamar diretamente
-                        df = self.data_adapter.load_data()
+                        # Fallback: carregar path do adapter
+                        parquet_path = getattr(self.data_adapter, 'parquet_path', None)
+                        if parquet_path:
+                            df = pd.read_parquet(parquet_path)
+                        else:
+                            raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem _get_base_dask_df() nem parquet_path")
                 else:
                     # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
                     parquet_file = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
