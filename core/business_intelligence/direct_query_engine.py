@@ -348,6 +348,32 @@ class DirectQueryEngine:
             user_query = self._normalize_query(user_query)
             query_lower = user_query.lower()
 
+            # 🔥 PRIORIDADE MÁXIMA: Detectar "ranking DE segmentos" (plural) - lista de segmentos
+            if re.search(r'ranking\s*(de|dos)\s*segmentos', query_lower):
+                result = ("ranking_segmentos", {})
+                logger.info(f"✅ [PRIORIDADE MAXIMA] Classificado: ranking_segmentos (plural)")
+                return result
+
+            # 🔥 PRIORIDADE MÁXIMA: Detectar "top N produtos [do/no] segmento X"
+            top_produtos_segmento_match = re.search(r'top\s+(\d+)\s+produtos\s*(do|no|de|em)?\s*segmento\s+(\w+)', query_lower)
+            if top_produtos_segmento_match:
+                limite = int(top_produtos_segmento_match.group(1))
+                segmento_nome = top_produtos_segmento_match.group(3)
+                result = ("top_produtos_por_segmento", {"segmento": segmento_nome, "limit": limite})
+                logger.info(f"✅ [PRIORIDADE MAXIMA] Classificado: top_produtos_por_segmento (top {limite} do segmento: {segmento_nome})")
+                return result
+
+            # 🔥 PRIORIDADE MÁXIMA: Detectar "ranking [de vendas] [no/do/em] segmento X" (singular)
+            # ANTES de outros patterns para evitar confusão com "ranking DE segmentos"
+            ranking_segmento_match = re.search(r'ranking\s*(de\s*vendas)?\s*(no|do|em)?\s*segmento\s+(\w+)(?!\s*s\b)', query_lower)
+            if ranking_segmento_match and "segmentos" not in query_lower:
+                segmento_nome = ranking_segmento_match.group(3)
+                limite_match = re.search(r'top\s*(\d+)', query_lower)
+                limite = int(limite_match.group(1)) if limite_match else 10
+                result = ("top_produtos_por_segmento", {"segmento": segmento_nome, "limit": limite})
+                logger.info(f"✅ [PRIORIDADE MAXIMA] Classificado: top_produtos_por_segmento (segmento: {segmento_nome}, limit: {limite})")
+                return result
+
             # 🔥 PRIORIDADE MÁXIMA: Detectar "RANKING DE VENDAS NA UNE X" antes de tudo
             ranking_vendas_une_match = re.search(r'ranking\s*(de\s*vendas|vendas).*(na|da)\s*une\s+([A-Za-z0-9]+)', query_lower)
             if ranking_vendas_une_match:
