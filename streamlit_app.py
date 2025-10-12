@@ -267,7 +267,7 @@ else:
 
             # Debug 6: Inicializar CodeGen
             debug_info.append("Inicializando CodeGen...")
-            code_gen_agent = CodeGenAgent(llm_adapter=llm_adapter)
+            code_gen_agent = CodeGenAgent(llm_adapter=llm_adapter, data_adapter=parquet_adapter)
             debug_info.append("✅ CodeGen OK")
 
             # Debug 7: Inicializar QueryHistory
@@ -592,23 +592,82 @@ else:
                         if st.session_state.backend_components and 'agent_graph' in st.session_state.backend_components:
                             agent_graph = st.session_state.backend_components['agent_graph']
                             graph_input = {"messages": [{"role": "user", "content": user_input}]}
-                            final_state = agent_graph.invoke(graph_input)
-                            agent_response = final_state.get("final_response", {})
-                            agent_response["method"] = "agent_graph"
-                            agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
 
-                            # 💾 Salvar no cache para futuras queries similares
-                            try:
-                                cache.set(user_input, agent_response, metadata={"timestamp": datetime.now().isoformat()})
-                            except Exception as cache_save_error:
-                                logger.warning(f"Erro ao salvar no cache: {cache_save_error}")
+                            # 🔧 TIMEOUT IMPLEMENTATION: Executar agent_graph com timeout
+                            import threading
+                            import queue
 
-                            # Debug para admins
-                            user_role = st.session_state.get('role', '')
-                            if user_role == 'admin':
-                                with st.expander("🔍 Debug: agent_graph"):
-                                    st.write(f"**Tempo de processamento:** {agent_response['processing_time']:.2f}s")
-                                    st.write(f"**Tipo de resposta:** {agent_response.get('type', 'unknown')}")
+                            result_queue = queue.Queue()
+                            timeout_seconds = 30  # 30 segundos de timeout
+
+                            def invoke_agent_graph():
+                                try:
+                                    final_state = agent_graph.invoke(graph_input)
+                                    result_queue.put(("success", final_state))
+                                except Exception as e:
+                                    result_queue.put(("error", str(e)))
+
+                            # Executar em thread separada
+                            thread = threading.Thread(target=invoke_agent_graph, daemon=True)
+                            thread.start()
+                            thread.join(timeout=timeout_seconds)
+
+                            # Verificar resultado
+                            if thread.is_alive():
+                                # ⏰ TIMEOUT: Agent graph não respondeu a tempo
+                                agent_response = {
+                                    "type": "error",
+                                    "content": f"⏰ **Tempo Limite Excedido**\n\n"
+                                               f"O processamento da sua consulta demorou muito tempo (>{timeout_seconds}s).\n\n"
+                                               f"**Sugestões:**\n"
+                                               f"- Tente uma consulta mais específica\n"
+                                               f"- Use o DirectQueryEngine (painel de controle)\n"
+                                               f"- Verifique sua conexão de internet",
+                                    "user_query": user_input,
+                                    "method": "agent_graph_timeout"
+                                }
+                                logger.warning(f"Agent graph timeout após {timeout_seconds}s para query: {user_input}")
+                            else:
+                                # ✅ SUCESSO ou ERRO: Obter resultado da thread
+                                try:
+                                    result_type, result = result_queue.get_nowait()
+
+                                    if result_type == "success":
+                                        final_state = result
+                                        agent_response = final_state.get("final_response", {})
+                                        agent_response["method"] = "agent_graph"
+                                        agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
+
+                                        # 💾 Salvar no cache para futuras queries similares
+                                        try:
+                                            cache.set(user_input, agent_response, metadata={"timestamp": datetime.now().isoformat()})
+                                        except Exception as cache_save_error:
+                                            logger.warning(f"Erro ao salvar no cache: {cache_save_error}")
+
+                                        # Debug para admins
+                                        user_role = st.session_state.get('role', '')
+                                        if user_role == 'admin':
+                                            with st.expander("🔍 Debug: agent_graph"):
+                                                st.write(f"**Tempo de processamento:** {agent_response['processing_time']:.2f}s")
+                                                st.write(f"**Tipo de resposta:** {agent_response.get('type', 'unknown')}")
+                                    else:
+                                        # ❌ ERRO na execução do agent_graph
+                                        agent_response = {
+                                            "type": "error",
+                                            "content": f"❌ **Erro no Processamento**\n\n{result}\n\n"
+                                                       f"Por favor, tente reformular sua consulta.",
+                                            "user_query": user_input,
+                                            "method": "agent_graph_error"
+                                        }
+                                        logger.error(f"Erro no agent_graph: {result}")
+                                except queue.Empty:
+                                    # Caso improvável: thread terminou mas sem resultado
+                                    agent_response = {
+                                        "type": "error",
+                                        "content": "Erro inesperado ao processar consulta.",
+                                        "user_query": user_input,
+                                        "method": "agent_graph_empty"
+                                    }
                         else:
                             agent_response = {
                                 "type": "error",
