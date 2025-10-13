@@ -43,6 +43,14 @@ _local_users = {
         "tentativas_invalidas": 0,
         "bloqueado_ate": None,
         "ultimo_login": None
+    },
+    "renan": {
+        "password_hash": "$2b$12$8vn/Jk.xJKRNm8k9p4y7d.EKCQqrFYp.QY8vUqTrPcRN6kEJ9xvIW",  # renan
+        "role": "user",
+        "ativo": True,
+        "tentativas_invalidas": 0,
+        "bloqueado_ate": None,
+        "ultimo_login": None
     }
 }
 
