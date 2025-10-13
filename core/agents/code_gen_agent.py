@@ -368,8 +368,12 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
                 rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
                 df = df.rename(columns=rename_dict)
 
-                # Converter colunas restantes para MAIÚSCULAS
-                df.columns = [col.upper() if col.islower() else col for col in df.columns]
+                # ✅ GARANTIR COLUNAS ÚNICAS: Remover duplicatas mantendo a primeira
+                if len(df.columns) != len(set(df.columns)):
+                    self.logger.warning(f"⚠️ Colunas duplicadas detectadas: {[col for col in df.columns if list(df.columns).count(col) > 1]}")
+                    # Manter apenas primeira ocorrência de cada coluna
+                    df = df.loc[:, ~df.columns.duplicated(keep='first')]
+                    self.logger.info(f"✅ Colunas únicas após remoção: {list(df.columns)}")
 
                 return df
 
@@ -430,7 +434,11 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
         # Verificar se usuário pediu "top N"
         top_match = re.search(r'top\s+(\d+)', query_lower)
 
-        if top_match and '.head(' not in code:
+        # ✅ NÃO adicionar .head() se o código está gerando um gráfico Plotly
+        # Gráficos já devem ter o filtro aplicado antes do px.bar/px.pie/etc
+        is_plotly_chart = any(func in code for func in ['px.bar(', 'px.pie(', 'px.line(', 'px.scatter(', 'px.histogram('])
+
+        if top_match and '.head(' not in code and not is_plotly_chart:
             n = top_match.group(1)
             self.logger.warning(f"⚠️ Query pede top {n} mas código não tem .head(). Corrigindo automaticamente...")
 
@@ -452,6 +460,8 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
                 code = '\n'.join(lines)
 
             self.logger.info(f"✅ Código corrigido automaticamente com .head({n})")
+        elif is_plotly_chart:
+            self.logger.info(f"ℹ️ Código gera gráfico Plotly - não adicionando .head() automático")
 
         return code
 
