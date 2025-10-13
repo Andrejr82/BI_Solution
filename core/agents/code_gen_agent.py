@@ -247,16 +247,36 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 6. **ESTOQUE**: Use ESTOQUE_UNE para estoque
 7. **USE OS EXEMPLOS ACIMA** como referência se foram fornecidos!
 
+**REGRAS PARA RANKINGS/TOP N:**
+- Se a pergunta mencionar "ranking", "top", "maior", "mais vendido" → você DEVE fazer groupby + sum + sort_values
+- Se mencionar "top 10", "top 5" → adicione .head(N) ou .nlargest(N) ANTES de criar gráfico
+- SEMPRE agrupe por NOME (nome do produto) para rankings de produtos
+- SEMPRE ordene por VENDA_30DD (vendas em 30 dias) de forma DECRESCENTE (ascending=False)
+- Use .reset_index() no final para criar um DataFrame limpo
+- **IMPORTANTE:** NÃO retorne apenas o filtro! Sempre faça o groupby quando houver ranking/top!
+
 **🎯 DETECÇÃO DE GRÁFICOS - REGRA ABSOLUTA:**
 Se o usuário mencionar qualquer uma destas palavras-chave, você DEVE gerar um gráfico Plotly:
 - Palavras-chave visuais: "gráfico", "chart", "visualização", "plotar", "plot", "barras", "pizza", "linhas", "scatter"
 - Palavras-chave analíticas: "ranking", "top N", "top 10", "maiores", "menores", "comparação"
 
-**FORMATO DE CÓDIGO PARA GRÁFICOS:**
+**⚠️ REGRA CRÍTICA - GRÁFICOS PLOTLY:**
+Quando gerar gráficos Plotly (px.bar, px.pie, px.line):
+1. Filtre e limite os dados (.nlargest, .head, filtros) ANTES de criar o gráfico
+2. NUNCA use .head() ou .nlargest() DEPOIS de px.bar/px.pie/px.line
+3. A variável result deve conter o objeto Figure diretamente
+
+❌ ERRADO (causa erro 'Figure' object has no attribute 'head'):
 ```python
-df = load_data()
-# ... filtros e processamento ...
-result = px.bar(df_filtered, x='coluna_x', y='coluna_y', title='Título do Gráfico')
+df_top = df.nlargest(10, 'VENDA_30DD')
+result = px.bar(df_top, x='NOME', y='VENDA_30DD')
+result = result.head(10)  # ❌ Figure não tem .head()!
+```
+
+✅ CORRETO:
+```python
+df_top = df.nlargest(10, 'VENDA_30DD')  # Limite ANTES
+result = px.bar(df_top, x='NOME', y='VENDA_30DD')  # result é Figure
 ```
 
 **TIPOS DE GRÁFICOS DISPONÍVEIS:**
@@ -265,11 +285,29 @@ result = px.bar(df_filtered, x='coluna_x', y='coluna_y', title='Título do Gráf
 - px.line() - Gráfico de linhas (use para tendências temporais)
 - px.scatter() - Gráfico de dispersão (use para correlações)
 
-**EXEMPLO COMPLETO - RANKING:**
+**EXEMPLOS COMPLETOS DE GRÁFICOS:**
+
+1. **Gráfico de Barras - Top 10:**
 ```python
 df = load_data()
-df_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS'].nlargest(10, 'VENDA_30DD')
-result = px.bar(df_filtered, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Segmento Tecidos')
+df_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']
+df_top10 = df_filtered.nlargest(10, 'VENDA_30DD')
+result = px.bar(df_top10, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Tecidos')
+```
+
+2. **Gráfico de Pizza - Distribuição por Segmento:**
+```python
+df = load_data()
+vendas_por_segmento = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()
+result = px.pie(vendas_por_segmento, names='NOMESEGMENTO', values='VENDA_30DD', title='Vendas por Segmento')
+```
+
+3. **Gráfico de Barras - Comparação de Grupos:**
+```python
+df = load_data()
+papelaria = df[df['NOMESEGMENTO'] == 'PAPELARIA']
+vendas_por_grupo = papelaria.groupby('NOMEGRUPO')['VENDA_30DD'].sum().sort_values(ascending=False).head(5).reset_index()
+result = px.bar(vendas_por_grupo, x='NOMEGRUPO', y='VENDA_30DD', title='Top 5 Grupos - Papelaria')
 ```
 
 **EXEMPLO DE MAPEAMENTO:**
