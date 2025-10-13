@@ -113,8 +113,12 @@ class CodeGenAgent:
             rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
             df = df.rename(columns=rename_dict)
 
-            # Converter colunas restantes para MAIÚSCULAS
-            df.columns = [col.upper() if col.islower() else col for col in df.columns]
+            # ✅ GARANTIR COLUNAS ÚNICAS: Remover duplicatas mantendo a primeira
+            if len(df.columns) != len(set(df.columns)):
+                self.logger.warning(f"⚠️ Colunas duplicadas detectadas: {[col for col in df.columns if list(df.columns).count(col) > 1]}")
+                # Manter apenas primeira ocorrência de cada coluna
+                df = df.loc[:, ~df.columns.duplicated(keep='first')]
+                self.logger.info(f"✅ Colunas únicas após remoção: {list(df.columns)}")
 
             return df
 
@@ -156,9 +160,26 @@ class CodeGenAgent:
         prompt = input_data.get("query", "")
         raw_data = input_data.get("raw_data", [])
         user_query = input_data.get("query", "")  # Definir no início para evitar UnboundLocalError
-        
-        # O cache é simplificado, pois a lógica de RAG foi removida.
-        cache_key = hash(prompt + json.dumps(raw_data, sort_keys=True) if raw_data else "")
+
+        # 🎯 Cache inteligente: incluir palavras-chave de intenção na chave
+        # Isso evita que "ranking papelaria" retorne o mesmo que "ranking tecidos"
+        query_lower = user_query.lower()
+        intent_markers = []
+
+        # Detectar tipo de análise
+        if any(word in query_lower for word in ['gráfico', 'chart', 'visualização', 'plot']):
+            intent_markers.append('viz')
+        if any(word in query_lower for word in ['ranking', 'top']):
+            intent_markers.append('rank')
+
+        # Detectar segmento específico (extrair para evitar cache cruzado)
+        import re as regex_module
+        segment_match = regex_module.search(r'(tecido|papelaria|armarinho|festas|artes|casa|decoração|higiene|beleza|esporte|lazer|bazar|elétrica|limpeza|sazonais|informática|embalagens)', query_lower)
+        if segment_match:
+            intent_markers.append(f'seg_{segment_match.group(1)}')
+
+        # Gerar chave de cache única baseada em query + intenção
+        cache_key = hash(prompt + '_'.join(intent_markers) + (json.dumps(raw_data, sort_keys=True) if raw_data else ""))
 
         if cache_key in self.code_cache:
             code_to_execute = self.code_cache[cache_key]
@@ -225,6 +246,31 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 5. **VENDAS**: Sempre use VENDA_30DD para métricas de vendas
 6. **ESTOQUE**: Use ESTOQUE_UNE para estoque
 7. **USE OS EXEMPLOS ACIMA** como referência se foram fornecidos!
+
+**🎯 DETECÇÃO DE GRÁFICOS - REGRA ABSOLUTA:**
+Se o usuário mencionar qualquer uma destas palavras-chave, você DEVE gerar um gráfico Plotly:
+- Palavras-chave visuais: "gráfico", "chart", "visualização", "plotar", "plot", "barras", "pizza", "linhas", "scatter"
+- Palavras-chave analíticas: "ranking", "top N", "top 10", "maiores", "menores", "comparação"
+
+**FORMATO DE CÓDIGO PARA GRÁFICOS:**
+```python
+df = load_data()
+# ... filtros e processamento ...
+result = px.bar(df_filtered, x='coluna_x', y='coluna_y', title='Título do Gráfico')
+```
+
+**TIPOS DE GRÁFICOS DISPONÍVEIS:**
+- px.bar() - Gráfico de barras (use para rankings, comparações)
+- px.pie() - Gráfico de pizza (use para proporções)
+- px.line() - Gráfico de linhas (use para tendências temporais)
+- px.scatter() - Gráfico de dispersão (use para correlações)
+
+**EXEMPLO COMPLETO - RANKING:**
+```python
+df = load_data()
+df_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS'].nlargest(10, 'VENDA_30DD')
+result = px.bar(df_filtered, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Segmento Tecidos')
+```
 
 **EXEMPLO DE MAPEAMENTO:**
 - Usuário diz: "segmento tecido" → Você usa: df[df['NOMESEGMENTO'] == 'TECIDOS']
