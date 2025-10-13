@@ -169,44 +169,9 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
 
                     if reset_password_submitted:
                         if DB_AVAILABLE and user_id > 0:
-                            st.markdown("---")
-                            st.warning(f"⚠️ Resetar senha para: **{selected_username}**")
-
-                            with st.container():
-                                new_temp_password = st.text_input(
-                                    "Nova Senha Temporária",
-                                    type="password",
-                                    key=f"temp_pass_{user_id}",
-                                    help="Digite a nova senha temporária para o usuário"
-                                )
-                                confirm_temp = st.text_input(
-                                    "Confirme a Senha",
-                                    type="password",
-                                    key=f"confirm_temp_{user_id}",
-                                    help="Digite novamente a senha"
-                                )
-
-                                if st.button("🔑 Confirmar Reset", key=f"confirm_reset_{user_id}", type="primary"):
-                                    if not new_temp_password:
-                                        st.error("❌ Digite a nova senha.")
-                                    elif new_temp_password != confirm_temp:
-                                        st.error("❌ As senhas não coincidem.")
-                                    else:
-                                        # Validar força da senha
-                                        is_valid, error_msg = validate_password_strength(new_temp_password)
-                                        if not is_valid:
-                                            st.error(f"❌ {error_msg}")
-                                        else:
-                                            success = auth_db.reset_user_password(user_id, new_temp_password)
-                                            if success:
-                                                st.success(f"✅ Senha resetada para '{selected_username}'!")
-                                                audit_logger.info(f"Admin {st.session_state.get('username')} resetou senha de {selected_username}.")
-                                                st.info("💡 Informe o usuário sobre a nova senha temporária.")
-                                                import time
-                                                time.sleep(2)
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ Erro ao resetar senha.")
+                            # Armazenar no session_state para mostrar formulário de reset
+                            st.session_state[f"reset_password_mode_{user_id}"] = True
+                            st.rerun()
                         else:
                             st.warning("⚠️ Reset de senha não disponível no modo Cloud.")
 
@@ -217,6 +182,59 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                                 st.success(f"Usuário '{selected_username}' excluído permanentemente.")
                                 audit_logger.info(f"Admin {st.session_state.get('username')} excluiu o usuário {selected_username}.")
                                 st.rerun()
+
+                # Formulário de reset de senha (fora do form principal)
+                if st.session_state.get(f"reset_password_mode_{user_id}", False):
+                    st.markdown("---")
+                    st.warning(f"⚠️ Resetar senha para: **{selected_username}**")
+
+                    with st.form(f"reset_password_form_{user_id}"):
+                        new_temp_password = st.text_input(
+                            "Nova Senha Temporária",
+                            type="password",
+                            key=f"temp_pass_{user_id}",
+                            help="Digite a nova senha temporária para o usuário"
+                        )
+                        confirm_temp = st.text_input(
+                            "Confirme a Senha",
+                            type="password",
+                            key=f"confirm_temp_{user_id}",
+                            help="Digite novamente a senha"
+                        )
+
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            confirm_reset = st.form_submit_button("🔑 Confirmar Reset", type="primary")
+                        with col2:
+                            cancel_reset = st.form_submit_button("❌ Cancelar")
+
+                        if cancel_reset:
+                            del st.session_state[f"reset_password_mode_{user_id}"]
+                            st.rerun()
+
+                        if confirm_reset:
+                            if not new_temp_password:
+                                st.error("❌ Digite a nova senha.")
+                            elif new_temp_password != confirm_temp:
+                                st.error("❌ As senhas não coincidem.")
+                            else:
+                                # Validar força da senha
+                                is_valid, error_msg = validate_password_strength(new_temp_password)
+                                if not is_valid:
+                                    st.error(f"❌ {error_msg}")
+                                else:
+                                    success = auth_db.reset_user_password(user_id, new_temp_password)
+                                    if success:
+                                        st.success(f"✅ Senha resetada para '{selected_username}'!")
+                                        audit_logger.info(f"Admin {st.session_state.get('username')} resetou senha de {selected_username}.")
+                                        st.info("💡 Informe o usuário sobre a nova senha temporária.")
+                                        del st.session_state[f"reset_password_mode_{user_id}"]
+                                        import time
+                                        time.sleep(2)
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Erro ao resetar senha.")
+
     else:
         st.info("Nenhum usuário cadastrado ainda.")
 
