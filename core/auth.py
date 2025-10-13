@@ -160,7 +160,7 @@ def login():
                     return
 
                 # Verificar autenticação baseada no modo
-                auth_mode = st.session_state.get("auth_mode", "sql_server")
+                auth_mode = st.session_state.get("auth_mode", "cloud_fallback")
 
                 if auth_mode == "sql_server":
                     # Usar autenticação SQL Server original
@@ -169,6 +169,7 @@ def login():
                         role, erro = current_auth_db.autenticar_usuario(username, password)
                     else:
                         role, erro = None, "Banco de dados não disponível"
+
                     if role:
                         # Login bem-sucedido - resetar rate limiter
                         login_limiter.reset(username)
@@ -182,13 +183,28 @@ def login():
                         time.sleep(1)
                         st.rerun()
                     else:
-                        audit_logger.warning(f"Tentativa de login falha para o usuário: {username}. Erro: {erro or 'Usuário ou senha inválidos.'}")
-                        if erro and "bloqueado" in erro:
-                            st.error(f"{erro} Contate o administrador.")
-                        elif erro and "Tentativas restantes" in erro:
-                            st.warning(erro)
+                        # Se SQL Server falhar, tentar cloud fallback
+                        audit_logger.warning(f"SQL Server falhou para {username}, tentando cloud fallback...")
+                        is_valid, cloud_role = verify_cloud_user(username, password)
+                        if is_valid:
+                            login_limiter.reset(username)
+                            st.session_state["authenticated"] = True
+                            st.session_state["username"] = username
+                            st.session_state["role"] = cloud_role
+                            st.session_state["ultimo_login"] = time.time()
+                            audit_logger.info(f"Usuário {username} logado com sucesso (Cloud Fallback). Papel: {cloud_role}")
+                            st.success(f"Bem-vindo, {username}! (Modo Cloud)")
+                            time.sleep(1)
+                            st.rerun()
                         else:
-                            st.error(erro or "Usuário ou senha inválidos.")
+                            # Ambos falharam
+                            audit_logger.warning(f"Tentativa de login falha para o usuário: {username}. Erro: {erro or 'Usuário ou senha inválidos.'}")
+                            if erro and "bloqueado" in erro:
+                                st.error(f"{erro} Contate o administrador.")
+                            elif erro and "Tentativas restantes" in erro:
+                                st.warning(erro)
+                            else:
+                                st.error(erro or "Usuário ou senha inválidos.")
                 else:
                     # Usar autenticação cloud fallback
                     is_valid, role = verify_cloud_user(username, password)
