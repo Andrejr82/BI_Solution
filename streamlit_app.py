@@ -1050,7 +1050,38 @@ else:
                 if user_query and msg["role"] == "assistant":
                     st.caption(f"📝 Pergunta: {user_query}")
 
-                st.write(content)
+                # ✅ CORREÇÃO: Garantir renderização correta do content
+                if isinstance(content, str):
+                    # Caso normal: content é string
+                    st.markdown(content)
+                elif isinstance(content, dict):
+                    # Se content for dict, tentar extrair mensagem
+                    if "message" in content:
+                        st.markdown(content["message"])
+                    elif "text" in content:
+                        st.markdown(content["text"])
+                    else:
+                        # Último recurso: mostrar JSON formatado
+                        st.warning("⚠️ Resposta em formato não esperado:")
+                        st.json(content)
+                else:
+                    # Converter para string
+                    st.markdown(str(content))
+
+                # ✅ DEBUG PARA ADMINS: Mostrar estrutura da resposta
+                if msg["role"] == "assistant" and st.session_state.get('role') == 'admin':
+                    with st.expander("🔍 Debug (Admin)", expanded=False):
+                        st.write("**Response Data Structure:**")
+                        st.json(response_data)
+
+                        st.write("**Response Type:**", response_type)
+                        st.write("**Content Type:**", type(content).__name__)
+
+                        if isinstance(content, str):
+                            st.write("**Content Length:**", len(content))
+                        elif isinstance(content, (list, dict)):
+                            st.write("**Content Keys/Length:**",
+                                    list(content.keys()) if isinstance(content, dict) else len(content))
 
                 # ========================================
                 # 🎯 FASE 1: FEEDBACK SYSTEM
