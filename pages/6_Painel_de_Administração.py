@@ -48,6 +48,8 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
             new_username = st.text_input("Nome de Usuário")
             new_password = st.text_input("Senha", type="password")
             new_role = st.selectbox("Papel", ["user", "admin"])
+            new_cloud_enabled = st.checkbox("🌤️ Acesso Cloud (Streamlit Cloud)", value=False,
+                                           help="Marque para permitir que este usuário acesse via Streamlit Cloud")
             add_user_submitted = st.form_submit_button("Adicionar Usuário")
 
             if add_user_submitted:
@@ -69,9 +71,12 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                             st.error(f"❌ {error_msg}")
                         else:
                             try:
-                                auth_db.criar_usuario(sanitized_username, new_password, new_role)
-                                st.success(f"Usuário '{sanitized_username}' adicionado com sucesso!")
-                                audit_logger.info(f"Admin {st.session_state.get('username')} adicionou o usuário {sanitized_username} com papel {new_role}.")
+                                auth_db.criar_usuario(sanitized_username, new_password, new_role, new_cloud_enabled)
+                                cloud_msg = " (Cloud habilitado)" if new_cloud_enabled else ""
+                                st.success(f"Usuário '{sanitized_username}' adicionado com sucesso!{cloud_msg}")
+                                audit_logger.info(f"Admin {st.session_state.get('username')} adicionou o usuário {sanitized_username} com papel {new_role}. Cloud: {new_cloud_enabled}")
+                                if new_cloud_enabled:
+                                    st.info("💡 Lembre-se de executar o script de sincronização: `python dev_tools/scripts/sync_users_to_cloud.py`")
                                 st.rerun()
                             except ValueError as e:
                                 st.error(f"Erro ao adicionar usuário: {e}")
@@ -122,10 +127,13 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                 with st.form(f"edit_user_form_{user_id}"):
                     current_role = selected_user.get('role', 'user')
                     current_status = selected_user.get('ativo', True)
-                    
+                    current_cloud = selected_user.get('cloud_enabled', False)
+
                     edited_role = st.selectbox("Papel", ["user", "admin"], index=["user", "admin"].index(current_role))
                     edited_status = st.checkbox("Ativo", value=current_status)
-                    
+                    edited_cloud = st.checkbox("🌤️ Acesso Cloud", value=current_cloud,
+                                              help="Permitir acesso via Streamlit Cloud")
+
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         update_submitted = st.form_submit_button("Atualizar Papel/Status")
@@ -136,15 +144,26 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
 
                     if update_submitted:
                         if DB_AVAILABLE and user_id > 0:
+                            changes_made = False
                             if edited_role != current_role:
                                 auth_db.update_user_role(user_id, edited_role)
                                 st.success(f"Papel do usuário '{selected_username}' atualizado para '{edited_role}'.")
                                 audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o papel do usuário {selected_username} para {edited_role}.")
+                                changes_made = True
                             if edited_status != current_status:
                                 auth_db.set_user_status(user_id, edited_status)
                                 st.success(f"Status do usuário '{selected_username}' atualizado para {'Ativo' if edited_status else 'Inativo'}.")
                                 audit_logger.info(f"Admin {st.session_state.get('username')} atualizou o status do usuário {selected_username} para {'Ativo' if edited_status else 'Inativo'}.")
-                            st.rerun()
+                                changes_made = True
+                            if edited_cloud != current_cloud:
+                                auth_db.toggle_cloud_enabled(user_id, edited_cloud)
+                                st.success(f"Acesso Cloud {'habilitado' if edited_cloud else 'desabilitado'} para '{selected_username}'.")
+                                audit_logger.info(f"Admin {st.session_state.get('username')} {'habilitou' if edited_cloud else 'desabilitou'} acesso cloud para {selected_username}.")
+                                if edited_cloud:
+                                    st.info("💡 Execute: `python dev_tools/scripts/sync_users_to_cloud.py`")
+                                changes_made = True
+                            if changes_made:
+                                st.rerun()
                         else:
                             st.warning("⚠️ Modo Cloud: Edição de usuários não disponível. Use SQL Server para gerenciar usuários.")
 

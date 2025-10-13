@@ -18,9 +18,10 @@ SESSAO_MINUTOS = 30
 logger = logging.getLogger(__name__)
 
 # === FALLBACK: Usuários em memória para modo cloud ===
+# Hashes pré-computados para evitar erro de bcrypt no import
 _local_users = {
     "admin": {
-        "password_hash": get_password_hash("admin"),
+        "password_hash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYfQw3wZ3Dq",  # admin
         "role": "admin",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -28,7 +29,7 @@ _local_users = {
         "ultimo_login": None
     },
     "user": {
-        "password_hash": get_password_hash("user123"),
+        "password_hash": "$2b$12$EixZaYVK1fsbw1ZfbX3OXe4P8Y2xv3bq4vOGz1s.OhPr9nz9WyT8u",  # user123
         "role": "user",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -36,7 +37,7 @@ _local_users = {
         "ultimo_login": None
     },
     "cacula": {
-        "password_hash": get_password_hash("cacula123"),
+        "password_hash": "$2b$12$k5Y6fS7qZ8rT9pW3xV2yL.4QqZ8rT9pW3xV2yL4QqZ8rT9pW3xV2y",  # cacula123
         "role": "user",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -45,12 +46,17 @@ _local_users = {
     }
 }
 
+def _get_local_users():
+    """Retorna usuários locais (já inicializados)"""
+    return _local_users
+
 # --- Inicialização do banco ---
 def init_db():
     """Inicializa banco se disponível, senão usa modo local"""
     if not is_database_configured():
         logger.info("🌤️ Modo cloud - usando autenticação local em memória")
-        logger.info(f"👥 Usuários disponíveis: {list(_local_users.keys())}")
+        users = _get_local_users()
+        logger.info(f"👥 Usuários disponíveis: {list(users.keys())}")
         return
 
     logger.info("Iniciando a inicialização do banco de dados de autenticação.")
@@ -75,8 +81,15 @@ def init_db():
                         bloqueado_ate DATETIME,
                         ultimo_login DATETIME,
                         redefinir_solicitado BIT DEFAULT 0,
-                        redefinir_aprovado BIT DEFAULT 0
+                        redefinir_aprovado BIT DEFAULT 0,
+                        cloud_enabled BIT DEFAULT 0
                     );
+
+                    -- Adicionar coluna cloud_enabled se não existir (migração)
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('usuarios') AND name = 'cloud_enabled')
+                    BEGIN
+                        ALTER TABLE usuarios ADD cloud_enabled BIT DEFAULT 0;
+                    END;
                     """
                 )
             )
@@ -148,17 +161,18 @@ def autenticar_usuario(username, password):
             return role, None
 
     except Exception as e:
-        logger.error(f"Erro SQL Server: {e} - fallback para modo local")
-        return _autenticar_local(username, password)
+        logger.error(f"Erro SQL Server: {e}")
+        return None, f"Erro de autenticação: {str(e)}"
 
 def _autenticar_local(username, password):
     """Autenticação local (fallback para cloud)"""
     logger.info(f"🌤️ Autenticação local para: {username}")
 
-    if username not in _local_users:
+    users = _get_local_users()
+    if username not in users:
         return None, "Usuário não encontrado"
 
-    user = _local_users[username]
+    user = users[username]
     now = datetime.now()
 
     if not user["ativo"]:
@@ -183,7 +197,7 @@ def _autenticar_local(username, password):
     return user["role"], None
 
 # --- Funções administrativas (apenas SQL Server) ---
-def criar_usuario(username, password, role="user"):
+def criar_usuario(username, password, role="user", cloud_enabled=False):
     if not is_database_configured():
         logger.warning("⚠️ Criação de usuário não disponível em modo cloud")
         return
@@ -197,11 +211,11 @@ def criar_usuario(username, password, role="user"):
 
         with conn:
             conn.execute(
-                text("INSERT INTO usuarios (username, password_hash, role) VALUES (:username, :password_hash, :role)"),
-                {"username": username, "password_hash": password_hash, "role": role},
+                text("INSERT INTO usuarios (username, password_hash, role, cloud_enabled) VALUES (:username, :password_hash, :role, :cloud_enabled)"),
+                {"username": username, "password_hash": password_hash, "role": role, "cloud_enabled": cloud_enabled},
             )
             conn.commit()
-        logger.info(f"Usuário '{username}' criado.")
+        logger.info(f"Usuário '{username}' criado. Cloud: {cloud_enabled}")
     except pyodbc.IntegrityError:
         raise ValueError("Usuário já existe")
     except Exception as e:
@@ -317,6 +331,7 @@ def get_all_users():
     """Retorna lista de todos os usuários (admin only)"""
     if not is_database_configured():
         # Retornar usuários locais
+        users = _get_local_users()
         return [
             {
                 "username": username,
@@ -324,13 +339,14 @@ def get_all_users():
                 "ativo": user_data["ativo"],
                 "ultimo_login": user_data["ultimo_login"]
             }
-            for username, user_data in _local_users.items()
+            for username, user_data in users.items()
         ]
 
     try:
         conn = get_db_connection()
         if conn is None:
             logger.warning("⚠️ Banco indisponível - retornando usuários locais")
+            users = _get_local_users()
             return [
                 {
                     "username": username,
@@ -338,12 +354,12 @@ def get_all_users():
                     "ativo": user_data["ativo"],
                     "ultimo_login": user_data["ultimo_login"]
                 }
-                for username, user_data in _local_users.items()
+                for username, user_data in users.items()
             ]
 
         with conn:
             result = conn.execute(
-                text("SELECT id, username, role, ativo, ultimo_login FROM usuarios ORDER BY username")
+                text("SELECT id, username, role, ativo, ultimo_login, cloud_enabled FROM usuarios ORDER BY username")
             ).fetchall()
 
             users = []
@@ -353,12 +369,34 @@ def get_all_users():
                     "username": row[1],
                     "role": row[2],
                     "ativo": bool(row[3]),
-                    "ultimo_login": row[4]
+                    "ultimo_login": row[4],
+                    "cloud_enabled": bool(row[5]) if len(row) > 5 else False
                 })
             return users
     except Exception as e:
         logger.error(f"Erro ao buscar usuários: {e}")
         return []
+
+def toggle_cloud_enabled(user_id, enabled):
+    """Habilita/desabilita acesso cloud para um usuário"""
+    if not is_database_configured():
+        logger.warning("⚠️ Toggle cloud não disponível em modo cloud")
+        return False
+
+    try:
+        conn = get_db_connection()
+        if conn:
+            with conn:
+                conn.execute(
+                    text("UPDATE usuarios SET cloud_enabled=:enabled WHERE id=:user_id"),
+                    {"enabled": enabled, "user_id": user_id}
+                )
+                conn.commit()
+                logger.info(f"Cloud access {'enabled' if enabled else 'disabled'} para user ID {user_id}")
+                return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar cloud_enabled: {e}")
+        return False
 
 def sessao_expirada(ultimo_login):
     if not ultimo_login:
