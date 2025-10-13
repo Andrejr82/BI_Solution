@@ -4,7 +4,7 @@ developmentMode = false
 [server]
 # Otimizado para Streamlit Cloud + 6 usuários
 headless = true
-enableCORS = false
+enableCORS = true
 enableXsrfProtection = true
 maxUploadSize = 50
 port = 8501
