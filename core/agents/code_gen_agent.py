@@ -96,10 +96,11 @@ class CodeGenAgent:
 
             # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
             column_mapping = {
+                'une': 'UNE_ID',  # Renomear 'une' para evitar conflito com 'UNE' (de une_nome)
                 'nomesegmento': 'NOMESEGMENTO',
                 'codigo': 'PRODUTO',
                 'nome_produto': 'NOME',
-                'une_nome': 'UNE',
+                'une_nome': 'UNE',  # une_nome vira UNE (nome da loja)
                 'nomegrupo': 'NOMEGRUPO',
                 'ean': 'EAN',
                 'preco_38_percent': 'LIQUIDO_38',
@@ -389,10 +390,11 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
 
                 # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
                 column_mapping = {
+                    'une': 'UNE_ID',  # Renomear 'une' para evitar conflito com 'UNE' (de une_nome)
                     'nomesegmento': 'NOMESEGMENTO',
                     'codigo': 'PRODUTO',
                     'nome_produto': 'NOME',
-                    'une_nome': 'UNE',
+                    'une_nome': 'UNE',  # une_nome vira UNE (nome da loja)
                     'nomegrupo': 'NOMEGRUPO',
                     'ean': 'EAN',
                     'preco_38_percent': 'LIQUIDO_38',
