@@ -59,7 +59,8 @@ def init_auth_system():
 CLOUD_USERS = {
     "admin": {"password": "admin", "role": "admin"},
     "user": {"password": "user123", "role": "user"},
-    "cacula": {"password": "cacula123", "role": "admin"}  # Usuário específico do projeto
+    "cacula": {"password": "cacula123", "role": "admin"},  # Usuário específico do projeto
+    "renan": {"password": "renan", "role": "user"}  # Sincronizado do SQL Server local
 }
 
 def verify_cloud_user(username, password):
