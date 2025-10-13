@@ -349,26 +349,85 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
         }
         
         logger.info(f"\n--- PROMPT PARA CODEGENAGENT ---\n{prompt_for_code_gen}\n---------------------------------")
-        
+
         logger.info("🚀 Calling code_gen_agent.generate_and_execute_code...")
         code_gen_response = code_gen_agent.generate_and_execute_code(code_gen_input)
+
+        # ✅ LOGS DETALHADOS DO RETORNO DO CODEGENAGENT
         logger.info(f"📋 CodeGenAgent response type: {code_gen_response.get('type')}")
+        logger.info(f"📋 CodeGenAgent response keys: {list(code_gen_response.keys())}")
+
+        # Logs específicos por tipo
+        if code_gen_response.get("type") == "dataframe":
+            df_result = code_gen_response.get("output")
+            if isinstance(df_result, pd.DataFrame):
+                logger.info(f"📊 DataFrame result: {len(df_result)} rows, {len(df_result.columns)} cols")
+                logger.info(f"📊 DataFrame columns: {list(df_result.columns)}")
+                if len(df_result) > 0:
+                    logger.info(f"📊 DataFrame sample (first 3 rows): {df_result.head(3).to_dict(orient='records')}")
+            else:
+                logger.warning(f"⚠️ Expected DataFrame but got {type(df_result)}")
+        elif code_gen_response.get("type") == "text":
+            text_output = str(code_gen_response.get("output"))
+            logger.info(f"📝 Text result length: {len(text_output)} chars")
+            logger.info(f"📝 Text result preview: {text_output[:200]}...")
 
         # Processa a resposta do CodeGenAgent
         if code_gen_response.get("type") == "chart":
             plotly_spec = json.loads(code_gen_response.get("output"))
+            logger.info(f"📈 Chart generated successfully")
             return {"plotly_spec": plotly_spec}
+
         elif code_gen_response.get("type") == "dataframe":
-            # Se o resultado for um dataframe, converte para uma lista de dicionários para a resposta final
+            # ✅ CORREÇÃO: Converter DataFrame para lista de dicionários
             df_result = code_gen_response.get("output")
-            return {"retrieved_data": df_result.to_dict(orient='records')}
+
+            # Garantir que seja DataFrame
+            if isinstance(df_result, pd.DataFrame):
+                data_list = df_result.to_dict(orient='records')
+            else:
+                data_list = df_result
+
+            logger.info(f"📊 Converted DataFrame to {len(data_list)} records")
+            logger.info(f"📊 Sample record keys: {list(data_list[0].keys()) if data_list else 'Empty'}")
+            return {"retrieved_data": data_list}
+
         elif code_gen_response.get("type") == "text":
-            # Se for texto, encapsula na estrutura de resposta final
-            return {"final_response": {"type": "text", "content": str(code_gen_response.get("output"))}}
+            # ✅ CORREÇÃO: Garantir que texto seja STRING e preservar user_query
+            text_output = str(code_gen_response.get("output"))
+            logger.info(f"📝 Text response: {len(text_output)} chars - Returning as final_response")
+
+            return {
+                "final_response": {
+                    "type": "text",
+                    "content": text_output,
+                    "user_query": user_query
+                }
+            }
+
         elif code_gen_response.get("type") == "error":
-            return {"final_response": {"type": "text", "content": code_gen_response.get("output")}}
+            error_msg = str(code_gen_response.get("output", "Erro desconhecido"))
+            logger.error(f"❌ CodeGenAgent error: {error_msg}")
+
+            return {
+                "final_response": {
+                    "type": "text",
+                    "content": f"❌ Erro ao processar: {error_msg}",
+                    "user_query": user_query
+                }
+            }
+
         else:
-            return {"final_response": {"type": "text", "content": f"Resposta inesperada do agente de código: {code_gen_response.get('output')}"}}
+            # ✅ FALLBACK: Tipo desconhecido
+            logger.warning(f"⚠️ Unknown CodeGenAgent response type: {code_gen_response.get('type')}")
+
+            return {
+                "final_response": {
+                    "type": "text",
+                    "content": f"⚠️ Resposta inesperada do agente: {code_gen_response.get('output')}",
+                    "user_query": user_query
+                }
+            }
 
     except Exception as e:
         logger.error(f"Erro ao gerar script Python com CodeGenAgent: {e}", exc_info=True)
@@ -382,20 +441,59 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
     user_query = state['messages'][-1]['content']
     logger.info(f"[NODE] format_final_response: Formatando resposta para '{user_query}'")
 
+    # 🔍 LOGS DETALHADOS DO ESTADO
+    logger.info(f"🔍 STATE KEYS: {list(state.keys())}")
+    logger.info(f"🔍 clarification_needed: {state.get('clarification_needed')}")
+    logger.info(f"🔍 plotly_spec exists: {bool(state.get('plotly_spec'))}")
+    logger.info(f"🔍 retrieved_data exists: {bool(state.get('retrieved_data'))}")
+    logger.info(f"🔍 final_response exists: {bool(state.get('final_response'))}")
+
+    # Se retrieved_data existir, logar detalhes
+    if state.get("retrieved_data"):
+        data = state.get("retrieved_data")
+        logger.info(f"📊 retrieved_data type: {type(data)}")
+        logger.info(f"📊 retrieved_data length: {len(data) if isinstance(data, list) else 'N/A'}")
+        if isinstance(data, list) and len(data) > 0:
+            logger.info(f"📊 retrieved_data sample keys: {list(data[0].keys())}")
+
     # 📝 Construir resposta baseada no estado
     response = {}
-    if state.get("clarification_needed"):
+
+    # ✅ PRIORIDADE 1: Verificar se já existe final_response (resposta direta do CodeGenAgent)
+    if state.get("final_response"):
+        logger.info(f"✅ Using pre-formatted final_response from state")
+        response = state.get("final_response")
+        # Garantir que user_query esteja presente
+        if "user_query" not in response:
+            response["user_query"] = user_query
+
+    # ✅ PRIORIDADE 2: Clarificação
+    elif state.get("clarification_needed"):
         response = {"type": "clarification", "content": state.get("clarification_options")}
         logger.info(f"💬 CLARIFICATION RESPONSE for query: '{user_query}'")
+
+    # ✅ PRIORIDADE 3: Gráfico
     elif state.get("plotly_spec"):
         response = {"type": "chart", "content": state.get("plotly_spec")}
+        response["user_query"] = user_query
         logger.info(f"📈 CHART RESPONSE for query: '{user_query}'")
+
+    # ✅ PRIORIDADE 4: Dados tabulares
     elif state.get("retrieved_data"):
-        response = {"type": "data", "content": _clean_json_values(state.get("retrieved_data"))}
-        logger.info(f"📊 DATA RESPONSE for query: '{user_query}' - {len(state.get('retrieved_data', []))} rows")
+        data = state.get("retrieved_data")
+        response = {"type": "data", "content": _clean_json_values(data)}
+        response["user_query"] = user_query
+        logger.info(f"📊 DATA RESPONSE for query: '{user_query}' - {len(data)} rows")
+
+    # ❌ FALLBACK: Se nenhum dos acima
     else:
-        response = {"type": "text", "content": "Não consegui processar a sua solicitação."}
-        logger.warning(f"❓ DEFAULT RESPONSE for query: '{user_query}' - No specific response type matched")
+        response = {
+            "type": "text",
+            "content": "❌ Não consegui processar a sua solicitação. Tente reformular a pergunta."
+        }
+        response["user_query"] = user_query
+        logger.warning(f"❓ FALLBACK RESPONSE for query: '{user_query}' - No data in state")
+        logger.warning(f"❓ State keys available: {list(state.keys())}")
 
     # ✅ GARANTIR que a pergunta do usuário seja preservada no histórico
     final_messages = state['messages'] + [{"role": "assistant", "content": response}]
