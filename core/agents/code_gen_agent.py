@@ -155,6 +155,7 @@ class CodeGenAgent:
         """
         prompt = input_data.get("query", "")
         raw_data = input_data.get("raw_data", [])
+        user_query = input_data.get("query", "")  # Definir no início para evitar UnboundLocalError
         
         # O cache é simplificado, pois a lógica de RAG foi removida.
         cache_key = hash(prompt + json.dumps(raw_data, sort_keys=True) if raw_data else "")
@@ -201,7 +202,7 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
             examples_context = ""
             if self.pattern_matcher:
                 try:
-                    user_query = input_data.get("query", "")
+                    # user_query já foi definido no início da função
                     examples_context = self.pattern_matcher.build_examples_context(user_query, max_examples=2)
                     if examples_context:
                         self.logger.info("🎯 Exemplos contextuais injetados no prompt")
@@ -254,7 +255,7 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
                 return {"type": "text", "output": "Não consegui gerar um script para responder à sua pergunta."}
 
             # 🚀 QUICK WIN 1: Validar e corrigir Top N automaticamente
-            user_query = input_data.get("query", "")
+            # user_query já foi definido no início da função
             code_to_execute = self._validate_top_n(code_to_execute, user_query)
 
             # ✅ FASE 1: Validar código antes de executar
