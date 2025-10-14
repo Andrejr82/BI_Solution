@@ -365,6 +365,7 @@ else:
     # --- Logout Button ---
     with st.sidebar:
         st.write(f"Bem-vindo, {st.session_state.get('username', '')}!")
+        st.write(f"DEBUG: Role do usuário (sidebar): {st.session_state.get('role', '')}") # LINHA DE DEBUG
         if st.button("Logout"):
             st.session_state.authenticated = False
             st.session_state.username = ""
