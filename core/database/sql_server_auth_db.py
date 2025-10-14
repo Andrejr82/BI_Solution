@@ -98,6 +98,17 @@ def init_db():
                     BEGIN
                         ALTER TABLE usuarios ADD cloud_enabled BIT DEFAULT 0;
                     END;
+
+                    -- Criar tabela de permissões de usuário
+                    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_permissions' and xtype='U')
+                    CREATE TABLE user_permissions (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        username NVARCHAR(255) NOT NULL,
+                        page_file NVARCHAR(255) NOT NULL,
+                        created_at DATETIME DEFAULT GETDATE(),
+                        UNIQUE(username, page_file),
+                        FOREIGN KEY (username) REFERENCES usuarios(username) ON DELETE CASCADE
+                    );
                     """
                 )
             )
@@ -413,3 +424,86 @@ def sessao_expirada(ultimo_login):
         return (datetime.now() - ultimo_login) > timedelta(minutes=SESSAO_MINUTOS)
     except Exception:
         return True
+
+# --- Funções de Permissões ---
+def save_user_permissions(username, pages_list):
+    """Salva permissões de usuário no banco de dados"""
+    if not is_database_configured():
+        logger.warning("⚠️ Salvamento de permissões não disponível em modo cloud")
+        return False
+
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            logger.warning("⚠️ Banco indisponível - permissões não foram salvas")
+            return False
+
+        with conn:
+            # Primeiro, remover permissões antigas do usuário
+            conn.execute(
+                text("DELETE FROM user_permissions WHERE username=:username"),
+                {"username": username}
+            )
+
+            # Inserir novas permissões
+            for page_file in pages_list:
+                conn.execute(
+                    text("INSERT INTO user_permissions (username, page_file) VALUES (:username, :page_file)"),
+                    {"username": username, "page_file": page_file}
+                )
+
+            conn.commit()
+            logger.info(f"✅ Permissões salvas para {username}: {len(pages_list)} páginas")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao salvar permissões: {e}")
+        return False
+
+def load_user_permissions(username):
+    """Carrega permissões de usuário do banco de dados"""
+    if not is_database_configured():
+        return None  # Retornar None indica que não há permissões customizadas
+
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            return None
+
+        with conn:
+            result = conn.execute(
+                text("SELECT page_file FROM user_permissions WHERE username=:username"),
+                {"username": username}
+            ).fetchall()
+
+            if result:
+                pages = [row[0] for row in result]
+                logger.info(f"✅ Permissões carregadas para {username}: {len(pages)} páginas")
+                return pages
+            else:
+                return None  # Nenhuma permissão customizada
+    except Exception as e:
+        logger.error(f"Erro ao carregar permissões: {e}")
+        return None
+
+def delete_user_permissions(username):
+    """Remove todas as permissões customizadas de um usuário"""
+    if not is_database_configured():
+        logger.warning("⚠️ Remoção de permissões não disponível em modo cloud")
+        return False
+
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            return False
+
+        with conn:
+            conn.execute(
+                text("DELETE FROM user_permissions WHERE username=:username"),
+                {"username": username}
+            )
+            conn.commit()
+            logger.info(f"✅ Permissões removidas para {username}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao remover permissões: {e}")
+        return False
