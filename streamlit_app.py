@@ -137,8 +137,8 @@ if not st.session_state.authenticated or sessao_expirada():
     login()
 else:
     # --- Configuração da Página ---
-    st.set_page_config(page_title="Agent_BI", page_icon="📊", layout="wide")
-    st.title("📊 Agent_BI - Assistente Inteligente")
+    st.set_page_config(page_title="Assistente de Negócios", page_icon="📊", layout="wide")
+    st.title("📊 Assistente de Negócios")
 
     # --- Inicialização do Backend Integrado ---
     @st.cache_resource(show_spinner=False)
@@ -480,7 +480,7 @@ else:
                 "role": "assistant",
                 "content": {
                     "type": "text",
-                    "content": "Olá! Como posso ajudar você com seus dados hoje?"
+                    "content": "Olá! Como posso te ajudar?"
                 }
             }
         ]
