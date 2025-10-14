@@ -39,9 +39,13 @@ AVAILABLE_PAGES = {
 # Permissões padrão por role
 DEFAULT_PERMISSIONS = {
     "admin": list(AVAILABLE_PAGES.keys()),  # Admin tem acesso a tudo
-    "user": [  # User tem acesso limitado
+    "user": [  # User tem acesso às páginas de usuário final
+        "3_Graficos_Salvos.py",
         "5_📚_Exemplos_Perguntas.py",
         "6_❓_Ajuda.py",
+        "7_📦_Transferências.py",
+        "8_📊_Relatório_de_Transferências.py",
+        "10_🤖_Gemini_Playground.py",
         "11_🔐_Alterar_Senha.py",
     ]
 }
