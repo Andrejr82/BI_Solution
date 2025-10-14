@@ -655,7 +655,38 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
         if "produtos" in result:  # Abastecimento
             retrieved_data = result.get("produtos", [])
             return {"retrieved_data": retrieved_data}
-        else:  # MC ou Preço - retornar como texto formatado
+        elif "mc_calculada" in result:  # MC - Formatar para usuário
+            response_text = f"""**Média Comum (MC) - Produto {result['produto_id']}**
+
+**Produto:** {result['nome']}
+**Segmento:** {result['segmento']}
+**UNE:** {result['une_id']}
+
+**Indicadores:**
+- MC Calculada: {result['mc_calculada']:.2f} unidades/dia
+- Estoque Atual: {result['estoque_atual']:.2f} unidades
+- Linha Verde: {result['linha_verde']:.2f} unidades
+- Percentual da LV: {result['percentual_linha_verde']:.1f}%
+
+**Recomendação:**
+{result['recomendacao']}"""
+            return {"final_response": {"type": "text", "content": response_text}}
+        elif "valor_original" in result:  # Preço - Formatar para usuário
+            response_text = f"""**Cálculo de Preço Final UNE**
+
+**Valor Original:** R$ {result['valor_original']:.2f}
+**Tipo de Venda:** {result['tipo']}
+**Ranking:** {result['ranking']} ({result['desconto_ranking']})
+**Forma de Pagamento:** {result['forma_pagamento']} ({result['desconto_pagamento']})
+
+**Cálculo:**
+- Desconto Ranking: {result['desconto_aplicado_ranking']:.1f}%
+- Desconto Pagamento: {result['desconto_aplicado_pagamento']:.1f}%
+- **Desconto Total:** {result['desconto_total']:.1f}%
+
+**PREÇO FINAL:** R$ {result['preco_final']:.2f}"""
+            return {"final_response": {"type": "text", "content": response_text}}
+        else:  # Fallback - JSON formatado
             response_text = json.dumps(result, indent=2, ensure_ascii=False)
             return {"final_response": {"type": "text", "content": response_text}}
 
