@@ -13,6 +13,10 @@ O **Agent BI** é uma plataforma de business intelligence que permite aos usuár
 - **Visualização Dinâmica de Dados**: Gere gráficos e tabelas automaticamente a partir de suas perguntas.
 - **Dashboard Personalizável**: Salve e organize os gráficos mais importantes em um dashboard pessoal.
 - **Motor de Consulta Híbrido**: O sistema otimiza os custos usando um motor de consulta que prioriza cache e consultas diretas, utilizando LLMs apenas quando necessário.
+- **🆕 Operações UNE**: Consultas especializadas para gestão de Unidades de Negócio:
+  - **Abastecimento**: Identifique produtos que precisam reposição
+  - **MC (Média Comum)**: Consulte dimensionamento de estoque com recomendações
+  - **Preços UNE**: Calcule preços com política de varejo/atacado e rankings
 - **Painel de Administração**: Gerencie usuários, permissões e monitore a saúde do sistema.
 - **Diagnóstico e Testes**: Ferramentas integradas para diagnosticar problemas de conexão e testar a funcionalidade do sistema.
 
@@ -119,6 +123,42 @@ python scripts/health_check.py
 python scripts/test_hybrid_connection.py
 ```
 
+## 📦 Operações UNE (Novo!)
+
+O sistema agora suporta consultas especializadas para gestão de Unidades de Negócio (UNE). Faça perguntas em linguagem natural sobre:
+
+### **Abastecimento**
+```
+"Quais produtos precisam abastecimento na UNE 2586?"
+"Mostre produtos TECIDOS para reposição na UNE 2599"
+```
+
+### **MC (Média Comum)**
+```
+"Qual a MC do produto 704559 na UNE 2586?"
+"Recomendação de estoque para produto 123456"
+```
+
+### **Preços com Política UNE**
+```
+"Calcule o preço de R$ 800 ranking 0 a vista"
+"Qual o preço final de R$ 1500 ranking 2 em 30 dias?"
+```
+
+### **Demo e Testes**
+```bash
+# Executar demo interativo
+python demo/demo_une_operations.py
+
+# Executar testes automatizados (17 testes)
+pytest tests/test_une_operations.py -v
+```
+
+### **Documentação Completa**
+- [IMPLEMENTACAO_UNE_MVP.md](docs/IMPLEMENTACAO_UNE_MVP.md) - Documentação técnica completa
+- [PLANO_EXECUCAO_AGENTES.md](docs/PLANO_EXECUCAO_AGENTES.md) - Plano de implementação
+- [RELATORIO_PROGRESSO_MVP_UNE.md](docs/RELATORIO_PROGRESSO_MVP_UNE.md) - Relatório de progresso
+
 ## 📄 Documentação Adicional
 
 Para mais detalhes sobre a arquitetura, guias de desenvolvimento e relatórios, consulte o diretório `docs/`.
@@ -130,3 +170,28 @@ Contribuições são bem-vindas! Por favor, leia o nosso (futuro) `CONTRIBUTING.
 ## 📜 Licença
 
 Este projeto é licenciado sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+
+## 📋 Histórico de Versões
+
+### v2.1 - Integração UNE no Streamlit (2025-10-14)
+**Correções Críticas:**
+- Corrigidos erros de sintaxe em `bi_agent_nodes.py` (triple quotes, regex)
+- Fix: Streamlit agora usa `HumanMessage` do LangChain em vez de dicionários Python
+- Fix: Criada função `_extract_user_query()` para lidar corretamente com objetos LangChain
+
+**Novas Funcionalidades:**
+- Integração completa das ferramentas UNE no workflow do GraphBuilder
+- Novo intent `une_operation` para roteamento inteligente de queries UNE
+- Nó `execute_une_tool` (130+ linhas) com detecção automática de ferramentas
+- Formatação amigável para respostas de MC e Preço
+- Novo teste end-to-end `test_graph_integration.py` (3/3 passando)
+
+**Testes:**
+- ✅ 17/17 testes unitários UNE
+- ✅ 3/3 testes integração com LLM
+- ✅ 3/3 testes GraphBuilder
+- ✅ Validado no Streamlit local
+
+**Commits:**
+- `d736792` - Integrar ferramentas UNE no workflow principal
+- `b67a2dd` - Melhorar formatação de respostas MC e Preço
