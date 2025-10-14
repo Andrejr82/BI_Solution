@@ -1,10 +1,14 @@
 """
-Módulo para core/llm_adapter.py. Define as classes: GeminiLLMAdapter, DeepSeekLLMAdapter. Fornece funções utilitárias, incluindo 'get_completion' e outras.
+Módulo para core/llm_adapter.py. Define as classes: GeminiLLMAdapter, DeepSeekLLMAdapter, CustomLangChainLLM. Fornece funções utilitárias, incluindo 'get_completion' e outras.
 """
 
 import logging
+from typing import Any, List, Optional
 from openai import OpenAI, RateLimitError
 from core.utils.response_cache import ResponseCache
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
 
 logger = logging.getLogger(__name__)
 
@@ -203,3 +207,55 @@ class DeepSeekLLMAdapter:
         return stats
 
 
+
+class CustomLangChainLLM(BaseChatModel):
+    """
+    Wrapper LangChain para os adaptadores Gemini/DeepSeek.
+    Permite usar nossos adapters customizados com LangChain.
+    """
+    llm_adapter: Any
+
+    def __init__(self, llm_adapter: Any):
+        """
+        Inicializa o wrapper com um adapter (GeminiLLMAdapter ou DeepSeekLLMAdapter).
+
+        Args:
+            llm_adapter: Instância de GeminiLLMAdapter ou DeepSeekLLMAdapter
+        """
+        super().__init__(llm_adapter=llm_adapter)
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """
+        Implementação obrigatória do BaseChatModel.
+        Converte mensagens LangChain para formato OpenAI e chama o adapter.
+        """
+        # Converter mensagens LangChain para formato OpenAI
+        openai_messages = []
+        for msg in messages:
+            if hasattr(msg, 'type') and hasattr(msg, 'content'):
+                role = "user" if msg.type == "human" else msg.type
+                openai_messages.append({"role": role, "content": msg.content})
+
+        # Chamar o adapter
+        response = self.llm_adapter.get_completion(
+            messages=openai_messages,
+            temperature=kwargs.get("temperature", 0),
+            max_tokens=kwargs.get("max_tokens", 1024)
+        )
+
+        # Converter resposta para formato LangChain
+        content = response.get("content", "")
+        message = AIMessage(content=content)
+        generation = ChatGeneration(message=message)
+
+        return ChatResult(generations=[generation])
+
+    @property
+    def _llm_type(self) -> str:
+        """Retorna o tipo do LLM para identificação."""
+        return "custom_llm_adapter"

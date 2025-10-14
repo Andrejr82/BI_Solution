@@ -14,7 +14,9 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from core.llm_langchain_adapter import CustomLangChainLLM
+from core.llm_adapter import CustomLangChainLLM
+
+
 
 from core.connectivity.base import DatabaseAdapter
 from core.config.settings import settings # Import the settings instance
@@ -38,6 +40,11 @@ def create_caculinha_bi_agent(
     """
 
     from core.tools.data_tools import query_product_data, list_table_columns
+    from core.tools.une_tools import (
+        calcular_abastecimento_une,
+        calcular_mc_produto,
+        calcular_preco_final_une
+    )
 
     # Inicializar o mapeador de campos
     catalog_path = os.path.join(os.path.dirname(os.path.dirname(parquet_dir)), "data", "catalog_focused.json")
@@ -51,7 +58,14 @@ def create_caculinha_bi_agent(
         return code_gen_agent.generate_and_execute_code(query)
 
     # A lista de ferramentas agora é definida dentro do escopo que tem acesso ao db_adapter
-    bi_tools = [query_product_data, list_table_columns, generate_and_execute_python_code]
+    bi_tools = [
+        query_product_data,
+        list_table_columns,
+        generate_and_execute_python_code,
+        calcular_abastecimento_une,
+        calcular_mc_produto,
+        calcular_preco_final_une
+    ]
 
     # --- LLM para Geração de SQL ---
     sql_gen_llm = ChatOpenAI(
@@ -219,11 +233,22 @@ JSON:
                 [
                     (
                         "system",
-                        "Você é um assistente de BI. Sua tarefa é decidir qual ferramenta usar para responder à consulta do usuário. As ferramentas disponíveis são:\n" 
-                        "- `query_product_data`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria, categorias com estoque zero).\n" 
-                        "- `list_table_columns`: Para listar todas as colunas de uma tabela (arquivo Parquet) específica.\n" 
-                        "- `generate_and_execute_python_code`: Para análises complexas, cálculos, agregações ou geração de gráficos que exigem código Python.\n\n" 
-                        "Retorne APENAS o nome da ferramenta: `query_product_data`, `list_table_columns` ou `generate_and_execute_python_code`.",
+                        "Você é um assistente de BI. Sua tarefa é decidir qual ferramenta usar para responder à consulta do usuário. As ferramentas disponíveis são:\n\n"
+                        "**FERRAMENTAS GERAIS:**\n"
+                        "- `query_product_data`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria, categorias com estoque zero).\n"
+                        "- `list_table_columns`: Para listar todas as colunas de uma tabela (arquivo Parquet) específica.\n"
+                        "- `generate_and_execute_python_code`: Para análises complexas, cálculos, agregações ou geração de gráficos que exigem código Python.\n\n"
+                        "**FERRAMENTAS UNE (Unidade de Negócio):**\n"
+                        "- `calcular_abastecimento_une`: Para calcular produtos que precisam abastecimento em uma UNE específica. Use quando o usuário perguntar sobre 'abastecimento', 'reposição', 'produtos para abastecer', 'estoque baixo em UNE', ou mencionar uma UNE específica (ex: UNE 2586).\n"
+                        "- `calcular_mc_produto`: Para consultar MC (Média Comum) de um produto específico em uma UNE. Use quando o usuário perguntar sobre 'MC', 'Média Comum', 'média de vendas', ou solicitar recomendações de estoque para um produto específico.\n"
+                        "- `calcular_preco_final_une`: Para calcular preço final aplicando política UNE (varejo/atacado, ranking, forma de pagamento). Use quando o usuário perguntar sobre 'preço final', 'calcular preço', 'preço com desconto', 'preço atacado', 'preço varejo', ou mencionar formas de pagamento (vista, 30d, 90d, 120d).\n\n"
+                        "**EXEMPLOS DE ROTEAMENTO:**\n"
+                        "- 'Quais produtos precisam abastecimento na UNE 2586?' → `calcular_abastecimento_une`\n"
+                        "- 'Qual a MC do produto 704559?' → `calcular_mc_produto`\n"
+                        "- 'Calcule o preço de R$ 800 no ranking 0 a vista' → `calcular_preco_final_une`\n"
+                        "- 'Mostre produtos do segmento TECIDOS' → `query_product_data`\n"
+                        "- 'Faça um gráfico de vendas' → `generate_and_execute_python_code`\n\n"
+                        "Retorne APENAS o nome da ferramenta.",
                     ),
                     ("user", "{query}"),
                 ]
@@ -272,6 +297,100 @@ JSON:
             elif "generate_and_execute_python_code" in tool_decision:
                 # Return AIMessage encapsulating ToolCall for CodeGenAgent
                 return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="generate_and_execute_python_code", args={"query": user_query})])]}
+
+            elif "calcular_abastecimento_une" in tool_decision:
+                # Extrair UNE ID e segmento da query usando LLM
+                logger.info("Roteando para calcular_abastecimento_une")
+                extract_prompt = ChatPromptTemplate.from_messages([
+                    ("system",
+                     "Extraia o ID da UNE e o segmento (opcional) da consulta do usuário.\n"
+                     "Retorne APENAS um JSON no formato:\n"
+                     '{"une_id": <número>, "segmento": "<nome ou null>"}\n'
+                     "Exemplos:\n"
+                     '- "produtos para abastecer na UNE 2586" → {"une_id": 2586, "segmento": null}\n'
+                     '- "abastecimento de TECIDOS na UNE 2599" → {"une_id": 2599, "segmento": "TECIDOS"}\n'
+                     '- "reposição na loja 2720 segmento PAPELARIA" → {"une_id": 2720, "segmento": "PAPELARIA"}'),
+                    ("user", "{query}")
+                ])
+                extract_chain = extract_prompt | sql_gen_llm
+                extract_result = extract_chain.invoke({"query": user_query})
+
+                try:
+                    params = json.loads(extract_result.content.strip())
+                    une_id = params.get("une_id")
+                    segmento = params.get("segmento")
+
+                    if une_id is None:
+                        return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique o ID da UNE na consulta (ex: UNE 2586).")]}
+
+                    args = {"une_id": une_id}
+                    if segmento:
+                        args["segmento"] = segmento
+
+                    return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="calcular_abastecimento_une", args=args)])]}
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Erro ao extrair parâmetros para calcular_abastecimento_une: {e}")
+                    return {"messages": state["messages"] + [AIMessage(content="Não consegui identificar o ID da UNE. Por favor, especifique (ex: 'UNE 2586').")]}
+
+            elif "calcular_mc_produto" in tool_decision:
+                # Extrair produto_id e une_id da query
+                logger.info("Roteando para calcular_mc_produto")
+                extract_prompt = ChatPromptTemplate.from_messages([
+                    ("system",
+                     "Extraia o código do produto e o ID da UNE da consulta do usuário.\n"
+                     "Retorne APENAS um JSON no formato:\n"
+                     '{"produto_id": <número>, "une_id": <número>}\n'
+                     "Exemplos:\n"
+                     '- "MC do produto 704559 na UNE 2586" → {"produto_id": 704559, "une_id": 2586}\n'
+                     '- "média comum do código 123456 loja 2599" → {"produto_id": 123456, "une_id": 2599}'),
+                    ("user", "{query}")
+                ])
+                extract_chain = extract_prompt | sql_gen_llm
+                extract_result = extract_chain.invoke({"query": user_query})
+
+                try:
+                    params = json.loads(extract_result.content.strip())
+                    produto_id = params.get("produto_id")
+                    une_id = params.get("une_id")
+
+                    if produto_id is None or une_id is None:
+                        return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique o código do produto e o ID da UNE (ex: 'produto 704559 na UNE 2586').")]}
+
+                    return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="calcular_mc_produto", args={"produto_id": produto_id, "une_id": une_id})])]}
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Erro ao extrair parâmetros para calcular_mc_produto: {e}")
+                    return {"messages": state["messages"] + [AIMessage(content="Não consegui identificar o produto e UNE. Use o formato: 'MC do produto <código> na UNE <id>'.")]}
+
+            elif "calcular_preco_final_une" in tool_decision:
+                # Extrair valor_compra, ranking, forma_pagamento da query
+                logger.info("Roteando para calcular_preco_final_une")
+                extract_prompt = ChatPromptTemplate.from_messages([
+                    ("system",
+                     "Extraia o valor da compra, ranking e forma de pagamento da consulta do usuário.\n"
+                     "Retorne APENAS um JSON no formato:\n"
+                     '{"valor_compra": <número>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}\n'
+                     "Exemplos:\n"
+                     '- "preço de R$ 800 ranking 0 a vista" → {"valor_compra": 800.0, "ranking": 0, "forma_pagamento": "vista"}\n'
+                     '- "calcule 1500 reais no ranking 2 pagando em 30 dias" → {"valor_compra": 1500.0, "ranking": 2, "forma_pagamento": "30d"}'),
+                    ("user", "{query}")
+                ])
+                extract_chain = extract_prompt | sql_gen_llm
+                extract_result = extract_chain.invoke({"query": user_query})
+
+                try:
+                    params = json.loads(extract_result.content.strip())
+                    valor_compra = params.get("valor_compra")
+                    ranking = params.get("ranking")
+                    forma_pagamento = params.get("forma_pagamento")
+
+                    if valor_compra is None or ranking is None or forma_pagamento is None:
+                        return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique: valor da compra, ranking (0-4) e forma de pagamento (vista, 30d, 90d, 120d).")]}
+
+                    return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="calcular_preco_final_une", args={"valor_compra": valor_compra, "ranking": ranking, "forma_pagamento": forma_pagamento})])]}
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Erro ao extrair parâmetros para calcular_preco_final_une: {e}")
+                    return {"messages": state["messages"] + [AIMessage(content="Não consegui identificar os parâmetros. Use: 'calcular preço de R$ <valor> ranking <0-4> forma de pagamento <vista/30d/90d/120d>'.")]}
+
             else:
                 return {"messages": [AIMessage(content="Desculpe, não consegui determinar a ferramenta apropriada para sua consulta.")]}
 
