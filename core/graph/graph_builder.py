@@ -16,7 +16,8 @@ from core.connectivity.parquet_adapter import ParquetAdapter
 from core.connectivity.hybrid_adapter import HybridDataAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 # CORREÇÃO: Removida a importação da função inexistente.
-from core.agents import bi_agent_nodes
+import core.agents.bi_agent_nodes as bi_nodes
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +38,21 @@ class GraphBuilder:
     def _decide_after_intent_classification(self, state: AgentState) -> str:
         """
         Aresta condicional que roteia o fluxo após a classificação da intenção.
+        - une_operation vai para o executor de ferramentas UNE.
         - python_analysis e gerar_grafico vão para a geração de código Python.
         - resposta_simples vai para a geração de filtros simples.
         """
         intent = state.get("intent")
         logger.info(f"Roteando com base na intenção: {intent}")
-        
-        if intent in ["python_analysis", "gerar_grafico"]:
+
+        if intent == "une_operation":
+            logger.info(f"Intenção '{intent}' roteada para execute_une_tool.")
+            return "execute_une_tool"
+        elif intent in ["python_analysis", "gerar_grafico"]:
             # Intenções que exigem análise de código (gráfico ou textual) vão direto para o CodeGenAgent.
             logger.info(f"Intenção '{intent}' roteada para generate_plotly_spec.")
             return "generate_plotly_spec"
-        
+
         # Apenas as perguntas mais básicas seguem para o filtro simples.
         logger.info(f"Intenção '{intent}' roteada para generate_parquet_query.")
         return "generate_parquet_query"
@@ -78,23 +83,27 @@ class GraphBuilder:
         """
         Constrói, define as arestas e compila o StateGraph.
         """
+        # As funções são acessadas via bi_agent_nodes.funcao, pois o módulo já foi importado.
         workflow = StateGraph(AgentState)
 
         # Vincula as dependências aos nós usando functools.partial para passar os adaptadores
-        classify_intent_node = partial(bi_agent_nodes.classify_intent, llm_adapter=self.llm_adapter)
-        generate_parquet_query_node = partial(bi_agent_nodes.generate_parquet_query, llm_adapter=self.llm_adapter, parquet_adapter=self.parquet_adapter)
+        _classify_intent_func = bi_nodes.classify_intent
+        classify_intent_node = partial(_classify_intent_func, llm_adapter=self.llm_adapter)
+        generate_parquet_query_node = partial(bi_nodes.generate_parquet_query, llm_adapter=self.llm_adapter, parquet_adapter=self.parquet_adapter)
         # CORREÇÃO: A função correta 'execute_query' de bi_agent_nodes é usada aqui.
-        execute_query_node = partial(bi_agent_nodes.execute_query, parquet_adapter=self.parquet_adapter)
+        execute_query_node = partial(bi_nodes.execute_query, parquet_adapter=self.parquet_adapter)
+        # Novo nó para executar ferramentas UNE
+        execute_une_tool_node = partial(bi_nodes.execute_une_tool, llm_adapter=self.llm_adapter)
 
         # Adiciona os nós (estados) ao grafo
         workflow.add_node("classify_intent", classify_intent_node)
-        
+        workflow.add_node("execute_une_tool", execute_une_tool_node)
         workflow.add_node("generate_parquet_query", generate_parquet_query_node)
         # CORREÇÃO: O nó é adicionado com o nome correto, correspondendo à função.
         workflow.add_node("execute_query", execute_query_node)
-        generate_plotly_spec_node = partial(bi_agent_nodes.generate_plotly_spec, llm_adapter=self.llm_adapter, code_gen_agent=self.code_gen_agent)
+        generate_plotly_spec_node = partial(bi_nodes.generate_plotly_spec, llm_adapter=self.llm_adapter, code_gen_agent=self.code_gen_agent)
         workflow.add_node("generate_plotly_spec", generate_plotly_spec_node)
-        workflow.add_node("format_final_response", bi_agent_nodes.format_final_response)
+        workflow.add_node("format_final_response", bi_nodes.format_final_response)
 
         # Define o ponto de entrada
         workflow.set_entry_point("classify_intent")
@@ -104,10 +113,13 @@ class GraphBuilder:
             "classify_intent",
             self._decide_after_intent_classification,
             {
+                "execute_une_tool": "execute_une_tool",
                 "generate_plotly_spec": "generate_plotly_spec",
                 "generate_parquet_query": "generate_parquet_query",
             }
         )
+        # UNE tool vai direto para format_final_response
+        workflow.add_edge("execute_une_tool", "format_final_response")
         workflow.add_edge("generate_parquet_query", "execute_query")
         workflow.add_conditional_edges(
             "execute_query",

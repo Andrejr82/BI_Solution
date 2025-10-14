@@ -2,6 +2,7 @@
 Nós (estados) para o StateGraph da arquitetura avançada do Agent_BI.
 Cada função representa um passo no fluxo de processamento da consulta.
 """
+
 import logging
 import json
 import re
@@ -22,6 +23,11 @@ from core.utils.json_utils import _clean_json_values # Import the cleaning funct
 
 logger = logging.getLogger(__name__)
 
+def _extract_user_query(state: AgentState) -> str:
+    """Extrai a query do usuário do state, lidando com objetos LangChain."""
+    last_message = state['messages'][-1]
+    return last_message.content if hasattr(last_message, 'content') else last_message.get('content', '')
+
 def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
     """
     Classifica a intenção do utilizador para roteamento do fluxo.
@@ -30,7 +36,7 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     - 'gerar_grafico': Para pedidos diretos de gráficos sem lógica complexa.
     - 'resposta_simples': Para consultas que podem ser respondidas com filtros simples.
     """
-    user_query = state['messages'][-1]['content']
+    user_query = _extract_user_query(state)
     logger.info(f"[NODE] classify_intent: Recebida query '{user_query}'")
     
     prompt = f"""
@@ -38,27 +44,30 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
 
     **Intenções Possíveis:**
 
-    1.  **`python_analysis`**: Use esta intenção para perguntas que exigem **análise, ranking, agregação ou comparações**.
+    1.  **`une_operation`**: Use para operações UNE (abastecimento, MC, preços).
+        - Palavras-chave: "abastecimento", "abastecer", "reposição", "MC", "média comum", "preço final", "calcular preço", "UNE", "linha verde".
+        - **Exemplos:**
+            - "quais produtos precisam abastecimento na UNE 2586?" → `{{"intent": "une_operation"}}`
+            - "qual a MC do produto 704559?" → `{{"intent": "une_operation"}}`
+            - "calcule o preço de R$ 800 ranking 0 a vista" → `{{"intent": "une_operation"}}`
+
+    2.  **`python_analysis`**: Use para perguntas que exigem **análise, ranking, agregação ou comparações**.
         - Palavras-chave: "qual mais", "top", "maior", "menor", "evolução", "comparar", "análise de", "ranking de".
         - **Exemplos:**
             - "qual produto mais vende no segmento tecidos?" → `{{"intent": "python_analysis"}}`
             - "top 5 categorias por venda" → `{{"intent": "python_analysis"}}`
-            - "mostre a evolução de vendas nos últimos 6 meses" → `{{"intent": "python_analysis"}}`
-            - "compare as vendas dos segmentos A e B" → `{{"intent": "python_analysis"}}`
 
-    2.  **`gerar_grafico`**: Use para pedidos **diretos e simples** de gráficos, onde a dimensão e a métrica são claras.
+    3.  **`gerar_grafico`**: Use para pedidos **diretos e simples** de gráficos.
         - **Exemplos:**
             - "gere um gráfico de vendas por categoria" → `{{"intent": "gerar_grafico"}}`
-            - "gráfico de produtos por segmento" → `{{"intent": "gerar_grafico"}}`
 
-    3.  **`resposta_simples`**: Use para perguntas que podem ser respondidas com uma **filtragem direta**, sem agregação complexa.
+    4.  **`resposta_simples`**: Use para perguntas com **filtragem direta**.
         - **Exemplos:**
             - "liste os produtos da categoria 'AVIAMENTOS'" → `{{"intent": "resposta_simples"}}`
             - "qual o estoque do produto 12345?" → `{{"intent": "resposta_simples"}}`
-            - "produtos com estoque zero" → `{{"intent": "resposta_simples"}}`
 
     **REGRAS:**
-    - Priorize `python_analysis` se a pergunta contiver qualquer forma de ranking ou agregação.
+    - Priorize `une_operation` se mencionar UNE, abastecimento, MC ou cálculo de preço.
     - Responda APENAS com o objeto JSON contendo a chave 'intent'.
 
     **Consulta do Usuário:**
@@ -73,7 +82,7 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     
     # Fallback para extrair JSON de blocos de markdown
     if "```json" in plan_str:
-        match = re.search(r"""```json\n(.*?)```""", plan_str, re.DOTALL)
+        match = re.search(r"```json\n(.*?)```", plan_str, re.DOTALL)
         if match:
             plan_str = match.group(1).strip()
 
@@ -95,12 +104,11 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
 
 
 
-
 def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
     """
     Gera um dicionário de filtros para consulta Parquet a partir da pergunta do utilizador, usando o schema do arquivo Parquet e descrições de colunas.
     """
-    user_query = state['messages'][-1]['content']
+    user_query = _extract_user_query(state)
     logger.info(f"[NODE] generate_parquet_query: Gerando filtros para '{user_query}'")
 
     # Importar field_mapper
@@ -213,7 +221,7 @@ Quando o usuário mencionar:
 
     # Fallback para extrair JSON de blocos de markdown
     if "```json" in filters_str:
-        match = re.search(r"""```json\n(.*?)```""", filters_str, re.DOTALL)
+        match = re.search(r"```json\n(.*?)```", filters_str, re.DOTALL)
         if match:
             filters_str = match.group(1).strip()
 
@@ -254,7 +262,7 @@ def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[st
     """
     Executa os filtros Parquet do estado.
     """
-    user_query = state['messages'][-1]['content']
+    user_query = _extract_user_query(state)
     parquet_filters = state.get('parquet_filters', {})
 
     logger.info(f"[NODE] execute_query: Executando com filtros {parquet_filters}")
@@ -287,7 +295,7 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
     """
     logger.info("Nó: generate_plotly_spec")
     raw_data = state.get("retrieved_data")
-    user_query = state['messages'][-1]['content']
+    user_query = _extract_user_query(state)
     plan = state.get("plan", {})
     intent = plan.get("intent")
 
@@ -438,7 +446,7 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
     """
     Formata a resposta final para o utilizador.
     """
-    user_query = state['messages'][-1]['content']
+    user_query = _extract_user_query(state)
     logger.info(f"[NODE] format_final_response: Formatando resposta para '{user_query}'")
 
     # 🔍 LOGS DETALHADOS DO ESTADO
@@ -503,3 +511,154 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
     logger.info(f"📋 MESSAGE HISTORY - Total messages: {len(final_messages)}")
 
     return {"messages": final_messages, "final_response": response}
+
+
+def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
+    """
+    Executa ferramentas UNE baseado na query do usuário.
+    Detecta qual ferramenta UNE usar e extrai os parâmetros necessários.
+    """
+    user_query = _extract_user_query(state)
+    logger.info(f"[NODE] execute_une_tool: Processando query UNE '{user_query}'")
+
+    # Importar ferramentas UNE
+    from core.tools.une_tools import (
+        calcular_abastecimento_une,
+        calcular_mc_produto,
+        calcular_preco_final_une
+    )
+
+    # Detectar qual ferramenta usar
+    tool_detection_prompt = f"""
+    Analise a consulta e identifique qual ferramenta UNE usar.
+
+    Ferramentas disponíveis:
+    - calcular_abastecimento_une: Para queries sobre abastecimento, reposição, produtos para abastecer
+    - calcular_mc_produto: Para queries sobre MC, média comum, média de vendas
+    - calcular_preco_final_une: Para queries sobre preço final, calcular preço, preço com desconto
+
+    Retorne APENAS um JSON: {{"tool": "nome_da_ferramenta"}}
+
+    Query: "{user_query}"
+    """
+
+    tool_response = llm_adapter.get_completion(
+        messages=[{"role": "user", "content": tool_detection_prompt}],
+        json_mode=True
+    )
+
+    tool_str = tool_response.get("content", "{}").strip()
+    if "```json" in tool_str:
+        match = re.search(r"```json\n(.*?)```", tool_str, re.DOTALL)
+        if match:
+            tool_str = match.group(1).strip()
+
+    try:
+        tool_data = json.loads(tool_str)
+        tool_name = tool_data.get("tool", "")
+    except json.JSONDecodeError:
+        logger.error(f"Erro ao detectar ferramenta UNE: {tool_str}")
+        return {"final_response": {"type": "text", "content": "Não consegui identificar a operação UNE solicitada."}}
+
+    logger.info(f"Ferramenta UNE detectada: {tool_name}")
+
+    # Executar ferramenta apropriada
+    try:
+        if "abastecimento" in tool_name:
+            # Extrair parâmetros para abastecimento
+            extract_prompt = f"""
+            Extraia o ID da UNE e o segmento (opcional) da consulta.
+            Retorne JSON: {{"une_id": <número>, "segmento": "<nome ou null>"}}
+
+            Query: "{user_query}"
+            """
+            params_response = llm_adapter.get_completion(
+                messages=[{"role": "user", "content": extract_prompt}],
+                json_mode=True
+            )
+            params_str = params_response.get("content", "{}").strip()
+            if "```json" in params_str:
+                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
+                if match:
+                    params_str = match.group(1).strip()
+
+            params = json.loads(params_str)
+            une_id = int(params.get("une_id"))
+            segmento = params.get("segmento")
+
+            args = {"une_id": une_id}
+            if segmento:
+                args["segmento"] = segmento
+
+            result = calcular_abastecimento_une.invoke(args)
+
+        elif "mc_produto" in tool_name:
+            # Extrair parâmetros para MC
+            extract_prompt = f"""
+            Extraia o código do produto e o ID da UNE da consulta.
+            Retorne JSON: {{"produto_id": <número>, "une_id": <número>}}
+
+            Query: "{user_query}"
+            """
+            params_response = llm_adapter.get_completion(
+                messages=[{"role": "user", "content": extract_prompt}],
+                json_mode=True
+            )
+            params_str = params_response.get("content", "{}").strip()
+            if "```json" in params_str:
+                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
+                if match:
+                    params_str = match.group(1).strip()
+
+            params = json.loads(params_str)
+            produto_id = int(params.get("produto_id"))
+            une_id = int(params.get("une_id"))
+
+            result = calcular_mc_produto.invoke({"produto_id": produto_id, "une_id": une_id})
+
+        elif "preco" in tool_name:
+            # Extrair parâmetros para preço
+            extract_prompt = f"""
+            Extraia o valor da compra, ranking e forma de pagamento.
+            Retorne JSON: {{"valor_compra": <número>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}
+
+            Query: "{user_query}"
+            """
+            params_response = llm_adapter.get_completion(
+                messages=[{"role": "user", "content": extract_prompt}],
+                json_mode=True
+            )
+            params_str = params_response.get("content", "{}").strip()
+            if "```json" in params_str:
+                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
+                if match:
+                    params_str = match.group(1).strip()
+
+            params = json.loads(params_str)
+            valor_compra = float(params.get("valor_compra"))
+            ranking = int(params.get("ranking"))
+            forma_pagamento = params.get("forma_pagamento")
+
+            result = calcular_preco_final_une.invoke({
+                "valor_compra": valor_compra,
+                "ranking": ranking,
+                "forma_pagamento": forma_pagamento
+            })
+        else:
+            return {"final_response": {"type": "text", "content": f"Ferramenta UNE '{tool_name}' não reconhecida."}}
+
+        # Verificar se houve erro
+        if "error" in result:
+            return {"final_response": {"type": "text", "content": f"Erro: {result['error']}"}}
+
+        # Formatar resposta baseado no tipo de ferramenta
+        if "produtos" in result:  # Abastecimento
+            retrieved_data = result.get("produtos", [])
+            return {"retrieved_data": retrieved_data}
+        else:  # MC ou Preço - retornar como texto formatado
+            response_text = json.dumps(result, indent=2, ensure_ascii=False)
+            return {"final_response": {"type": "text", "content": response_text}}
+
+    except Exception as e:
+        logger.error(f"Erro ao executar ferramenta UNE: {e}", exc_info=True)
+        return {"final_response": {"type": "text", "content": f"Erro ao processar operação UNE: {str(e)}"}}
