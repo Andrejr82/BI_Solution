@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760474453.5928903,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\n# Mapear \"artes\" para o valor exato 'ARTES'\nsegmento_artes = df[df['NOMESEGMENTO'] == 'ARTES']\n\n# Filtrar pela unidade '2720'\nartes_une_2720 = segmento_artes[segmento_artes['UNE'] == '2720']\n\n# Obter o top 10 por VENDA_30DD\nranking_artes_2720 = artes_une_2720.nlargest(10, 'VENDA_30DD')\n\n# Agrupar por NOME para obter o ranking de produtos\nresult = ranking_artes_2720.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()\n\n# Passo 3: Salvar resultado\n# A variável 'result' já contém o resultado desejado\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "29e0406c96f094a45e9fd772ccf0084a"
+  }
+}

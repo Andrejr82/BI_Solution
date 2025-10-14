@@ -1,3 +1,4 @@
+'''
 """
 Motor de Consultas Diretas - Zero LLM para Economia Máxima
 Sistema que executa consultas pré-definidas sem usar tokens da LLM.
@@ -296,9 +297,11 @@ class DirectQueryEngine:
         current_time = datetime.now()
 
         # Cache por 5 minutos
-        if (self._cache_timestamp is None or
-            (current_time - self._cache_timestamp).seconds > 300 or
-            cache_key not in self._cached_data):
+        if (
+            self._cache_timestamp is None
+            or (current_time - self._cache_timestamp).seconds > 300
+            or cache_key not in self._cached_data
+        ):
             if full_dataset:
                 logger.info("Carregando dataset COMPLETO - necessário para consulta específica")
             else:
@@ -451,7 +454,7 @@ class DirectQueryEngine:
             # ALTA PRIORIDADE: Detectar consultas de PRODUTO MAIS VENDIDO EM TODAS AS UNES
             produto_todas_unes_match = re.search(r'produto\s*mais\s*vendido.*(todas?\s*unes?|todas?\s*as\s*unes?|em\s*todas?\s*unes?)', query_lower)
             if produto_todas_unes_match:
-                result = ("produto_mais_vendido_cada_une", {})  # Usar o mesmo método
+                result = ("produto_mais_vendido_cada_une", {})
                 logger.info(f"CLASSIFICADO COMO: produto_mais_vendido_cada_une (todas as UNEs)")
                 return result
 
@@ -603,6 +606,12 @@ class DirectQueryEngine:
             # Criar vendas_total como soma dos meses
             ddf = ddf.assign(vendas_total=ddf[vendas_colunas_existentes].fillna(0).sum(axis=1))
             logger.debug("Coluna vendas_total criada somando meses (lazy)")
+
+        # Otimização: Definir índice para acelerar filtros por UNE
+        if 'une_nome' in ddf.columns:
+            logger.info("Otimizando DataFrame com índice em 'une_nome'...")
+            ddf = ddf.set_index('une_nome', sorted=False)
+            logger.info("Otimização com índice concluída.")
 
         # ⚡ ARMAZENAR EM CACHE para próximas queries
         self._cached_dask_df = ddf
@@ -980,6 +989,8 @@ class DirectQueryEngine:
             except:
                 pass
 
+
+
         # OTIMIZAÇÃO CRÍTICA: Agregar ANTES de compute (lazy operations)
         # 1. Filtrar vendas > 0 (lazy)
         # 2. Agrupar por produto (lazy) - reduz de 50k linhas para ~5k produtos
@@ -1003,10 +1014,31 @@ class DirectQueryEngine:
 
         # Validação APÓS agregação (não causa MemoryError)
         if top_produtos.empty:
-            return {
-                "error": f"Nenhum produto com vendas encontrado na UNE {une_nome}",
-                "type": "error"
-            }
+            # Verificar se a UNE existe no dataset para dar uma mensagem mais útil
+            une_check_df = ddf[
+                (ddf['une_nome'].str.upper() == une_upper) |
+                (ddf['une'].astype(str) == une_upper)
+            ]
+            # head() em dask retorna um pandas DF, então não precisa de compute()
+            if une_check_df.head(1).empty:
+                # A UNE realmente não existe
+                unes_disponiveis = sorted(ddf['une_nome'].unique().compute())
+                suggestions = [u for u in unes_disponiveis if une_upper[:2] in u.upper()][:5]
+                error_message = f"A UNE '{une_nome}' não foi encontrada."
+                if suggestions:
+                    error_message += f" Talvez você quisesse dizer uma destas: {', '.join(suggestions)}?"
+                
+                return {
+                    "error": error_message,
+                    "type": "error",
+                    "suggestion": f"UNEs disponíveis para consulta: {', '.join(unes_disponiveis[:10])}..."
+                }
+            else:
+                # A UNE existe, mas não tem produtos com vendas
+                return {
+                    "error": f"Nenhum produto com vendas encontrado na UNE {une_nome}",
+                    "type": "error"
+                }
 
         # Preparar dados para gráfico
         x_data = [produto['nome_produto'][:50] + '...' if len(produto['nome_produto']) > 50 else produto['nome_produto']
@@ -1556,7 +1588,7 @@ class DirectQueryEngine:
         x_labels = []
         y_values = []
         for (une_codigo, une_nome), row in vendas_por_une_top.iterrows():
-            label = f"{une_nome}\\n(UNE {une_codigo})"
+            label = f"{une_nome}\n(UNE {une_codigo})"
             x_labels.append(label)
             y_values.append(float(row['vendas_total']))
 
@@ -1808,11 +1840,13 @@ class DirectQueryEngine:
                 "total_vendas": float(total_vendas),
                 "total_produtos": int(total_produtos),
                 "top_segmentos": [{"nome": seg, "vendas": float(val)} for seg, val in segmentos.items()],
-                "top_produtos": [{
-                    "codigo": int(cod),
-                    "nome": row['nome_produto'],
-                    "vendas": float(row['vendas_total'])
-                } for cod, row in top_produtos.iterrows()]
+                "top_produtos": [
+                    {
+                        "codigo": int(cod),
+                        "nome": row['nome_produto'],
+                        "vendas": float(row['vendas_total'])
+                    } for cod, row in top_produtos.iterrows()
+                ]
             },
             "summary": f"UNE {une_nome}: {total_vendas:,.0f} vendas totais, {total_produtos} produtos diferentes",
             "tokens_used": 0
@@ -2362,9 +2396,9 @@ class DirectQueryEngine:
         if 'une' in user_query or 'loja' in user_query or 'filial' in user_query:
             # Diversidade por UNE
             agrupamento = ddf.groupby('une_nome').agg({
-                'codigo': 'nunique',
+                'codigo': 'nunique',  # Diversidade de produtos
                 'vendas_total': 'sum',
-                'nomesegmento': 'nunique'
+                'nomesegmento': 'nunique'  # Diversidade de segmentos
             }).compute().reset_index()
 
             agrupamento.columns = ['une', 'produtos_unicos', 'vendas_total', 'segmentos_ativos']
@@ -2621,7 +2655,7 @@ class DirectQueryEngine:
         # Agrupar por UNE
         ranking = df_segmento.groupby('une_nome', as_index=False).agg({
             'vendas_total': 'sum',
-            'codigo': 'nunique'
+            'codigo': 'nunique'  # Produtos únicos
         })
 
         ranking.columns = ['une', 'vendas_total', 'produtos_unicos']
@@ -3203,8 +3237,8 @@ class DirectQueryEngine:
         media_eficiencia = unes['eficiencia'].mean()
         summary = f"Comparativo de Eficiência entre UNEs:\n\n"
         summary += f"Eficiência média: R$ {media_eficiencia:,.2f} por produto\n"
-        summary += f"Mais eficiente: {tabela[0]['une']} (R$ {tabela[0]['eficiencia']:,.2f}/produto)\n"
-        summary += f"Total de UNEs analisadas: {len(unes)}"
+        summary += f"Mais eficiente: {tabela[0]['une']} (R$ {tabela[0]['eficiencia']:,.2f}/produto)"
+        summary += f"\nTotal de UNEs analisadas: {len(unes)}"
 
         return {
             "type": "chart",
@@ -3403,7 +3437,7 @@ class DirectQueryEngine:
 
     def _query_estoque_baixo_alta_demanda(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Produtos com estoque baixo mas alta demanda (venda_30_d alta).
+        Produtos com estoque baixo mas alta demanda (venda_30d alta).
         """
         ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando estoque_baixo_alta_demanda - params: {params}")
@@ -3445,9 +3479,9 @@ class DirectQueryEngine:
 
         summary = f"Produtos com Estoque Baixo e Alta Demanda:\n\n"
         summary += f"Total identificado: {len(produtos_risco)}\n"
-        summary += f"Critério: Estoque < 15 dias + Demanda ≥ {mediana_demanda:.0f} (mediana)\n"
+        summary += f"Critério: Estoque < 15 dias + Demanda ≥ {mediana_demanda:.0f} (mediana)"
         if tabela:
-            summary += f"Maior risco: {tabela[0]['produto']} ({tabela[0]['dias_estoque']:.1f} dias)"
+            summary += f"\nMaior risco: {tabela[0]['produto']} ({tabela[0]['dias_estoque']:.1f} dias)"
 
             return {
             "type": "table",
@@ -3516,9 +3550,7 @@ class DirectQueryEngine:
         }
 
     def _query_rotacao_estoque_avancada(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Produtos com maior rotação de estoque (venda_30d / estoque).
-        """
+        """Produtos com maior rotação de estoque (venda_30d / estoque)."""
         ddf = self._get_base_dask_df()
         logger.info(f"[>] Processando rotacao_estoque_avancada - params: {params}")
 
@@ -3769,15 +3801,7 @@ class DirectQueryEngine:
         # Top 5 produtos
         top_5 = ddf.nlargest(5, 'vendas_total')[['nome_produto', 'vendas_total']].compute()
 
-        summary = f"""Análise Geral do Período:
-📊 Métricas Principais:
-- Vendas Totais: R$ {total_vendas:,.2f}
-- Total de Produtos: {total_produtos}
-- Total de UNEs: {total_unes}
-- Média de Vendas por Produto: R$ {media_vendas:,.2f}
-
-🏆 Top 5 Produtos:
-"""
+        summary = f"Análise Geral do Período:\n📊 Métricas Principais:\n- Vendas Totais: R$ {total_vendas:,.2f}\n- Total de Produtos: {total_produtos}\n- Total de UNEs: {total_unes}\n- Média de Vendas por Produto: R$ {media_vendas:,.2f}\n\n🏆 Top 5 Produtos:"
         for idx, row in top_5.iterrows():
             summary += f"\n{idx+1}. {row['nome_produto']}: R$ {row['vendas_total']:,.2f}"
 
@@ -3834,3 +3858,4 @@ class DirectQueryEngine:
             {"keyword": keyword, "description": f"Executa consulta: {query_type}"}
             for keyword, query_type in list(self.keywords_map.items())[:20]
         ]
+'''

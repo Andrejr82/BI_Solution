@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760460022.7536325,
+  "response": {
+    "content": "{\n  \"status\": \"ok\"\n}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "851572131f343e63d9203930d27263f2"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760462381.3003213,
+  "response": {
+    "content": "{\"NOMESEGMENTO\": \"TECIDOS\", \"ESTOQUE_UNE\": 0}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "593b19fb6c837691c87f196bfd9de5a4"
+  }
+}

@@ -342,7 +342,7 @@ def calcular_preco_final_une(valor_compra: float, ranking: int, forma_pagamento:
 
         if desconto_ranking_percent > 0:
             detalhamento_partes.append(
-                f"Desconto ranking {ranking}: {desconto_ranking_percent}% → R$ {valor_apos_ranking:.2f}"
+                f"Desconto ranking {ranking}: {desconto_ranking_percent}% -> R$ {valor_apos_ranking:.2f}"
             )
         else:
             detalhamento_partes.append(
@@ -350,7 +350,7 @@ def calcular_preco_final_une(valor_compra: float, ranking: int, forma_pagamento:
             )
 
         detalhamento_partes.append(
-            f"Desconto pagamento ({forma_pagamento}): {desconto_pagamento_percent}% → R$ {valor_final:.2f}"
+            f"Desconto pagamento ({forma_pagamento}): {desconto_pagamento_percent}% -> R$ {valor_final:.2f}"
         )
         detalhamento_partes.append(
             f"Economia total: R$ {economia:.2f} ({(economia/valor_original)*100:.2f}%)"
@@ -359,7 +359,7 @@ def calcular_preco_final_une(valor_compra: float, ranking: int, forma_pagamento:
         detalhamento = " | ".join(detalhamento_partes)
 
         logger.info(
-            f"Preço calculado: R$ {valor_original:.2f} → R$ {valor_final:.2f} "
+            f"Preço calculado: R$ {valor_original:.2f} -> R$ {valor_final:.2f} "
             f"(Ranking {ranking}, {forma_pagamento})"
         )
 

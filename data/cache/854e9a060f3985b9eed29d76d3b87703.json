@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760467676.296539,
+  "response": {
+    "content": "{\"produto_id\": 704559, \"une_id\": 2586}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "854e9a060f3985b9eed29d76d3b87703"
+  }
+}

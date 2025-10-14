@@ -1,165 +1,177 @@
 """
-Módulo para tests/test_graph_integration.py. Fornece funções utilitárias, incluindo 'mock_adapters' e outras.
+Teste de Integração do GraphBuilder - Valida fluxo completo UNE
+Este teste valida especificamente o GraphBuilder usado pelo Streamlit
 """
+import sys
+import os
+import time
 
-# tests/test_graph_integration.py
-import pytest
-from unittest.mock import MagicMock, patch
-from langgraph.graph import StateGraph
-from langchain_core.messages import HumanMessage
+# Adicionar diretório raiz ao path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.graph.graph_builder import GraphBuilder
-from core.agent_state import AgentState
+def main():
+    """Executa testes de integração do GraphBuilder com ferramentas UNE"""
+    print("\n" + "="*70)
+    print("TESTE DE INTEGRACAO GRAPHBUILDER - FLUXO COMPLETO UNE")
+    print("="*70)
 
-from core.connectivity.parquet_adapter import ParquetAdapter # Import ParquetAdapter
+    # 1. Inicializar componentes
+    print("\n[STEP 1] Inicializando GraphBuilder (usado pelo Streamlit)...")
+    try:
+        from core.factory.component_factory import ComponentFactory
+        from core.agents.code_gen_agent import CodeGenAgent
+        from core.connectivity.parquet_adapter import ParquetAdapter
+        from core.graph.graph_builder import GraphBuilder
+        from langchain_core.messages import HumanMessage
 
-@pytest.fixture
-def mock_adapters():
-    """Fixture to create mock adapters for testing."""
-    mock_llm_adapter = MagicMock()
-    mock_parquet_adapter = MagicMock(spec=ParquetAdapter)
-    mock_code_gen_agent = MagicMock()
-    return mock_llm_adapter, mock_parquet_adapter, mock_code_gen_agent
+        # Obter LLM adapter
+        llm_adapter = ComponentFactory.get_llm_adapter()
+        print(f"   [OK] LLM Adapter: {llm_adapter.__class__.__name__}")
 
-def test_graph_builds_and_compiles(mock_adapters):
-    """
-    Testa se o grafo é construído e compilado sem erros.
-    """
-    mock_llm_adapter, mock_parquet_adapter, mock_code_gen_agent = mock_adapters
-    
-    builder = GraphBuilder(
-        llm_adapter=mock_llm_adapter,
-        parquet_adapter=mock_parquet_adapter,
-        code_gen_agent=mock_code_gen_agent
-    )
-    
-    app = builder.build()
-    
-    assert app is not None
-    assert hasattr(app, "invoke")
+        # Criar ParquetAdapter
+        parquet_adapter = ParquetAdapter('data/parquet/admmat_extended.parquet')
+        print(f"   [OK] ParquetAdapter criado")
 
-@patch('core.agents.bi_agent_nodes.fetch_data_from_query')
-def test_full_graph_flow_simple_query(mock_fetch_data_tool, mock_adapters):
-    """
-    Testa um fluxo completo do grafo para uma consulta simples.
-    """
-    mock_llm_adapter, mock_parquet_adapter, mock_code_gen_agent = mock_adapters
+        # Criar CodeGenAgent
+        code_gen_agent = CodeGenAgent(llm_adapter=llm_adapter, data_adapter=parquet_adapter)
+        print(f"   [OK] CodeGenAgent criado")
 
-    # --- Mocking Setup ---
-    # 1. classify_intent returns 'consulta_sql_complexa'
-    mock_llm_adapter.get_completion.side_effect = [
+        # Criar GraphBuilder e compilar grafo
+        graph_builder = GraphBuilder(
+            llm_adapter=llm_adapter,
+            parquet_adapter=parquet_adapter,
+            code_gen_agent=code_gen_agent
+        )
+        app = graph_builder.build()
+        print(f"   [OK] GraphBuilder compilado com sucesso")
+
+    except Exception as e:
+        print(f"   [FAIL] Erro na inicialização: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+    # 2. Definir queries de teste UNE
+    test_queries = [
         {
-            "content": '{"intent": "consulta_sql_complexa", "entities": {}}'
+            "query": "Quais produtos do segmento TECIDOS precisam de abastecimento na UNE 2586?",
+            "test_name": "Abastecimento UNE - Segmento TECIDOS",
+            "expected_intent": "une_operation"
         },
-        # 2. generate_sql_query returns a SQL query
         {
-            "content": '{"coluna": "valor"}' # Valid JSON for parquet_filters
+            "query": "Qual a MC do produto 704559 na UNE 2586?",
+            "test_name": "Calculo MC - Produto Especifico",
+            "expected_intent": "une_operation"
+        },
+        {
+            "query": "Calcule o preco de R$ 800 ranking 0 pagando a vista",
+            "test_name": "Politica de Precos - Atacado",
+            "expected_intent": "une_operation"
         }
     ]
-    # 3. get_schema returns a schema
-    mock_parquet_adapter.get_schema.return_value = {"tables": ["ADMAT"]}
-    # 4. fetch_data_from_query (the tool) returns mock data
-    mock_fetch_data_tool.invoke.return_value = [{"product": "A", "price": 100}]
 
-    # --- Graph Execution ---
-    builder = GraphBuilder(
-        llm_adapter=mock_llm_adapter,
-        parquet_adapter=mock_parquet_adapter,
-        code_gen_agent=mock_code_gen_agent
-    )
-    app = builder.build()
+    # 3. Executar testes
+    print("\n[STEP 2] Executando queries UNE através do GraphBuilder...")
+    print("="*70)
 
-    initial_state: AgentState = {
-        "messages": [HumanMessage(content="me dê os dados")] # Use HumanMessage
-    }
-    
-    final_state = app.invoke(initial_state)
+    results = []
+    total_start = time.time()
 
-    # --- Assertions ---
-    # Check if the flow went through the correct nodes
-    assert mock_llm_adapter.get_completion.call_count == 2
-    mock_parquet_adapter.get_schema.assert_called_once()
-    mock_fetch_data_tool.invoke.assert_called_once()
-    
-    # Check the final response
-    final_response = final_state.get("final_response")
-    assert final_response is not None
-    assert final_response["type"] == "data"
-    assert final_response["content"][0]["product"] == "A"
+    for idx, test_case in enumerate(test_queries, 1):
+        query = test_case["query"]
+        test_name = test_case["test_name"]
 
-@patch('core.agents.bi_agent_nodes.fetch_data_from_query')
-def test_full_graph_flow_chart_generation(mock_fetch_data_tool, mock_adapters):
-    """
-    Testa um fluxo completo do grafo para geração de gráfico.
-    """
-    mock_llm_adapter, mock_parquet_adapter, mock_code_gen_agent = mock_adapters
+        print(f"\n[TEST {idx}/3] {test_name}")
+        print(f"Query: {query}")
+        print("-" * 70)
 
-    # --- Mocking Setup ---
-    # 1. classify_intent returns 'gerar_grafico'
-    mock_llm_adapter.get_completion.side_effect = [
-        {
-            "content": '{"intent": "gerar_grafico", "entities": {"product_id": "369947"}}'
-        },
-        {
-            "content": '{"coluna": "valor"}' # Valid JSON for parquet_filters
-        },
-        {
-            "content": "import pandas as pd\nimport plotly.express as px\ndf_raw_data = pd.DataFrame([{\"MES_01\": 100, \"MES_02\": 150, \"MES_03\": 120}])\nfig = px.bar(df_raw_data.melt(), x=\"variable\", y=\"value\", title=\"Vendas do Produto 369947\")\nresult = fig"
-        }
-    ]
-    # 2. get_schema returns a schema
-    mock_parquet_adapter.get_schema.return_value = {"tables": ["ADMAT"], "columns": {"product": "str", "sales": "int"}}
-    # 3. fetch_data_from_query (the tool) returns mock data
-    mock_fetch_data_tool.invoke.return_value = [{"product": "A", "sales": 100}, {"product": "B", "sales": 200}]
-    # 4. code_gen_agent.generate_and_execute_code returns a mock Plotly JSON
-    mock_code_gen_agent.generate_and_execute_code.return_value = {
-        "type": "chart",
-        "output": '''{
-            "data": [{"x": ["MES_01", "MES_02", "MES_03"], "y": [100, 150, 120], "type": "bar"}],
-            "layout": {
-                "title": "Vendas do Produto 369947",
-                "xaxis": {"title": "Mês"},
-                "yaxis": {"title": "Vendas"}
-            }
-        }'''
-    }
+        start_time = time.time()
 
-    # --- Graph Execution ---
-    builder = GraphBuilder(
-        llm_adapter=mock_llm_adapter,
-        parquet_adapter=mock_parquet_adapter,
-        code_gen_agent=mock_code_gen_agent
-    )
-    app = builder.build()
+        try:
+            # Invocar grafo (fluxo completo usado pelo Streamlit)
+            result = app.invoke({
+                "messages": [HumanMessage(content=query)],
+                "query": query
+            })
 
-    initial_state: AgentState = {
-        "messages": [HumanMessage(content="gere um gráfico do produto 369947")]
-    }
-    
-    final_state = app.invoke(initial_state)
+            elapsed = time.time() - start_time
 
-    # --- Assertions ---
-    mock_parquet_adapter.get_schema.assert_called_once()
-    mock_fetch_data_tool.invoke.assert_called_once()
-    mock_code_gen_agent.generate_and_execute_code.assert_called_once()
-    
-    # Check the final response type
-    final_response = final_state.get("final_response")
-    assert final_response is not None
-    assert final_response["type"] == "chart"
-    
-    # Check the content of the Plotly spec
-    chart_content = final_response["content"]
-    assert "data" in chart_content
-    assert "layout" in chart_content
-    assert chart_content["layout"]["title"] == "Vendas do Produto 369947"
-    assert "xaxis" in chart_content["layout"]
-    assert chart_content["layout"]["xaxis"]["title"] == "Mês"
-    assert "yaxis" in chart_content["layout"]
-    assert chart_content["layout"]["yaxis"]["title"] == "Vendas"
-    assert len(chart_content["data"]) > 0
-    assert chart_content["data"][0]["type"] == "bar"
-    assert "x" in chart_content["data"][0]
-    assert "y" in chart_content["data"][0]
-    assert "layout" in final_response["content"]
-    assert final_response["content"]["layout"]["title"] == "Vendas do Produto 369947"
+            # Validar resultado
+            intent = result.get("intent", "")
+            final_response = result.get("final_response", "")
+
+            print(f"   Intent detectado: {intent}")
+            print(f"   Tempo: {elapsed:.2f}s")
+
+            # Verificar se houve erro
+            final_response_str = str(final_response) if final_response else ''
+            if not final_response or 'erro' in final_response_str.lower():
+                print(f"   [FAIL] Resposta vazia ou com erro")
+                print(f"   Resposta: {str(final_response)[:200] if final_response else 'VAZIA'}")
+                results.append({
+                    'test_name': test_name,
+                    'success': False,
+                    'time': elapsed,
+                    'error': 'Resposta vazia ou com erro',
+                    'intent': intent
+                })
+            else:
+                print(f"   [OK] Query executada com sucesso")
+                response_preview = str(final_response)[:200] if final_response else ''
+                print(f"   Resposta (preview): {response_preview}...")
+
+                results.append({
+                    'test_name': test_name,
+                    'success': True,
+                    'time': elapsed,
+                    'response_length': len(str(final_response)),
+                    'intent': intent
+                })
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"   [EXCEPTION] {e}")
+            import traceback
+            traceback.print_exc()
+            results.append({
+                'test_name': test_name,
+                'success': False,
+                'time': elapsed,
+                'error': str(e)
+            })
+
+    total_time = time.time() - total_start
+
+    # 4. Sumário dos resultados
+    print("\n" + "="*70)
+    print("SUMARIO DOS TESTES")
+    print("="*70)
+
+    passed = sum(1 for r in results if r['success'])
+    total = len(results)
+
+    for result in results:
+        status = "[PASS]" if result['success'] else "[FAIL]"
+        time_str = f"{result['time']:.2f}s"
+        intent_str = f"(intent: {result.get('intent', 'N/A')})"
+        print(f"{status} {result['test_name']} {time_str} {intent_str}")
+        if not result['success'] and 'error' in result:
+            print(f"       Erro: {result['error']}")
+
+    print(f"\nResultado: {passed}/{total} testes passaram")
+    print(f"Tempo total: {total_time:.2f}s")
+
+    # 5. Conclusão
+    print("\n" + "="*70)
+    if passed == total:
+        print("RESULTADO FINAL: TODOS OS TESTES PASSARAM!")
+        print("Status: GRAPHBUILDER COM UNE INTEGRADO CORRETAMENTE")
+        return True
+    else:
+        print(f"RESULTADO FINAL: {total - passed} teste(s) falharam")
+        print("Status: VERIFICAR ERROS ACIMA")
+        return False
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760365900.13455,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"ranking de vendas do tecido\"\n# Mapeamento inteligente: \"tecido\" (singular) para 'TECIDOS' (plural)\ntecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']\nranking_vendas_tecido = tecidos_df.nlargest(10, 'VENDA_30DD')\n\n# Passo 3: Salvar resultado\nresult = px.bar(ranking_vendas_tecido, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Segmento Tecidos')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "56e6d09a8dbbddfe4610f10ea0826839"
+  }
+}

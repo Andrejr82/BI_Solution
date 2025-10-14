@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760301261.5064478,
+  "response": {
+    "content": "{\"PRODUTO\": 369947}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "b28ef1c6b324fb6c22bb18ac77b04fe5"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760468623.9738393,
+  "response": {
+    "content": "{\"tool\": \"calcular_mc_produto\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "aea244f55135ad27c6f7fbc154c5806e"
+  }
+}
