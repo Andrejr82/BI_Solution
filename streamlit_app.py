@@ -536,7 +536,10 @@ else:
                         logger.info("Cache miss. Processando com agent_graph...")
                         if st.session_state.backend_components and 'agent_graph' in st.session_state.backend_components:
                             agent_graph = st.session_state.backend_components['agent_graph']
-                            graph_input = {"messages": [{"role": "user", "content": user_input}]}
+
+                            # ✅ CORREÇÃO: Usar HumanMessage do LangChain, não dict
+                            HumanMessage = get_backend_module("HumanMessage")
+                            graph_input = {"messages": [HumanMessage(content=user_input)], "query": user_input}
 
                             # 🔧 TIMEOUT IMPLEMENTATION: Executar agent_graph com timeout
                             import threading
