@@ -260,6 +260,20 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                     # Obter permissões atuais
                     current_perms = get_user_permissions(selected_user_perms, user_data['role'])
 
+                    # Verificar se permissões vêm do banco (persistentes)
+                    perms_from_db = False
+                    if DB_AVAILABLE:
+                        try:
+                            db_perms = auth_db.load_user_permissions(selected_user_perms)
+                            perms_from_db = db_perms is not None
+                        except:
+                            pass
+
+                    if perms_from_db:
+                        st.success("💾 Permissões carregadas do banco de dados (persistente)")
+                    else:
+                        st.caption("⚠️ Usando permissões padrão ou temporárias")
+
                     st.markdown("### Páginas Disponíveis")
                     st.caption("Marque as páginas que o usuário pode acessar:")
 
@@ -281,20 +295,37 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
 
                     with col_save:
                         if st.button("💾 Salvar Permissões", use_container_width=True, type="primary"):
-                            set_user_permissions(selected_user_perms, selected_pages)
-                            st.success(f"✅ Permissões atualizadas para {selected_user_perms}!")
-                            st.info(f"📄 {len(selected_pages)} páginas liberadas")
+                            success = set_user_permissions(selected_user_perms, selected_pages)
+
+                            if success:
+                                st.success(f"✅ Permissões salvas no banco de dados para {selected_user_perms}!")
+                                st.info(f"📄 {len(selected_pages)} páginas liberadas (persistente)")
+                            else:
+                                st.warning(f"⚠️ Permissões salvas temporariamente para {selected_user_perms}")
+                                st.caption("💡 As permissões serão perdidas ao recarregar a página (banco indisponível)")
+
                             audit_logger.info(f"Admin {st.session_state.get('username')} atualizou permissões de {selected_user_perms}")
                             import time
-                            time.sleep(1)
+                            time.sleep(2)
                             st.rerun()
 
                     with col_reset:
                         if st.button("🔄 Resetar para Padrão", use_container_width=True):
-                            # Remover permissões customizadas
+                            # Remover permissões customizadas do banco
+                            try:
+                                if DB_AVAILABLE:
+                                    auth_db.delete_user_permissions(selected_user_perms)
+                                    st.success("✅ Permissões resetadas no banco de dados!")
+                                else:
+                                    st.warning("⚠️ Permissões resetadas temporariamente (banco indisponível)")
+                            except Exception as e:
+                                st.error(f"Erro ao resetar permissões: {e}")
+
+                            # Limpar do session_state também
                             if f"permissions_{selected_user_perms}" in st.session_state:
                                 del st.session_state[f"permissions_{selected_user_perms}"]
-                            st.success("✅ Permissões resetadas para o padrão!")
+
+                            audit_logger.info(f"Admin {st.session_state.get('username')} resetou permissões de {selected_user_perms}")
                             st.rerun()
 
                     # Mostrar resumo

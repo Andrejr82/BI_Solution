@@ -1,10 +1,26 @@
 """
 Sistema de permissões de páginas por usuário
+Suporta persistência no banco de dados SQL Server
 """
 import streamlit as st
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Lazy loading do módulo de banco
+_auth_db_module = None
+
+def _get_auth_db():
+    """Carrega módulo de auth usando lazy loading"""
+    global _auth_db_module
+    if _auth_db_module is None:
+        try:
+            from core.database import sql_server_auth_db
+            _auth_db_module = sql_server_auth_db
+        except Exception as e:
+            logger.warning(f"Módulo de auth não disponível: {e}")
+            _auth_db_module = False
+    return _auth_db_module if _auth_db_module else None
 
 # Páginas disponíveis no sistema
 AVAILABLE_PAGES = {
@@ -33,18 +49,30 @@ DEFAULT_PERMISSIONS = {
 def get_user_permissions(username, role):
     """
     Retorna lista de páginas que o usuário tem permissão
-    Por enquanto usa permissões padrão baseadas em role
+    Carrega do banco de dados se disponível, caso contrário usa session_state
     """
     # Admin sempre tem acesso total
     if role == "admin":
         return DEFAULT_PERMISSIONS["admin"]
 
-    # Verificar se há permissões customizadas no session_state
+    # 1. Tentar carregar do banco de dados
+    auth_db = _get_auth_db()
+    if auth_db:
+        try:
+            db_perms = auth_db.load_user_permissions(username)
+            if db_perms is not None:  # None significa que não há permissões customizadas
+                logger.info(f"Permissões carregadas do banco para {username}")
+                return db_perms
+        except Exception as e:
+            logger.warning(f"Erro ao carregar permissões do banco: {e}")
+
+    # 2. Fallback: Verificar session_state (temporário)
     custom_perms = st.session_state.get(f"permissions_{username}")
     if custom_perms:
+        logger.info(f"Permissões carregadas do session_state para {username}")
         return custom_perms
 
-    # Usar permissões padrão
+    # 3. Usar permissões padrão baseadas em role
     return DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS["user"])
 
 def has_page_permission(page_name):
@@ -68,10 +96,27 @@ def has_page_permission(page_name):
 def set_user_permissions(username, pages_list):
     """
     Define permissões customizadas para um usuário
-    (armazenado em session_state - em produção seria no banco)
+    Salva no banco de dados se disponível, caso contrário usa session_state
     """
+    # 1. Tentar salvar no banco de dados
+    auth_db = _get_auth_db()
+    if auth_db:
+        try:
+            success = auth_db.save_user_permissions(username, pages_list)
+            if success:
+                logger.info(f"✅ Permissões salvas no banco para {username}: {len(pages_list)} páginas")
+                # Atualizar session_state também para refletir imediatamente
+                st.session_state[f"permissions_{username}"] = pages_list
+                return True
+            else:
+                logger.warning(f"⚠️ Falha ao salvar permissões no banco para {username}")
+        except Exception as e:
+            logger.error(f"Erro ao salvar permissões no banco: {e}")
+
+    # 2. Fallback: Salvar apenas em session_state (temporário)
     st.session_state[f"permissions_{username}"] = pages_list
-    logger.info(f"Permissões atualizadas para {username}: {len(pages_list)} páginas")
+    logger.warning(f"⚠️ Permissões salvas apenas em session_state para {username} (temporário)")
+    return False
 
 def check_page_access(page_name):
     """
