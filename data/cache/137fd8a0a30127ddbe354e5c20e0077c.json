@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760450783.6262276,
+  "response": {
+    "content": "```json\n{\"une_id\": 2586, \"segmento\": \"TECIDOS\"}\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "137fd8a0a30127ddbe354e5c20e0077c"
+  }
+}

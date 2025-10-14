@@ -19,7 +19,7 @@ from core.llm_adapter import CustomLangChainLLM
 
 
 from core.connectivity.base import DatabaseAdapter
-from core.config.settings import settings # Import the settings instance
+from core.config.settings import get_safe_settings
 from core.utils.field_mapper import get_field_mapper # Import do mapeador de campos
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def create_caculinha_bi_agent(
         Uma tupla contendo o agente executável e a lista de suas ferramentas.
     """
 
-    from core.tools.data_tools import query_product_data, list_table_columns
+    from core.tools.data_tools import fetch_data_from_query
     from core.tools.une_tools import (
         calcular_abastecimento_une,
         calcular_mc_produto,
@@ -59,28 +59,24 @@ def create_caculinha_bi_agent(
 
     # A lista de ferramentas agora é definida dentro do escopo que tem acesso ao db_adapter
     bi_tools = [
-        query_product_data,
-        list_table_columns,
+        fetch_data_from_query,
         generate_and_execute_python_code,
         calcular_abastecimento_une,
         calcular_mc_produto,
         calcular_preco_final_une
     ]
 
-    # --- LLM para Geração de SQL ---
-    sql_gen_llm = ChatOpenAI(
-        model=settings.LLM_MODEL_NAME,
-        openai_api_key=settings.OPENAI_API_KEY.get_secret_value(),
-        temperature=0,
-    )
+    settings = get_safe_settings()
 
-    # Get parquet schema usando o arquivo correto: admatao.parquet
+    sql_gen_llm = CustomLangChainLLM(llm_adapter=llm_adapter)
+
+    # Get parquet schema usando o arquivo correto: admmat.parquet
     parquet_schema = {}
     try:
-        # Tenta carregar do arquivo admatao.parquet
-        parquet_file = os.path.join(parquet_dir, "admatao.parquet")
+        # Tenta carregar do arquivo admmat.parquet
+        parquet_file = os.path.join(parquet_dir, "admmat.parquet")
         if not os.path.exists(parquet_file):
-            # Fallback para ADMAT_REBUILT.parquet se admatao não existir
+            # Fallback para ADMAT_REBUILT.parquet se admmat não existir
             parquet_file = os.path.join(parquet_dir, "ADMAT_REBUILT.parquet")
         
         df_sample = pd.read_parquet(parquet_file, columns=[])
@@ -132,7 +128,8 @@ Quando o usuário mencionar:
         [
             (
                 "system",
-                """Você é um assistente de BI especializado. Sua tarefa é converter a consulta em linguagem natural do usuário em um objeto JSON que representa os filtros para consultar o arquivo admatao.parquet.
+                """
+Você é um assistente de BI especializado. Sua tarefa é converter a consulta em linguagem natural do usuário em um objeto JSON que representa os filtros para consultar o arquivo admmat.parquet.
 
 **IMPORTANTE: Use SEMPRE os nomes de campos EXATOS conforme o mapeamento abaixo.**
 
@@ -144,7 +141,7 @@ Use o seguinte esquema de dados para gerar os filtros JSON:
 Retorne APENAS o objeto JSON. Não inclua explicações ou qualquer outro texto.
 O JSON deve ter a seguinte estrutura:
 {{
-    "target_file": "admatao.parquet",
+    "target_file": "admmat.parquet",
     "filters": [
         {{"column": "nome_da_coluna_real", "operator": "operador", "value": "valor"}}
     ]
@@ -161,7 +158,7 @@ Consulta: Qual é o preço do produto 369947?
 JSON:
 ```json
 {{
-    "target_file": "admatao.parquet",
+    "target_file": "admmat.parquet",
     "filters": [
         {{"column": "PRODUTO", "operator": "==", "value": 369947}}
     ]
@@ -173,7 +170,7 @@ Consulta: Quais são as categorias do segmento tecidos com estoque 0?
 JSON:
 ```json
 {{
-    "target_file": "admatao.parquet",
+    "target_file": "admmat.parquet",
     "filters": [
         {{"column": "NOMESEGMENTO", "operator": "contains", "value": "TECIDO"}},
         {{"column": "ESTOQUE_UNE", "operator": "==", "value": 0}}
@@ -186,7 +183,7 @@ Consulta: Liste produtos da categoria Aviamentos com vendas acima de 100.
 JSON:
 ```json
 {{
-    "target_file": "admatao.parquet",
+    "target_file": "admmat.parquet",
     "filters": [
         {{"column": "NomeCategoria", "operator": "contains", "value": "Aviamentos"}},
         {{"column": "VENDA_30DD", "operator": ">", "value": 100}}
@@ -199,7 +196,7 @@ Consulta: Mostre produtos do fabricante XYZ
 JSON:
 ```json
 {{
-    "target_file": "admatao.parquet",
+    "target_file": "admmat.parquet",
     "filters": [
         {{"column": "NomeFabricante", "operator": "contains", "value": "XYZ"}}
     ]
@@ -233,10 +230,9 @@ JSON:
                 [
                     (
                         "system",
-                        "Você é um assistente de BI. Sua tarefa é decidir qual ferramenta usar para responder à consulta do usuário. As ferramentas disponíveis são:\n\n"
+                        """Você é um assistente de BI. Sua tarefa é decidir qual ferramenta usar para responder à consulta do usuário. As ferramentas disponíveis são:\n\n"""
                         "**FERRAMENTAS GERAIS:**\n"
-                        "- `query_product_data`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria, categorias com estoque zero).\n"
-                        "- `list_table_columns`: Para listar todas as colunas de uma tabela (arquivo Parquet) específica.\n"
+                        "- `fetch_data_from_query`: Para consultas que podem ser respondidas buscando dados específicos de produtos com filtros (ex: buscar preço de produto, listar produtos por categoria, categorias com estoque zero).\n"
                         "- `generate_and_execute_python_code`: Para análises complexas, cálculos, agregações ou geração de gráficos que exigem código Python.\n\n"
                         "**FERRAMENTAS UNE (Unidade de Negócio):**\n"
                         "- `calcular_abastecimento_une`: Para calcular produtos que precisam abastecimento em uma UNE específica. Use quando o usuário perguntar sobre 'abastecimento', 'reposição', 'produtos para abastecer', 'estoque baixo em UNE', ou mencionar uma UNE específica (ex: UNE 2586).\n"
@@ -246,7 +242,7 @@ JSON:
                         "- 'Quais produtos precisam abastecimento na UNE 2586?' → `calcular_abastecimento_une`\n"
                         "- 'Qual a MC do produto 704559?' → `calcular_mc_produto`\n"
                         "- 'Calcule o preço de R$ 800 no ranking 0 a vista' → `calcular_preco_final_une`\n"
-                        "- 'Mostre produtos do segmento TECIDOS' → `query_product_data`\n"
+                        "- 'Mostre produtos do segmento TECIDOS' → `fetch_data_from_query`\n"
                         "- 'Faça um gráfico de vendas' → `generate_and_execute_python_code`\n\n"
                         "Retorne APENAS o nome da ferramenta.",
                     ),
@@ -261,7 +257,7 @@ JSON:
             tool_decision = tool_decision_message.content.strip()
             logger.info(f"Decisão da ferramenta: {tool_decision}")
 
-            if "query_product_data" in tool_decision:
+            if "fetch_data_from_query" in tool_decision:
                 # Gerar JSON de filtros e retornar ToolCall
                 generated_json_message = sql_generator_chain.invoke({
                     "query": user_query, 
@@ -278,21 +274,17 @@ JSON:
                 
                 try:
                     parsed_json = json.loads(json_str)
-                    target_file = parsed_json.get("target_file", "admatao.parquet")
+                    target_file = parsed_json.get("target_file", "admmat.parquet")
                     filters = parsed_json.get("filters", [])
                     logger.info(f"JSON de filtros gerado: {parsed_json}")
                     
-                    # Return AIMessage encapsulating ToolCall for query_product_data
-                    return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="query_product_data", args={"target_file": target_file, "filters": filters})])]}
+                    # Return AIMessage encapsulating ToolCall for fetch_data_from_query
+                    return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="fetch_data_from_query", args={"target_file": target_file, "filters": filters})])]}
                 except json.JSONDecodeError as e:
                     logger.error(f"Erro ao decodificar JSON gerado: {e}. Conteúdo: {json_str}")
                     return {"messages": state["messages"] + [AIMessage(content=f"Desculpe, não consegui processar sua consulta devido a um erro na geração dos filtros: {e}")]}
 
-            elif "list_table_columns" in tool_decision:
-                table_name = "admatao" # Atualizado para usar admatao
-                logger.info(f"Listando colunas para a tabela: {table_name}")
-                # Return AIMessage encapsulating ToolCall for list_table_columns
-                return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="list_table_columns", args={"table_name": table_name})])]}
+
 
             elif "generate_and_execute_python_code" in tool_decision:
                 # Return AIMessage encapsulating ToolCall for CodeGenAgent
@@ -305,23 +297,30 @@ JSON:
                     ("system",
                      "Extraia o ID da UNE e o segmento (opcional) da consulta do usuário.\n"
                      "Retorne APENAS um JSON no formato:\n"
-                     '{"une_id": <número>, "segmento": "<nome ou null>"}\n'
+                     '{{"une_id": <número>, "segmento": "<nome ou null>"}}\n'
                      "Exemplos:\n"
-                     '- "produtos para abastecer na UNE 2586" → {"une_id": 2586, "segmento": null}\n'
-                     '- "abastecimento de TECIDOS na UNE 2599" → {"une_id": 2599, "segmento": "TECIDOS"}\n'
-                     '- "reposição na loja 2720 segmento PAPELARIA" → {"une_id": 2720, "segmento": "PAPELARIA"}'),
+                     '- "produtos para abastecer na UNE 2586" → {{"une_id": 2586, "segmento": null}}\n'
+                     '- "abastecimento de TECIDOS na UNE 2599" → {{"une_id": 2599, "segmento": "TECIDOS"}}\n'
+                     '- "reposição na loja 2720 segmento PAPELARIA" → {{"une_id": 2720, "segmento": "PAPELARIA"}}'),
                     ("user", "{query}")
                 ])
                 extract_chain = extract_prompt | sql_gen_llm
                 extract_result = extract_chain.invoke({"query": user_query})
-
                 try:
-                    params = json.loads(extract_result.content.strip())
+                    json_match = re.search(r"```json\n(.*?)```", extract_result.content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1).strip()
+                    else:
+                        json_str = extract_result.content.strip()
+                    params = json.loads(json_str)
                     une_id = params.get("une_id")
                     segmento = params.get("segmento")
 
                     if une_id is None:
                         return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique o ID da UNE na consulta (ex: UNE 2586).")]}
+
+                    # Garantir que une_id seja int
+                    une_id = int(une_id)
 
                     args = {"une_id": une_id}
                     if segmento:
@@ -339,22 +338,30 @@ JSON:
                     ("system",
                      "Extraia o código do produto e o ID da UNE da consulta do usuário.\n"
                      "Retorne APENAS um JSON no formato:\n"
-                     '{"produto_id": <número>, "une_id": <número>}\n'
+                     '{{"produto_id": <número>, "une_id": <número>}}\n'
                      "Exemplos:\n"
-                     '- "MC do produto 704559 na UNE 2586" → {"produto_id": 704559, "une_id": 2586}\n'
-                     '- "média comum do código 123456 loja 2599" → {"produto_id": 123456, "une_id": 2599}'),
+                     '- "MC do produto 704559 na UNE 2586" → {{"produto_id": 704559, "une_id": 2586}}\n'
+                     '- "média comum do código 123456 loja 2599" → {{"produto_id": 123456, "une_id": 2599}}'),
                     ("user", "{query}")
                 ])
                 extract_chain = extract_prompt | sql_gen_llm
                 extract_result = extract_chain.invoke({"query": user_query})
-
                 try:
-                    params = json.loads(extract_result.content.strip())
+                    json_match = re.search(r"```json\n(.*?)```", extract_result.content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1).strip()
+                    else:
+                        json_str = extract_result.content.strip()
+                    params = json.loads(json_str)
                     produto_id = params.get("produto_id")
                     une_id = params.get("une_id")
 
                     if produto_id is None or une_id is None:
                         return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique o código do produto e o ID da UNE (ex: 'produto 704559 na UNE 2586').")]}
+
+                    # Garantir que sejam int
+                    produto_id = int(produto_id)
+                    une_id = int(une_id)
 
                     return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="calcular_mc_produto", args={"produto_id": produto_id, "une_id": une_id})])]}
                 except (json.JSONDecodeError, KeyError) as e:
@@ -368,23 +375,33 @@ JSON:
                     ("system",
                      "Extraia o valor da compra, ranking e forma de pagamento da consulta do usuário.\n"
                      "Retorne APENAS um JSON no formato:\n"
-                     '{"valor_compra": <número>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}\n'
+                     '{{"valor_compra": <número>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}\n'
                      "Exemplos:\n"
-                     '- "preço de R$ 800 ranking 0 a vista" → {"valor_compra": 800.0, "ranking": 0, "forma_pagamento": "vista"}\n'
-                     '- "calcule 1500 reais no ranking 2 pagando em 30 dias" → {"valor_compra": 1500.0, "ranking": 2, "forma_pagamento": "30d"}'),
+                     '- "preço de R$ 800 ranking 0 a vista" → {{"valor_compra": 800.0, "ranking": 0, "forma_pagamento": "vista"}}\n'
+                     '- "calcule 1500 reais no ranking 2 pagando em 30 dias" → {{"valor_compra": 1500.0, "ranking": 2, "forma_pagamento": "30d"}}'),
                     ("user", "{query}")
                 ])
                 extract_chain = extract_prompt | sql_gen_llm
                 extract_result = extract_chain.invoke({"query": user_query})
+                logger.info(f"LLM output for calcular_preco_final_une: {extract_result.content}")
 
                 try:
-                    params = json.loads(extract_result.content.strip())
+                    json_match = re.search(r"```json\n(.*?)```", extract_result.content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1).strip()
+                    else:
+                        json_str = extract_result.content.strip()
+                    params = json.loads(json_str)
                     valor_compra = params.get("valor_compra")
                     ranking = params.get("ranking")
                     forma_pagamento = params.get("forma_pagamento")
 
                     if valor_compra is None or ranking is None or forma_pagamento is None:
                         return {"messages": state["messages"] + [AIMessage(content="Por favor, especifique: valor da compra, ranking (0-4) e forma de pagamento (vista, 30d, 90d, 120d).")]}
+
+                    # Garantir tipos corretos
+                    valor_compra = float(valor_compra)
+                    ranking = int(ranking)
 
                     return {"messages": state["messages"] + [AIMessage(content="", tool_calls=[ToolCall(id=str(uuid.uuid4()), name="calcular_preco_final_une", args={"valor_compra": valor_compra, "ranking": ranking, "forma_pagamento": forma_pagamento})])]}
                 except (json.JSONDecodeError, KeyError) as e:

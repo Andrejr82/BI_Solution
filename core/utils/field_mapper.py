@@ -177,6 +177,21 @@ class FieldMapper:
             Tipo do campo ('string', 'integer', 'float', 'numeric', 'date')
         """
         return self.field_types.get(field_name, "string")
+
+    def get_field_description(self, field_name: str) -> str:
+        """
+        Retorna a descrição de um campo do catálogo.
+
+        Args:
+            field_name: Nome do campo
+
+        Returns:
+            Descrição do campo ou uma string vazia se não encontrada.
+        """
+        if self.catalog and isinstance(self.catalog, list) and self.catalog:
+            column_descriptions = self.catalog[0].get('column_descriptions', {})
+            return column_descriptions.get(field_name, "")
+        return ""
     
     def build_filter_condition(
         self, 

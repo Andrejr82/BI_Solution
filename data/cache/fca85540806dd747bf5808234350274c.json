@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760391659.1901948,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\n# Filtrar apenas o segmento 'TECIDOS'\ntecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']\n\n# Agrupar por NomeCategoria e contar a quantidade de produtos em estoque\nestoque_por_categoria = tecidos_df.groupby('NomeCategoria')['ESTOQUE_UNE'].sum()\n\n# Encontrar a categoria com a menor quantidade de estoque\ncategoria_menos_estoque = estoque_por_categoria.nsmallest(1)\n\n# Passo 3: Salvar resultado\nresult = categoria_menos_estoque\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "fca85540806dd747bf5808234350274c"
+  }
+}

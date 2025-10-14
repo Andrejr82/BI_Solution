@@ -18,7 +18,7 @@ from langchain_core.runnables import RunnableConfig
 
 from core.llm_base import BaseLLMAdapter
 from core.factory.component_factory import ComponentFactory
-# from core.llm_langchain_adapter import CustomLangChainLLM  # Arquivo não existe
+from core.llm_adapter import CustomLangChainLLM
 
 from core.tools.mcp_sql_server_tools import sql_tools
 
@@ -80,5 +80,5 @@ class ToolAgent:
 
 def initialize_agent_for_session():
     """Função de fábrica para inicializar o agente."""
-            llm_adapter = ComponentFactory.get_llm_adapter("gemini")
-            return ToolAgent(llm_adapter=llm_adapter)
+    llm_adapter = ComponentFactory.get_llm_adapter("gemini")
+    return ToolAgent(llm_adapter=llm_adapter)

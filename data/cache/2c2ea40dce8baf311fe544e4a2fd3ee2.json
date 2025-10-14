@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760317767.7027357,
+  "response": {
+    "content": "{\"ESTOQUE_UNE\": \"MAD\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "2c2ea40dce8baf311fe544e4a2fd3ee2"
+  }
+}

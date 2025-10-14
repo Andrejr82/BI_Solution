@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760377890.4240491,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\n# Filtrar pelo produto específico\nproduto_626605 = df[df['PRODUTO'] == 626605]\n\n# Calcular a média de vendas em todas as Unes\nmedia_vendas_por_une = produto_626605.groupby('UNE_NOME')['VENDA_30DD'].mean().reset_index()\n\n# Gerar o gráfico de barras\nimport plotly.express as px\nresult = px.bar(media_vendas_por_une, x='UNE_NOME', y='VENDA_30DD', title='Média de Vendas do Produto 626605 por Unidade de Medida')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "c1a662bd93fa94cb9036b3068caf9f3c"
+  }
+}

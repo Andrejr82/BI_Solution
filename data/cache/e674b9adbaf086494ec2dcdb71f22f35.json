@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760371017.7543666,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\nvendas_por_segmento = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\nresult = px.bar(vendas_por_segmento, x='NOMESEGMENTO', y='VENDA_30DD', title='Vendas por Segmento')\n\n# Passo 3: Salvar resultado\n# A última linha já está definida acima com a atribuição a 'result'\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "e674b9adbaf086494ec2dcdb71f22f35"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760370802.7824864,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\ndf_festas = df[df['NOMESEGMENTO'] == 'FESTAS']\ndf_top10_festas = df_festas.nlargest(10, 'VENDA_30DD')\nresult = px.bar(df_top10_festas, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Festas')\n\n# Passo 3: Salvar resultado\nresult = result\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "c18059890c4eeba5e4d84dc74522f6fc"
+  }
+}

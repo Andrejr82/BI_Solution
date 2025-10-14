@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760366441.2952127,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"top 10 produtos de papelaria\"\npapelaria_df = df[df['NOMESEGMENTO'] == 'PAPELARIA']\ntop_10_papelaria = papelaria_df.nlargest(10, 'VENDA_30DD')\nresult = px.bar(top_10_papelaria, x='NOME', y='VENDA_30DD', title='Top 10 Produtos de Papelaria')\n\n# Passo 3: Salvar resultado\nresult = result\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "d156fe9db9f53d2962ae06dce9bee4f8"
+  }
+}

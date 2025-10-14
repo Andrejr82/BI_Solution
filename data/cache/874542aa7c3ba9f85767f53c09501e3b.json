@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760450785.5743093,
+  "response": {
+    "content": "{\"valor_compra\": 800.0, \"ranking\": 0, \"forma_pagamento\": \"vista\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "874542aa7c3ba9f85767f53c09501e3b"
+  }
+}

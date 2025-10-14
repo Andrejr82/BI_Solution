@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760378697.821617,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\nproduto_id = '626605'\nmedia_vendas = df[df['PRODUTO'] == produto_id]['VENDA_30DD'].mean()\n\n# Passo 3: Salvar resultado\nresult = media_vendas\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "1735787fc752a2d2cca9a509287cd309"
+  }
+}

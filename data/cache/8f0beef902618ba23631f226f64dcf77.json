@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760390610.1479156,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\n# Filtrar pelos produtos especificados e suas unidades\nprodutos_filtrados = df[\n    ((df['PRODUTO'] == 25) & (df['UNE_NOME'] == 'BAR')) |\n    (df['PRODUTO'] == 261) |\n    (df['PRODUTO'] == 261) # Assumindo que \"MAD\" se refere ao produto 261, pois não há outra informação. Se \"MAD\" for uma unidade, a lógica precisaria ser ajustada.\n]\n\n# Agrupar por produto e somar as vendas dos últimos 3 meses (assumindo que VENDA_30DD representa as vendas recentes)\n# Se houver uma coluna específica para vendas de 3 meses, ela deve ser usada.\n# Como não há, usaremos VENDA_30DD como proxy para vendas recentes.\nrelatorio_vendas = produtos_filtrados.groupby(['PRODUTO', 'NOME', 'UNE_NOME'])['VENDA_30DD'].sum().reset_index()\n\n# Passo 3: Salvar resultado\nresult = relatorio_vendas\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "8f0beef902618ba23631f226f64dcf77"
+  }
+}

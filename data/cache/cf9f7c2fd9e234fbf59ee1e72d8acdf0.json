@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760303121.790941,
+  "response": {
+    "content": "```json\n{\"intent\": \"python_analysis\"}\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "cf9f7c2fd9e234fbf59ee1e72d8acdf0"
+  }
+}

@@ -1,0 +1,155 @@
+[
+  {
+    "query": "Produtos classificados como ABC 'A' no segmento TECIDOS",
+    "session_id": "bd416e8c-e768-4aad-97b7-85ef78cdaf73",
+    "timestamp": "2025-10-14T05:17:49.028776",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.910512
+  },
+  {
+    "query": "Produtos pendentes de solicitação há mais de 7 dias no tecido",
+    "session_id": "bd416e8c-e768-4aad-97b7-85ef78cdaf73",
+    "timestamp": "2025-10-14T05:21:11.444563",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.64853
+  },
+  {
+    "query": "Ranking de fabricantes por volume de vendas",
+    "session_id": "3805941e-23e2-4749-a219-ba1a70d34594",
+    "timestamp": "2025-10-14T05:37:12.901113",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 24.65223
+  },
+  {
+    "query": "Quais produtos do segmento TECIDOS precisam de abastecimento na UNE 2586?",
+    "session_id": "a163a3d1-e2f2-4dd9-b3a4-ea10b1926390",
+    "timestamp": "2025-10-14T14:19:42.418702",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.511457
+  },
+  {
+    "query": "Quais produtos do segmento TECIDOS precisam de abastecimento na UNE 2586?",
+    "session_id": "11d9747c-bc23-4380-ba19-9adc86aea1dd",
+    "timestamp": "2025-10-14T14:25:49.725105",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 0.029381
+  },
+  {
+    "query": "Quais produtos do segmento TECIDOS precisam de abastecimento na UNE 2586?",
+    "session_id": "11d9747c-bc23-4380-ba19-9adc86aea1dd",
+    "timestamp": "2025-10-14T14:26:15.738140",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 3.536161
+  },
+  {
+    "query": "Quais produtos do segmento TECIDOS precisam de abastecimento na UNE 2586?",
+    "session_id": "da063538-193d-48b0-bb5c-d26cf72b8daa",
+    "timestamp": "2025-10-14T16:02:17.834865",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.00857
+  },
+  {
+    "query": "Qual a MC do produto 704559 na UNE 2586",
+    "session_id": "da063538-193d-48b0-bb5c-d26cf72b8daa",
+    "timestamp": "2025-10-14T16:03:50.869891",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 9.01077
+  },
+  {
+    "query": "Recomendação de estoque para produto 704559 na UNE 2586",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:34:50.942131",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 10.612807
+  },
+  {
+    "query": "Recomendação de estoque para produto 704559 na UNE 2586",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:35:30.322636",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 5.505498
+  },
+  {
+    "query": "Média comum do código 59294 loja 2599",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:36:31.811106",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.160547
+  },
+  {
+    "query": "Quais produtos precisam abastecimento na UNE 1685?",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:37:07.011447",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.715993
+  },
+  {
+    "query": "Lista de abastecimento da loja 2720 segmento PAPELARIA",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:38:36.014531",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.630459
+  },
+  {
+    "query": "top 10 une 2720",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:40:08.020649",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 12.023523
+  },
+  {
+    "query": "top 10 segmento artes une 2720",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:41:00.102189",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 9.794045
+  },
+  {
+    "query": "gere um gráfico de barras da evolução de vendas do produto 704559",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:43:57.734838",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 12.796365
+  },
+  {
+    "query": "gere um gráfico de evolução de vendas do produto 369947 ",
+    "session_id": "ecc6bbf6-836d-4815-a18f-66707662f551",
+    "timestamp": "2025-10-14T17:44:50.568227",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 11.127606
+  }
+]

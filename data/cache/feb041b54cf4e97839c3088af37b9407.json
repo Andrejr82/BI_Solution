@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760369229.6455486,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"top 10 do tecido\"\n# Mapeia \"tecido\" para o valor exato 'TECIDOS'\ntecidos_df = df[df['NOMESEGMENTO'] == 'TECIDOS']\n# Calcula o top 10 por VENDA_30DD, agrupando por NOME\nranking_tecidos = tecidos_df.nlargest(10, 'VENDA_30DD')\n\n# Passo 3: Salvar resultado na variável result\nresult = ranking_tecidos\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "feb041b54cf4e97839c3088af37b9407"
+  }
+}

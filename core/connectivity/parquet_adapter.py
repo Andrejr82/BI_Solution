@@ -51,34 +51,51 @@ class ParquetAdapter(DatabaseAdapter):
             logger.error("Query without filters is disallowed on Parquet adapter.")
             return [{"error": "A consulta é muito ampla. Adicione filtros (ex: por UNE, segmento) para continuar."}]
 
-        # Parse filters into pyarrow format
+        try:
+            schema = dd.read_parquet(self.file_path, engine='pyarrow').dtypes.to_dict()
+        except Exception as e:
+            logger.error(f"Failed to read Parquet schema: {e}")
+            return [{"error": "Falha ao ler o esquema do arquivo Parquet.", "details": str(e)}]
+
         pyarrow_filters = []
         for column, condition in query_filters.items():
             try:
-                if isinstance(condition, str) and any(op in condition for op in ['>', '<', '=', '!']):
+                if column not in schema:
+                    logger.warning(f"Column '{column}' not found in Parquet schema. Skipping filter.")
+                    continue
+
+                col_type = schema[column]
+                
+                op = '='
+                value = condition
+
+                if isinstance(condition, str) and any(op in condition for op in ['>=', '<=', '!=', '>', '<', '=']):
                     match = re.match(r"(>=|<=|!=|>|<|=)\s*(.*)", str(condition))
                     if match:
                         op, value_str = match.groups()
                         op = op.strip()
-                        if value_str.isnumeric():
-                            value = int(value_str)
-                        else:
+                        value_str = value_str.strip()
+
+                        if pd.api.types.is_string_dtype(col_type):
+                            value = value_str.strip("'\"")
+                        elif pd.api.types.is_numeric_dtype(col_type):
                             try:
-                                value = float(value_str)
+                                if '.' in value_str:
+                                    value = float(value_str)
+                                else:
+                                    value = int(value_str)
                             except ValueError:
-                                value = value_str.strip("'\"")
-                        pyarrow_filters.append((column, op, value))
-                    else:
-                        pyarrow_filters.append((column, '=', condition))
-                else:
-                    pyarrow_filters.append((column, '=', condition))
+                                value = value_str.strip("'\"") # Fallback to string if conversion fails
+                        else:
+                            value = value_str.strip("'\"")
+                
+                pyarrow_filters.append((column, op, value))
+
             except Exception as e:
                 logger.error(f"Failed to parse filter: {column}={condition}. Error: {e}")
                 return [{"error": f"Filtro inválido para a coluna '{column}'"}]
 
         try:
-            # Read the Parquet file with Dask, applying filters directly.
-            # This is lazy and performs predicate pushdown for maximum efficiency.
             logger.info(f"Applying filters to Dask read_parquet: {pyarrow_filters}")
             ddf = dd.read_parquet(
                 self.file_path,
@@ -86,7 +103,6 @@ class ParquetAdapter(DatabaseAdapter):
                 filters=pyarrow_filters
             )
 
-            # Lazily define the 'vendas_total' column
             vendas_colunas = [f'mes_{i:02d}' for i in range(1, 13)]
             vendas_colunas_existentes = [col for col in vendas_colunas if col in ddf.columns]
             if vendas_colunas_existentes:
@@ -94,8 +110,6 @@ class ParquetAdapter(DatabaseAdapter):
                     ddf[col] = dd.to_numeric(ddf[col], errors='coerce')
                 ddf['vendas_total'] = ddf[vendas_colunas_existentes].fillna(0).sum(axis=1)
 
-            # Trigger the computation. This is the only step that uses significant
-            # memory/CPU, but only on the *filtered* data.
             logger.info("Computing Dask query...")
             computed_df = ddf.compute()
 

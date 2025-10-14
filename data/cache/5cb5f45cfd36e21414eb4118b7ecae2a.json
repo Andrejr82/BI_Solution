@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760452406.0539904,
+  "response": {
+    "content": "```json\n{\n    \"target_file\": \"admmat.parquet\",\n    \"filters\": [\n        {\"column\": \"ESTOQUE_UNE\", \"operator\": \"==\", \"value\": 0},\n        {\"column\": \"NOMESEGMENTO\", \"operator\": \"contains\", \"value\": \"PAPELARIA\"},\n        {\"column\": \"UNE\", \"operator\": \"==\", \"value\": 2586}\n    ]\n}\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "5cb5f45cfd36e21414eb4118b7ecae2a"
+  }
+}

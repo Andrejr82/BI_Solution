@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760467675.0208943,
+  "response": {
+    "content": "{\"intent\": \"une_operation\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "08af87124645b72ea41a9a4c96781c02"
+  }
+}

@@ -56,7 +56,7 @@ class CodeGenAgent:
             "VENDA_30DD": "Total de vendas nos últimos 30 dias",
             "ESTOQUE_UNE": "Quantidade em estoque",
             "LIQUIDO_38": "Preço de venda",
-            "UNE_NOME": "Unidade de medida",
+            "UNE": "Nome da loja/unidade (ex: SCR, UBERLANDIA, MATRIZ)",
             "NomeFabricante": "Fabricante do produto"
         }
 
@@ -189,7 +189,7 @@ class CodeGenAgent:
             # Construir contexto com descrições das colunas mais importantes
             important_columns = [
                 "PRODUTO", "NOME", "NOMESEGMENTO", "NomeCategoria", "NOMEGRUPO",
-                "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38", "UNE_NOME", "NomeFabricante"
+                "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38", "UNE", "NomeFabricante"
             ]
 
             column_context = "📊 COLUNAS DISPONÍVEIS:\n"

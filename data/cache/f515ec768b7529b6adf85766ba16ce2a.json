@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760374860.7125297,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\nproduto_369947 = df[df['PRODUTO'] == 369947]\nresult = px.line(produto_369947, x='NOME', y='VENDA_30DD', title='Vendas do Produto 369947 ao longo do tempo')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "f515ec768b7529b6adf85766ba16ce2a"
+  }
+}

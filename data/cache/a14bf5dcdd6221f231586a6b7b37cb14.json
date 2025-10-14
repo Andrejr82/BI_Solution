@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760474221.5568228,
+  "response": {
+    "content": "{\"une_id\": 1685, \"segmento\": null}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "a14bf5dcdd6221f231586a6b7b37cb14"
+  }
+}
