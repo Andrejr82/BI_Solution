@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760745499.7287452,
+  "response": {
+    "content": "```python\ndf = load_data()\ndf_filtered = df[df['PRODUTO'] == 760014]\nresult = px.line(df_filtered, x='DATA', y='VENDA_30DD', title='Evolução de Vendas do Produto 760014')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "fbe520ac45c74b200b6305de99d67e47"
+  }
+}

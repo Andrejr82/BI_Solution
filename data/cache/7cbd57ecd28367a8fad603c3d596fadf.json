@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760658903.6926734,
+  "response": {
+    "content": "```python\ndf = load_data()\ndf['LEADTIME'] = df['ESTOQUE_UNE'] / df['VENDA_30DD']\ndf_filtered = df.dropna(subset=['LEADTIME', 'VENDA_30DD'])\ndf_filtered = df_filtered.sort_values(by=['LEADTIME', 'VENDA_30DD'], ascending=[False, False])\nresult = df_filtered[['NOME', 'LEADTIME', 'VENDA_30DD']].head(10)\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "7cbd57ecd28367a8fad603c3d596fadf"
+  }
+}

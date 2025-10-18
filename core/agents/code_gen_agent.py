@@ -60,9 +60,15 @@ class CodeGenAgent:
             "NomeFabricante": "Fabricante do produto"
         }
 
-        # Inicializar pattern_matcher e code_validator
+        # Inicializar pattern_matcher and code_validator
         from collections import defaultdict
-        self.pattern_matcher = None
+        try:
+            self.pattern_matcher = PatternMatcher()
+            self.logger.info("✅ PatternMatcher inicializado (Few-Shot Learning ativo)")
+        except Exception as e:
+            self.logger.warning(f"⚠️ PatternMatcher não disponível: {e}")
+            self.pattern_matcher = None
+
         self.code_validator = CodeValidator()
         self.error_counts = defaultdict(int)
         self.logs_dir = os.path.join(os.getcwd(), "data", "learning")
@@ -220,14 +226,18 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 **REGRA DE OURO:** Interprete a intenção do usuário e mapeie para o valor EXATO da lista acima!
 """
 
-            # 🎯 FASE 1: Injetar exemplos contextuais baseados em padrões
+            # 🎯 PILAR 2: Injetar exemplos contextuais baseados em padrões (Few-Shot Learning)
             examples_context = ""
             if self.pattern_matcher:
                 try:
-                    # user_query já foi definido no início da função
-                    examples_context = self.pattern_matcher.build_examples_context(user_query, max_examples=2)
-                    if examples_context:
-                        self.logger.info("🎯 Exemplos contextuais injetados no prompt")
+                    # Buscar padrão similar à query do usuário
+                    matched_pattern = self.pattern_matcher.match_pattern(user_query)
+                    if matched_pattern:
+                        # Formatar exemplos para injeção no prompt
+                        examples_context = self.pattern_matcher.format_examples_for_prompt(matched_pattern, max_examples=2)
+                        self.logger.info(f"🎯 Few-Shot Learning: Padrão '{matched_pattern.pattern_name}' identificado com {len(matched_pattern.examples)} exemplos")
+                    else:
+                        self.logger.debug("ℹ️ Nenhum padrão específico identificado para esta query")
                 except Exception as e:
                     self.logger.warning(f"⚠️ Erro ao buscar padrões: {e}")
 

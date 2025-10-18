@@ -1,237 +1,327 @@
 """
-Módulo para identificar padrões de queries e injetar exemplos relevantes.
+Pattern Matcher - Few-Shot Learning System
+
+Este módulo implementa o sistema de Few-Shot Learning que identifica padrões
+de queries similares e injeta exemplos relevantes no prompt do LLM.
+
+Parte do Pilar 2: Few-Shot Learning
 """
 
 import json
-import os
-import logging
-from typing import Dict, List, Optional, Tuple
+import re
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+
+
+@dataclass
+class MatchedPattern:
+    """Representa um padrão identificado com seus exemplos"""
+    pattern_name: str
+    description: str
+    score: int
+    keywords_matched: List[str]
+    examples: List[Dict[str, str]]
 
 
 class PatternMatcher:
     """
-    Identifica qual padrão de query melhor se encaixa na pergunta do usuário
-    e retorna exemplos relevantes para guiar o LLM.
+    Identifica automaticamente qual padrão a query do usuário se encaixa
+    e retorna exemplos relevantes para injeção no prompt.
+
+    Exemplo de uso:
+        matcher = PatternMatcher()
+        matched = matcher.match_pattern("top 10 produtos mais vendidos")
+        if matched:
+            print(f"Padrão: {matched.pattern_name}")
+            print(f"Exemplos: {len(matched.examples)}")
     """
 
-    def __init__(self, patterns_file: str = None):
+    def __init__(self, patterns_file: Optional[str] = None):
         """
-        Inicializa o matcher com arquivo de padrões.
+        Inicializa o PatternMatcher carregando os padrões de queries.
 
         Args:
-            patterns_file: Caminho para query_patterns.json (opcional)
+            patterns_file: Caminho para o arquivo JSON com padrões.
+                          Se None, usa o caminho padrão.
         """
-        self.logger = logging.getLogger(__name__)
-
         if patterns_file is None:
-            patterns_file = os.path.join(os.getcwd(), "data", "query_patterns.json")
+            # Caminho padrão relativo ao diretório raiz do projeto
+            base_dir = Path(__file__).parent.parent.parent
+            patterns_file = base_dir / "data" / "query_patterns.json"
 
+        self.patterns_file = Path(patterns_file)
+        self.patterns = self._load_patterns()
+
+    def _load_patterns(self) -> Dict[str, Any]:
+        """Carrega os padrões do arquivo JSON"""
         try:
-            with open(patterns_file, 'r', encoding='utf-8') as f:
-                self.patterns = json.load(f)
-            self.logger.info(f"✅ {len(self.patterns)} padrões de query carregados")
-        except Exception as e:
-            self.logger.error(f"❌ Erro ao carregar padrões: {e}")
-            self.patterns = {}
+            with open(self.patterns_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print(f"⚠️ Arquivo de padrões não encontrado: {self.patterns_file}")
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Erro ao decodificar JSON: {e}")
+            return {}
 
-    def match_pattern(self, user_query: str) -> Optional[Dict]:
+    def match_pattern(self, user_query: str, top_k: int = 1) -> Optional[MatchedPattern]:
         """
         Identifica qual padrão a query se encaixa melhor.
 
         Args:
-            user_query: Query do usuário
+            user_query: Query do usuário em linguagem natural
+            top_k: Número de padrões a retornar (default: 1, melhor match)
 
         Returns:
-            Dicionário com padrão identificado e exemplos, ou None
+            MatchedPattern com o padrão identificado e seus exemplos,
+            ou None se nenhum padrão corresponder
         """
+        if not self.patterns:
+            return None
+
         query_lower = user_query.lower()
 
-        # Calcular score para cada padrão
-        scores = {}
+        # Calcular scores para cada padrão
+        pattern_scores = []
 
         for pattern_name, pattern_data in self.patterns.items():
             score = 0
+            matched_keywords = []
 
-            # Verificar keywords positivas
+            # Verificar keywords do padrão
             for keyword in pattern_data.get('keywords', []):
-                if keyword.lower() in query_lower:
-                    score += 1
+                keyword_lower = keyword.lower()
 
-            # Verificar keywords de exclusão (reduz score)
-            for exclude_kw in pattern_data.get('exclude_keywords', []):
-                if exclude_kw.lower() in query_lower:
-                    score -= 2
+                # Match exato de palavra inteira (mais pontos)
+                if re.search(r'\b' + re.escape(keyword_lower) + r'\b', query_lower):
+                    score += 3
+                    matched_keywords.append(keyword)
+                # Match parcial (menos pontos)
+                elif keyword_lower in query_lower:
+                    score += 1
+                    matched_keywords.append(keyword)
+
+            # Adicionar score baseado no número de palavras em comum
+            pattern_words = set(pattern_data.get('description', '').lower().split())
+            query_words = set(query_lower.split())
+            common_words = pattern_words.intersection(query_words)
+            score += len(common_words) * 0.5
 
             if score > 0:
-                scores[pattern_name] = score
+                pattern_scores.append({
+                    'pattern_name': pattern_name,
+                    'pattern_data': pattern_data,
+                    'score': score,
+                    'keywords_matched': matched_keywords
+                })
 
-        # Retornar padrão com maior score
-        if scores:
-            best_pattern_name = max(scores, key=scores.get)
-            best_pattern = self.patterns[best_pattern_name].copy()
-            best_pattern['pattern_name'] = best_pattern_name
-            best_pattern['score'] = scores[best_pattern_name]
+        # Ordenar por score decrescente
+        pattern_scores.sort(key=lambda x: x['score'], reverse=True)
 
-            self.logger.info(
-                f"🎯 Padrão identificado: '{best_pattern_name}' (score: {scores[best_pattern_name]})"
-            )
+        if not pattern_scores:
+            return None
 
-            return best_pattern
+        # Retornar o melhor match
+        best_match = pattern_scores[0]
 
-        self.logger.debug("⚠️ Nenhum padrão identificado para a query")
-        return None
+        return MatchedPattern(
+            pattern_name=best_match['pattern_name'],
+            description=best_match['pattern_data'].get('description', ''),
+            score=best_match['score'],
+            keywords_matched=best_match['keywords_matched'],
+            examples=best_match['pattern_data'].get('examples', [])
+        )
 
-    def get_all_matches(self, user_query: str, top_k: int = 3) -> List[Tuple[str, Dict, int]]:
+    def get_all_matches(self, user_query: str, min_score: float = 1.0) -> List[MatchedPattern]:
         """
-        Retorna os top K padrões mais relevantes.
+        Retorna todos os padrões que correspondem à query.
 
         Args:
             user_query: Query do usuário
-            top_k: Número de padrões a retornar
+            min_score: Score mínimo para considerar um match
 
         Returns:
-            Lista de tuplas (pattern_name, pattern_data, score)
+            Lista de MatchedPattern ordenada por score
         """
+        if not self.patterns:
+            return []
+
         query_lower = user_query.lower()
-        scores = []
+        matches = []
 
         for pattern_name, pattern_data in self.patterns.items():
             score = 0
+            matched_keywords = []
 
-            # Calcular score
             for keyword in pattern_data.get('keywords', []):
-                if keyword.lower() in query_lower:
+                keyword_lower = keyword.lower()
+                if re.search(r'\b' + re.escape(keyword_lower) + r'\b', query_lower):
+                    score += 3
+                    matched_keywords.append(keyword)
+                elif keyword_lower in query_lower:
                     score += 1
+                    matched_keywords.append(keyword)
 
-            for exclude_kw in pattern_data.get('exclude_keywords', []):
-                if exclude_kw.lower() in query_lower:
-                    score -= 2
+            if score >= min_score:
+                matches.append(MatchedPattern(
+                    pattern_name=pattern_name,
+                    description=pattern_data.get('description', ''),
+                    score=score,
+                    keywords_matched=matched_keywords,
+                    examples=pattern_data.get('examples', [])
+                ))
 
-            if score > 0:
-                scores.append((pattern_name, pattern_data, score))
+        # Ordenar por score
+        matches.sort(key=lambda x: x.score, reverse=True)
+        return matches
 
-        # Ordenar por score e retornar top K
-        scores.sort(key=lambda x: x[2], reverse=True)
-        return scores[:top_k]
-
-    def build_examples_context(self, user_query: str, max_examples: int = 2) -> str:
+    def format_examples_for_prompt(self, matched_pattern: MatchedPattern, max_examples: int = 3) -> str:
         """
-        Constrói contexto com exemplos relevantes para adicionar ao prompt.
+        Formata os exemplos do padrão para injeção no prompt do LLM.
 
         Args:
-            user_query: Query do usuário
-            max_examples: Número máximo de exemplos por padrão
+            matched_pattern: Padrão identificado
+            max_examples: Número máximo de exemplos a incluir
 
         Returns:
             String formatada com exemplos prontos para o prompt
         """
-        matched_pattern = self.match_pattern(user_query)
-
-        if not matched_pattern:
+        if not matched_pattern or not matched_pattern.examples:
             return ""
 
-        context = "**📚 EXEMPLOS RELEVANTES PARA SUA QUERY:**\n\n"
-        context += f"**Padrão identificado:** {matched_pattern['pattern_name']}\n"
-        context += f"**Descrição:** {matched_pattern['description']}\n\n"
+        examples_text = "**EXEMPLOS DE QUERIES SIMILARES:**\n\n"
+        examples_text += f"*Padrao identificado: {matched_pattern.description}*\n\n"
 
-        examples = matched_pattern.get('examples', [])[:max_examples]
+        # Limitar número de exemplos
+        examples = matched_pattern.examples[:max_examples]
 
         for i, example in enumerate(examples, 1):
-            context += f"**Exemplo {i}:**\n"
-            context += f"Query: \"{example['user_query']}\"\n"
-            context += f"Código:\n```python\n{example['code']}\n```\n"
-            context += f"Resultado esperado: {example['expected_output']}\n\n"
+            user_query = example.get('user_query', '')
+            code = example.get('code', '')
+            expected_output = example.get('expected_output', '')
 
-        context += "**⚡ USE OS EXEMPLOS ACIMA COMO REFERÊNCIA para gerar código similar!**\n"
-        context += "Adapte a lógica dos exemplos para responder à query do usuário.\n\n"
+            examples_text += f"**Exemplo {i}:**\n"
+            examples_text += f"Query: \"{user_query}\"\n\n"
+            examples_text += f"Codigo gerado:\n```python\n{code}\n```\n"
+            examples_text += f"Resultado esperado: {expected_output}\n\n"
+            examples_text += "---\n\n"
 
-        return context
+        examples_text += "**IMPORTANTE:**\n"
+        examples_text += "- Use os exemplos acima como REFERENCIA para estruturar seu codigo\n"
+        examples_text += "- Mantenha o mesmo padrao de agrupamento, filtragem e ordenacao\n"
+        examples_text += "- Sempre use `load_data()` e salve o resultado em `result`\n"
+        examples_text += "- Se a query pedir 'top N', use `.head(N)`\n\n"
 
-    def get_validation_hints(self, user_query: str) -> List[str]:
+        return examples_text
+
+    def get_pattern_statistics(self) -> Dict[str, Any]:
         """
-        Retorna dicas de validação específicas para o padrão identificado.
-
-        Args:
-            user_query: Query do usuário
+        Retorna estatísticas sobre os padrões carregados.
 
         Returns:
-            Lista de hints para validação
+            Dicionário com estatísticas
         """
-        matched_pattern = self.match_pattern(user_query)
+        if not self.patterns:
+            return {
+                'total_patterns': 0,
+                'total_examples': 0,
+                'patterns': []
+            }
 
-        if not matched_pattern:
-            return []
+        stats = {
+            'total_patterns': len(self.patterns),
+            'total_examples': sum(len(p.get('examples', [])) for p in self.patterns.values()),
+            'patterns': []
+        }
 
-        hints = []
-        pattern_name = matched_pattern.get('pattern_name', '')
+        for pattern_name, pattern_data in self.patterns.items():
+            stats['patterns'].append({
+                'name': pattern_name,
+                'description': pattern_data.get('description', ''),
+                'keywords_count': len(pattern_data.get('keywords', [])),
+                'examples_count': len(pattern_data.get('examples', []))
+            })
 
-        # Hints específicos por padrão
-        if pattern_name == 'top_n':
-            hints.append("DEVE usar .head(N) para limitar resultados")
-            hints.append("DEVE ter agregação com groupby()")
+        return stats
 
-        elif pattern_name == 'ranking_completo':
-            hints.append("NÃO deve ter .head() - mostrar todos os resultados")
-            hints.append("DEVE ordenar com sort_values()")
-
-        elif pattern_name == 'comparacao':
-            hints.append("DEVE usar .isin() para múltiplos valores")
-            hints.append("DEVE ter exatamente N linhas no resultado (N = itens comparados)")
-
-        elif pattern_name == 'agregacao_simples':
-            hints.append("Resultado pode ser um valor único, não necessariamente DataFrame")
-            hints.append("Usar sum(), mean(), count(), etc.")
-
-        elif pattern_name == 'estoque_baixo':
-            hints.append("Filtrar por ESTOQUE_UNE == 0 ou < threshold")
-            hints.append("Incluir coluna VENDA_30DD para contexto")
-
-        elif pattern_name == 'distribuicao':
-            hints.append("DEVE agrupar por categoria/segmento")
-            hints.append("Ordenar por valor descendente")
-
-        elif pattern_name == 'percentual':
-            hints.append("Calcular total primeiro")
-            hints.append("Criar coluna 'Percentual' com (valor/total * 100)")
-
-        return hints
-
-    def suggest_columns(self, user_query: str) -> List[str]:
+    def test_query(self, user_query: str, verbose: bool = True) -> Optional[MatchedPattern]:
         """
-        Sugere colunas relevantes baseadas no padrão identificado.
+        Testa uma query e imprime informações de debug.
 
         Args:
-            user_query: Query do usuário
+            user_query: Query a testar
+            verbose: Se True, imprime informações detalhadas
 
         Returns:
-            Lista de nomes de colunas sugeridas
+            MatchedPattern se encontrado
         """
-        query_lower = user_query.lower()
-        suggested = ['NOME']  # Sempre incluir nome do produto
+        matched = self.match_pattern(user_query)
 
-        # Análise de keywords para sugerir colunas
-        if any(kw in query_lower for kw in ['venda', 'vendas', 'faturamento', 'receita']):
-            suggested.append('VENDA_30DD')
+        if verbose:
+            print(f"\n{'='*60}")
+            print(f"Query testada: \"{user_query}\"")
+            print(f"{'='*60}\n")
 
-        if any(kw in query_lower for kw in ['estoque', 'inventário', 'disponível']):
-            suggested.append('ESTOQUE_UNE')
+            if matched:
+                print(f"[OK] Padrao identificado: {matched.pattern_name}")
+                print(f"Descricao: {matched.description}")
+                print(f"Score: {matched.score}")
+                print(f"Keywords matched: {', '.join(matched.keywords_matched)}")
+                print(f"Exemplos disponiveis: {len(matched.examples)}")
+                print(f"\n--- Primeiro exemplo ---")
+                if matched.examples:
+                    ex = matched.examples[0]
+                    print(f"Query: {ex.get('user_query', 'N/A')}")
+                    print(f"Codigo:\n{ex.get('code', 'N/A')[:200]}...")
+            else:
+                print("[ERRO] Nenhum padrao identificado")
+                print("Sugestao: Adicione mais padroes ou keywords ao arquivo de padroes")
 
-        if any(kw in query_lower for kw in ['preço', 'valor', 'custo']):
-            suggested.append('LIQUIDO_38')
+        return matched
 
-        if any(kw in query_lower for kw in ['segmento']):
-            suggested.append('NOMESEGMENTO')
 
-        if any(kw in query_lower for kw in ['categoria']):
-            suggested.append('NomeCategoria')
+# Função auxiliar para uso rápido
+def quick_match(user_query: str) -> Optional[str]:
+    """
+    Função auxiliar para match rápido de padrão.
 
-        if any(kw in query_lower for kw in ['grupo']):
-            suggested.append('NOMEGRUPO')
+    Args:
+        user_query: Query do usuário
 
-        if any(kw in query_lower for kw in ['fabricante', 'marca', 'fornecedor']):
-            suggested.append('NomeFabricante')
+    Returns:
+        String com exemplos formatados ou None
+    """
+    matcher = PatternMatcher()
+    matched = matcher.match_pattern(user_query)
 
-        if any(kw in query_lower for kw in ['une', 'loja', 'unidade']):
-            suggested.append('UNE_NOME')
+    if matched:
+        return matcher.format_examples_for_prompt(matched)
 
-        return list(dict.fromkeys(suggested))  # Remove duplicatas mantendo ordem
+    return None
+
+
+# Exemplo de uso standalone
+if __name__ == "__main__":
+    # Teste básico
+    matcher = PatternMatcher()
+
+    # Estatísticas
+    stats = matcher.get_pattern_statistics()
+    print(f"[STATS] Estatisticas dos Padroes:")
+    print(f"Total de padroes: {stats['total_patterns']}")
+    print(f"Total de exemplos: {stats['total_examples']}\n")
+
+    # Teste com queries de exemplo
+    test_queries = [
+        "top 10 produtos mais vendidos",
+        "ranking de vendas no segmento tecidos",
+        "comparar vendas entre perfumaria e alimentar",
+        "quantos produtos temos em estoque",
+        "produtos sem estoque na une 1"
+    ]
+
+    print("[TEST] Testando queries de exemplo:\n")
+    for query in test_queries:
+        matched = matcher.test_query(query, verbose=True)
+        print()

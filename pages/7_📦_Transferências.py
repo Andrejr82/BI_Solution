@@ -27,11 +27,13 @@ if not st.session_state.get("authenticated"):
 
 # Importar backend
 from core.connectivity.hybrid_adapter import HybridDataAdapter
+from core.tools.une_tools import validar_transferencia_produto, sugerir_transferencias_automaticas
 
-# Inicializar adapter se não existir
-if 'transfer_adapter' not in st.session_state:
-    st.session_state.transfer_adapter = HybridDataAdapter()
+# Usar SQL Server via HybridAdapter
+if 'transfer_adapter' in st.session_state:
+    del st.session_state['transfer_adapter']
 
+st.session_state.transfer_adapter = HybridDataAdapter()
 adapter = st.session_state.transfer_adapter
 
 # Título
@@ -43,46 +45,106 @@ st.markdown("Solicite transferências de produtos entre lojas e depósito centra
 def get_unes_disponiveis():
     """Retorna lista de UNEs disponíveis"""
     try:
-        result = adapter.execute_query({})
-        if result:
-            df = pd.DataFrame(result)
-            if 'une' in df.columns and 'une_nome' in df.columns:
-                unes = df[['une', 'une_nome']].drop_duplicates().sort_values('une')
-                return unes.to_dict('records')
+        # Carregar dados com filtro mínimo (apenas colunas necessárias)
+        # Como não podemos filtrar sem critérios, vamos usar a fonte diretamente
+        import os
+        from pathlib import Path
+
+        # Tentar carregar do Parquet diretamente
+        parquet_path = Path(__file__).parent.parent / 'data' / 'parquet'
+
+        # Verificar qual arquivo existe
+        if (parquet_path / 'admmat_extended.parquet').exists():
+            parquet_file = parquet_path / 'admmat_extended.parquet'
+        elif (parquet_path / 'admmat.parquet').exists():
+            parquet_file = parquet_path / 'admmat.parquet'
+        else:
+            st.error("Arquivo Parquet não encontrado")
+            return []
+
+        # Carregar apenas colunas UNE
+        df = pd.read_parquet(parquet_file, columns=['une', 'une_nome'])
+        unes = df[['une', 'une_nome']].drop_duplicates().sort_values('une')
+        return unes.to_dict('records')
     except Exception as e:
         st.error(f"Erro ao carregar UNEs: {e}")
+        import traceback
+        st.error(traceback.format_exc())
     return []
 
-# --- FUNÇÃO: Carregar produtos da UNE ---
-@st.cache_data(ttl=300)
+# --- FUNÇÃO: Carregar produtos da UNE (OTIMIZADO) ---
+@st.cache_data(ttl=300, show_spinner=False)
 def get_produtos_une(une_id):
-    """Retorna produtos disponíveis em uma UNE"""
+    """
+    Carrega produtos com estoque da UNE (OTIMIZADO com PyArrow + cache)
+    Cache de 5 minutos para evitar recarregamentos desnecessários
+    Performance esperada: <0.5s para 1000 produtos
+    """
+    import time
+    start_time = time.time()
+
     try:
-        result = adapter.execute_query({'une': une_id})
-        if result:
-            df = pd.DataFrame(result)
+        import pyarrow.parquet as pq
+        import pyarrow.compute as pc
 
-            # Selecionar colunas relevantes
-            cols_relevantes = ['codigo', 'nome_produto', 'estoque_atual', 'venda_30_d',
-                             'preco_38_percent', 'nomesegmento', 'NOMEFABRICANTE']
-            cols_existentes = [c for c in cols_relevantes if c in df.columns]
+        parquet_file = Path(__file__).parent.parent / 'data' / 'parquet' / 'admmat_extended.parquet'
 
-            if cols_existentes:
-                df_produtos = df[cols_existentes].copy()
+        # OTIMIZAÇÃO: PyArrow com push-down filters
+        table = pq.read_table(
+            parquet_file,
+            columns=['codigo', 'nome_produto', 'estoque_atual', 'venda_30_d', 'preco_38_percent', 'nomesegmento', 'NOMEFABRICANTE'],
+            filters=[('une', '=', int(une_id))]
+        )
 
-                # Garantir que estoque_atual existe e é numérico
-                if 'estoque_atual' not in df_produtos.columns:
-                    df_produtos['estoque_atual'] = 0
-                else:
-                    df_produtos['estoque_atual'] = pd.to_numeric(df_produtos['estoque_atual'], errors='coerce').fillna(0)
+        # Converter para pandas
+        df = table.to_pandas()
 
-                # Filtrar apenas produtos com estoque > 0
-                df_produtos = df_produtos[df_produtos['estoque_atual'] > 0]
+        # Converter estoque para numérico
+        df['estoque_atual'] = pd.to_numeric(df['estoque_atual'], errors='coerce').fillna(0)
 
-                return df_produtos.to_dict('records')
+        # Filtrar apenas produtos com estoque
+        df = df[df['estoque_atual'] > 0]
+
+        # Limitar a 1000 produtos mais relevantes (ordenar por venda ou estoque)
+        if 'venda_30_d' in df.columns:
+            df['venda_30_d'] = pd.to_numeric(df['venda_30_d'], errors='coerce').fillna(0)
+            df = df.nlargest(1000, 'venda_30_d')  # Top 1000 por vendas
+        else:
+            df = df.nlargest(1000, 'estoque_atual')  # Top 1000 por estoque
+
+        elapsed = time.time() - start_time
+        result = df.to_dict('records') if len(df) > 0 else []
+
+        # Log de performance (apenas em debug)
+        if elapsed > 2.0:  # Se demorar mais de 2s, alertar
+            st.warning(f"⚠️ Carregamento da UNE {une_id} demorou {elapsed:.2f}s (esperado <0.5s)")
+
+        return result
+
+    except ImportError:
+        # Fallback se PyArrow não estiver disponível
+        st.warning("⚠️ PyArrow não disponível - performance reduzida")
+        parquet_file = Path(__file__).parent.parent / 'data' / 'parquet' / 'admmat_extended.parquet'
+
+        df = pd.read_parquet(parquet_file)
+        df = df[df['une'] == int(une_id)]
+
+        df['estoque_atual'] = pd.to_numeric(df['estoque_atual'], errors='coerce').fillna(0)
+        df = df[df['estoque_atual'] > 0].head(1000)
+
+        elapsed = time.time() - start_time
+        if elapsed > 5.0:
+            st.warning(f"⚠️ Carregamento lento: {elapsed:.2f}s. Instale PyArrow para melhor performance.")
+
+        return df.to_dict('records') if len(df) > 0 else []
+
     except Exception as e:
-        st.error(f"Erro ao carregar produtos: {e}")
-    return []
+        st.error(f"❌ Erro ao carregar produtos da UNE {une_id}: {str(e)[:150]}")
+        # Não mostrar traceback completo para não assustar usuário
+        with st.expander("🔍 Detalhes técnicos do erro"):
+            import traceback
+            st.code(traceback.format_exc())
+        return []
 
 # --- SIDEBAR: Configuração da Transferência ---
 st.sidebar.header("🔧 Configuração")
@@ -189,16 +251,34 @@ if "N → N" in modo_transferencia:
 else:
     st.subheader(f"🔍 Produtos disponíveis na UNE {unes_origem[0]}")
 
-# Carregar produtos de todas as UNEs de origem
+# Carregar produtos de todas as UNEs de origem (COM PROGRESS BAR)
 produtos_por_une = {}
-with st.spinner("Carregando produtos..."):
-    for une in unes_origem:
+
+# Progress bar para melhor UX
+if len(unes_origem) > 1:
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
+    for idx, une in enumerate(unes_origem):
+        progress_text.text(f"🔄 Carregando UNE {une}... ({idx+1}/{len(unes_origem)})")
+        progress_bar.progress((idx + 1) / len(unes_origem))
+
         prods = get_produtos_une(une)
         if prods:
             produtos_por_une[une] = prods
 
+    progress_text.empty()
+    progress_bar.empty()
+else:
+    # Uma única UNE: spinner simples
+    with st.spinner(f"Carregando produtos da UNE {unes_origem[0]}..."):
+        prods = get_produtos_une(unes_origem[0])
+        if prods:
+            produtos_por_une[unes_origem[0]] = prods
+
 if not produtos_por_une:
     st.warning(f"⚠️ Nenhum produto com estoque encontrado nas UNEs selecionadas")
+    st.info("💡 **Dica:** Tente selecionar outras UNEs ou verifique se há produtos com estoque disponível.")
     st.stop()
 
 # Combinar produtos de todas as origens
@@ -222,7 +302,16 @@ with col2:
     segmento_filtro = st.selectbox("Segmento", ["Todos"] + sorted(segmentos))
 
 with col3:
-    fabricantes = list(set([p.get('NOMEFABRICANTE', 'N/A') for p in produtos if p.get('NOMEFABRICANTE')]))
+    # FILTRO DINÂMICO: Fabricantes filtrados pelo segmento selecionado
+    if segmento_filtro != "Todos":
+        # Filtrar produtos do segmento selecionado
+        produtos_segmento = [p for p in produtos if p.get('nomesegmento') == segmento_filtro]
+        # Extrair fabricantes apenas desses produtos
+        fabricantes = list(set([p.get('NOMEFABRICANTE', 'N/A') for p in produtos_segmento if p.get('NOMEFABRICANTE')]))
+    else:
+        # Se "Todos" segmentos, mostra todos fabricantes
+        fabricantes = list(set([p.get('NOMEFABRICANTE', 'N/A') for p in produtos if p.get('NOMEFABRICANTE')]))
+
     fabricante_filtro = st.selectbox("Fabricante", ["Todos"] + sorted(fabricantes))
 
 with col4:
@@ -387,17 +476,71 @@ if produtos_filtrados:
                         if qtd_add > estoque:
                             st.error(f"❌ Quantidade ({qtd_add}) > estoque ({estoque})")
                         else:
-                            chave = f"{codigo_add}_UNE{une_origem_prod}"
-                            st.session_state.carrinho_transferencia[chave] = {
-                                'produto': produto,
-                                'une_origem': une_origem_prod,
-                                'distribuicao': {unes_destino[0]: qtd_add},
-                                'total': qtd_add,
-                                'preco': produto.get('preco_38_percent', 0),
-                                'valor_total_item': qtd_add * pd.to_numeric(produto.get('preco_38_percent', 0), errors='coerce')
-                            }
-                            st.success(f"✅ Produto {codigo_add} adicionado!")
-                            st.rerun()
+                            # NOVA FUNCIONALIDADE: Validar transferência com regras de negócio
+                            with st.spinner("🔍 Validando transferência..."):
+                                try:
+                                    validacao = validar_transferencia_produto.invoke({
+                                        "produto_id": int(codigo_add),
+                                        "une_origem": int(une_origem_prod),
+                                        "une_destino": int(unes_destino[0]),
+                                        "quantidade": int(qtd_add)
+                                    })
+
+                                    if validacao.get('valido'):
+                                        # Transferência válida - adicionar ao carrinho
+                                        chave = f"{codigo_add}_UNE{une_origem_prod}"
+                                        st.session_state.carrinho_transferencia[chave] = {
+                                            'produto': produto,
+                                            'une_origem': une_origem_prod,
+                                            'distribuicao': {unes_destino[0]: qtd_add},
+                                            'total': qtd_add,
+                                            'preco': produto.get('preco_38_percent', 0),
+                                            'valor_total_item': qtd_add * pd.to_numeric(produto.get('preco_38_percent', 0), errors='coerce'),
+                                            'validacao': validacao  # Guardar validação
+                                        }
+
+                                        # Mostrar feedback com base na prioridade
+                                        prioridade = validacao.get('prioridade', 'NORMAL')
+                                        score = validacao.get('score_prioridade', 0)
+                                        qtd_recomendada = validacao.get('quantidade_recomendada', qtd_add)
+
+                                        if prioridade == 'URGENTE':
+                                            st.error(f"🚨 **URGENTE** (Score: {score}/100)")
+                                            st.warning(f"Produto adicionado. Quantidade recomendada: {qtd_recomendada}")
+                                        elif prioridade == 'ALTA':
+                                            st.warning(f"⚡ **ALTA PRIORIDADE** (Score: {score}/100)")
+                                            st.info(f"Produto adicionado. Quantidade recomendada: {qtd_recomendada}")
+                                        elif prioridade == 'NORMAL':
+                                            st.success(f"✅ Produto adicionado (Prioridade: NORMAL, Score: {score}/100)")
+                                        else:
+                                            st.info(f"✅ Produto adicionado (Prioridade: {prioridade})")
+
+                                        # Mostrar recomendações
+                                        if validacao.get('recomendacoes'):
+                                            with st.expander("💡 Recomendações"):
+                                                for rec in validacao['recomendacoes']:
+                                                    st.write(f"• {rec}")
+
+                                        st.rerun()
+                                    else:
+                                        # Transferência inválida
+                                        st.error(f"❌ Transferência não recomendada")
+                                        st.warning(f"**Motivo:** {validacao.get('motivo', 'Validação falhou')}")
+
+                                except Exception as e:
+                                    # Fallback: adicionar sem validação se houver erro
+                                    st.warning(f"⚠️ Não foi possível validar (sistema off-line): {str(e)[:100]}")
+                                    chave = f"{codigo_add}_UNE{une_origem_prod}"
+                                    st.session_state.carrinho_transferencia[chave] = {
+                                        'produto': produto,
+                                        'une_origem': une_origem_prod,
+                                        'distribuicao': {unes_destino[0]: qtd_add},
+                                        'total': qtd_add,
+                                        'preco': produto.get('preco_38_percent', 0),
+                                        'valor_total_item': qtd_add * pd.to_numeric(produto.get('preco_38_percent', 0), errors='coerce')
+                                    }
+                                    st.info(f"✅ Produto {codigo_add} adicionado (sem validação)")
+                                    st.rerun()
                     else:
                         st.error(f"❌ Produto {codigo_add} não encontrado")
                 else:
@@ -418,9 +561,24 @@ if st.session_state.carrinho_transferencia:
         distribuicao = item.get('distribuicao', {})
         total_prod = item.get('total', 0)
         valor_total_item = item.get('valor_total_item', 0)
+        validacao = item.get('validacao', {})
 
         # Criar string de distribuição
         dist_str = ", ".join([f"UNE {dest}: {qtd}" for dest, qtd in distribuicao.items() if qtd > 0])
+
+        # Adicionar badge de prioridade se houver validação
+        prioridade_badge = ""
+        if validacao.get('prioridade'):
+            prioridade = validacao['prioridade']
+            score = validacao.get('score_prioridade', 0)
+            if prioridade == 'URGENTE':
+                prioridade_badge = f"🚨 URGENTE ({score:.0f})"
+            elif prioridade == 'ALTA':
+                prioridade_badge = f"⚡ ALTA ({score:.0f})"
+            elif prioridade == 'NORMAL':
+                prioridade_badge = f"✓ NORMAL ({score:.0f})"
+            else:
+                prioridade_badge = f"• {prioridade}"
 
         carrinho_items.append({
             'Código': produto.get('codigo'),
@@ -428,6 +586,7 @@ if st.session_state.carrinho_transferencia:
             'Origem': f"UNE {une_origem_item}",
             'Distribuição': dist_str,
             'Total': total_prod,
+            'Prioridade': prioridade_badge if prioridade_badge else "N/A",
             'Valor Total': f"R$ {valor_total_item:,.2f}",
             'Estoque': produto.get('estoque_atual', 0)
         })
@@ -532,6 +691,250 @@ if st.session_state.carrinho_transferencia:
 
 else:
     st.info("🛒 Carrinho vazio. Adicione produtos para criar uma solicitação de transferência.")
+
+# --- SUGESTÕES AUTOMÁTICAS ---
+st.markdown("---")
+st.subheader("🤖 Sugestões Automáticas de Transferências")
+
+st.info("💡 **Dica:** Clique em '🔮 Gerar Sugestões' para analisar oportunidades de transferência baseadas em linha verde, MC e vendas")
+
+# Filtros para geração de sugestões
+with st.expander("⚙️ Filtros de Geração", expanded=False):
+    st.caption("⚠️ **Importante:** Selecione os filtros ANTES de gerar sugestões. Após gerar, limpe o cache e regere para aplicar novos filtros.")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+
+    with col_f1:
+        filtro_segmento = st.selectbox(
+            "Filtrar por segmento",
+            ["Todos"] + sorted(segmentos) if 'segmentos' in locals() else ["Todos"],
+            key='filtro_sug_segmento',
+            help="Filtro visual: mostra apenas sugestões do segmento selecionado"
+        )
+
+    with col_f2:
+        filtro_une_origem = st.selectbox(
+            "Filtrar por UNE origem",
+            ["Todas"] + [f"UNE {u}" for u in une_ids],
+            key='filtro_sug_une_origem',
+            help="Gera sugestões APENAS desta UNE origem (filtro na geração)"
+        )
+
+    with col_f3:
+        limite_sugestoes = st.slider(
+            "Limite de sugestões",
+            min_value=5,
+            max_value=50,
+            value=10,
+            step=5,
+            key='limite_sug',
+            help="Número máximo de sugestões a gerar"
+        )
+
+col1, col2, col3 = st.columns([2, 1, 1])
+
+with col1:
+    # Mostrar cache info se existir
+    if 'sugestoes_cache_timestamp' in st.session_state:
+        from datetime import datetime
+        cache_time = st.session_state.sugestoes_cache_timestamp
+        tempo_cache = (datetime.now() - datetime.fromisoformat(cache_time)).total_seconds() / 60
+        if tempo_cache < 5:
+            st.caption(f"✅ Sugestões em cache (válido por mais {5 - int(tempo_cache):.0f} min)")
+        else:
+            st.caption("⚠️ Cache expirado - gere novas sugestões")
+
+with col2:
+    if st.button("🔮 Gerar Sugestões", use_container_width=True, type="primary"):
+        with st.spinner("🤖 Analisando oportunidades de transferência..."):
+            try:
+                # Verificar cache (5 minutos)
+                usar_cache = False
+                if 'sugestoes_cache_timestamp' in st.session_state:
+                    from datetime import datetime
+                    cache_time = datetime.fromisoformat(st.session_state.sugestoes_cache_timestamp)
+                    tempo_decorrido = (datetime.now() - cache_time).total_seconds()
+
+                    # Cache válido por 5 minutos (300 segundos)
+                    if tempo_decorrido < 300:
+                        usar_cache = True
+                        st.info("⚡ Usando sugestões do cache (atualizadas há menos de 5 min)")
+
+                if not usar_cache:
+                    # Preparar parâmetros para geração de sugestões
+                    params = {"limite": limite_sugestoes}
+
+                    # Aplicar filtro de UNE origem se selecionado
+                    if 'filtro_sug_une_origem' in st.session_state and st.session_state.filtro_sug_une_origem != "Todas":
+                        une_filtro = int(st.session_state.filtro_sug_une_origem.split()[-1])
+                        params["une_origem_filtro"] = une_filtro
+
+                    # Gerar sugestões com filtros
+                    sugestoes_result = sugerir_transferencias_automaticas.invoke(params)
+
+                    if 'error' in sugestoes_result:
+                        st.error(f"❌ Erro: {sugestoes_result['error']}")
+                    elif sugestoes_result.get('total_sugestoes', 0) == 0:
+                        st.info("✓ Nenhuma oportunidade de transferência identificada no momento")
+                        st.caption("Todas as UNEs estão com estoque balanceado!")
+                    else:
+                        # Guardar sugestões e timestamp no session_state
+                        from datetime import datetime
+                        st.session_state.sugestoes_transferencia = sugestoes_result
+                        st.session_state.sugestoes_cache_timestamp = datetime.now().isoformat()
+                        st.success(f"✓ {sugestoes_result['total_sugestoes']} sugestões geradas!")
+                        st.rerun()
+                else:
+                    # Usar sugestões do cache
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar sugestões: {str(e)[:200]}")
+
+with col3:
+    # Botão para limpar cache e forçar regeração
+    if 'sugestoes_transferencia' in st.session_state:
+        if st.button("🗑️ Limpar Cache", use_container_width=True, help="Limpa sugestões cacheadas"):
+            if 'sugestoes_transferencia' in st.session_state:
+                del st.session_state.sugestoes_transferencia
+            if 'sugestoes_cache_timestamp' in st.session_state:
+                del st.session_state.sugestoes_cache_timestamp
+            st.success("✅ Cache limpo! Gere novas sugestões.")
+            st.rerun()
+
+# Mostrar sugestões se existirem
+if 'sugestoes_transferencia' in st.session_state and st.session_state.sugestoes_transferencia:
+    sugestoes_data = st.session_state.sugestoes_transferencia
+
+    # Aplicar filtros de visualização
+    sugestoes_filtradas = sugestoes_data.get('sugestoes', [])
+    total_original = len(sugestoes_filtradas)
+
+    # Aplicar filtro de segmento (usando variável correta do expander)
+    if 'filtro_sug_segmento' in st.session_state and st.session_state.filtro_sug_segmento != "Todos":
+        filtro_seg_aplicado = st.session_state.filtro_sug_segmento
+        sugestoes_filtradas = [s for s in sugestoes_filtradas if s.get('segmento') == filtro_seg_aplicado]
+
+    # Mostrar info sobre filtros aplicados
+    if total_original != len(sugestoes_filtradas):
+        st.caption(f"🔍 Filtros aplicados: {total_original} → **{len(sugestoes_filtradas)}** sugestões")
+
+    # Recalcular estatísticas com filtros
+    stats_filtradas = {
+        'total': len(sugestoes_filtradas),
+        'urgentes': len([s for s in sugestoes_filtradas if s.get('prioridade') == 'URGENTE']),
+        'altas': len([s for s in sugestoes_filtradas if s.get('prioridade') == 'ALTA']),
+        'normais': len([s for s in sugestoes_filtradas if s.get('prioridade') == 'NORMAL']),
+        'total_unidades': sum(s.get('quantidade_sugerida', 0) for s in sugestoes_filtradas)
+    }
+
+    stats = stats_filtradas
+
+    # Estatísticas
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total", stats.get('total', 0))
+    with col2:
+        st.metric("🚨 Urgentes", stats.get('urgentes', 0))
+    with col3:
+        st.metric("⚡ Altas", stats.get('altas', 0))
+    with col4:
+        st.metric("Unidades", stats.get('total_unidades', 0))
+
+    # Tabela de sugestões
+    st.markdown("### Top Sugestões")
+
+    if not sugestoes_filtradas:
+        st.info("Nenhuma sugestão encontrada com os filtros aplicados")
+
+    for idx, sug in enumerate(sugestoes_filtradas, 1):
+        prioridade = sug.get('prioridade', 'NORMAL')
+        score = sug.get('score', 0)
+
+        # Definir cor do expander baseado na prioridade
+        if prioridade == 'URGENTE':
+            header = f"🚨 #{idx} - {sug.get('nome_produto', 'N/A')[:40]} (Score: {score:.0f}/100)"
+        elif prioridade == 'ALTA':
+            header = f"⚡ #{idx} - {sug.get('nome_produto', 'N/A')[:40]} (Score: {score:.0f}/100)"
+        else:
+            header = f"✓ #{idx} - {sug.get('nome_produto', 'N/A')[:40]} (Score: {score:.0f}/100)"
+
+        with st.expander(header):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.write("**Transferência:**")
+                st.write(f"UNE {sug.get('une_origem')} → UNE {sug.get('une_destino')}")
+                st.write(f"**Quantidade:** {sug.get('quantidade_sugerida')} unidades")
+
+            with col2:
+                st.write("**Análise:**")
+                st.write(f"Segmento: {sug.get('segmento', 'N/A')}")
+                st.write(f"Prioridade: {prioridade}")
+                st.write(f"Score: {score:.1f}/100")
+
+            with col3:
+                st.write("**Benefício:**")
+                st.write(sug.get('beneficio_estimado', 'N/A'))
+
+            if sug.get('motivo'):
+                st.info(f"💡 **Motivo:** {sug['motivo']}")
+
+            # Botão para adicionar ao carrinho
+            if st.button(f"➕ Adicionar ao Carrinho", key=f"add_sug_{idx}"):
+                # Adicionar sugestão ao carrinho automaticamente
+                produto_id = sug.get('produto_id')
+                une_origem = sug.get('une_origem')
+                une_destino = sug.get('une_destino')
+                quantidade = sug.get('quantidade_sugerida')
+
+                # Buscar dados completos do produto
+                produto_info = next((p for p in produtos_filtrados if str(p.get('codigo')) == str(produto_id)), None)
+
+                if not produto_info:
+                    # Tentar carregar produto específico do Parquet
+                    try:
+                        import pyarrow.parquet as pq
+                        parquet_file = Path(__file__).parent.parent / 'data' / 'parquet' / 'admmat_extended.parquet'
+
+                        # Buscar produto específico (sem limite de 1000)
+                        table = pq.read_table(
+                            parquet_file,
+                            columns=['codigo', 'nome_produto', 'estoque_atual', 'venda_30_d', 'preco_38_percent', 'nomesegmento', 'NOMEFABRICANTE'],
+                            filters=[('une', '=', int(une_origem)), ('codigo', '=', int(produto_id))]
+                        )
+                        df = table.to_pandas()
+
+                        if len(df) > 0:
+                            produto_info = df.iloc[0].to_dict()
+                    except:
+                        produto_info = None
+
+                if produto_info:
+                    chave = f"{produto_id}_UNE{une_origem}"
+                    st.session_state.carrinho_transferencia[chave] = {
+                        'produto': produto_info,
+                        'une_origem': une_origem,
+                        'distribuicao': {une_destino: quantidade},
+                        'total': quantidade,
+                        'preco': produto_info.get('preco_38_percent', 0),
+                        'valor_total_item': quantidade * pd.to_numeric(produto_info.get('preco_38_percent', 0), errors='coerce'),
+                        'validacao': {
+                            'valido': True,
+                            'prioridade': prioridade,
+                            'score_prioridade': score,
+                            'quantidade_recomendada': quantidade
+                        }
+                    }
+                    st.success(f"✅ Produto {produto_id} adicionado ao carrinho!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Não foi possível carregar dados do produto {produto_id}")
+
+    # Botão para limpar sugestões
+    if st.button("🗑️ Limpar Sugestões"):
+        del st.session_state.sugestoes_transferencia
+        st.rerun()
 
 # --- HISTÓRICO DE TRANSFERÊNCIAS ---
 st.markdown("---")
