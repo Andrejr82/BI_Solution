@@ -1,0 +1,47 @@
+[
+  {
+    "query": "gere um gráfico de ranking de vendas segmento tecido",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:10:50.053750",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 15.904383
+  },
+  {
+    "query": "gere um ranking de vendas segmentos une MAD",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:12:09.066661",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.512551
+  },
+  {
+    "query": "ranking de vendas une mad",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:12:42.130959",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.491901
+  },
+  {
+    "query": "ranking de vendas une scr",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:15:22.682047",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 9.758208
+  },
+  {
+    "query": "gere um gráfico de ranking de vendas une 261",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:16:07.503392",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 7.766004
+  }
+]

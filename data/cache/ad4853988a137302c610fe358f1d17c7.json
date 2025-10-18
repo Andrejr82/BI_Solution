@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760829362.4543557,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"gere um gráfico de ranking de vendas une 261\"\n# Filtrar pelo UNE especificado\ndf_une_261 = df[df['UNE'] == '261']\n\n# Calcular o ranking de vendas por produto para o UNE especificado\nranking_vendas_une_261 = df_une_261.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\n\n# Gerar o gráfico de barras para o ranking\n# Importar plotly.express\nimport plotly.express as px\n\n# Criar o gráfico de barras\n# Usar .head(10) para limitar a um top 10, pois um ranking geralmente implica em ver os melhores\nresult = px.bar(ranking_vendas_une_261.head(10), x='NOME', y='VENDA_30DD', title='Ranking de Vendas - Loja 261 (Top 10)')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "ad4853988a137302c610fe358f1d17c7"
+  }
+}

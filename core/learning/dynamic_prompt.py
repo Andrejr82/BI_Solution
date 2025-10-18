@@ -103,8 +103,8 @@ BOAS PRÁTICAS:
             bool: True se avisos foram atualizados, False caso contrário
         """
         try:
-            # Obtém análise de erros recentes
-            error_analysis = self.error_analyzer.analyze_recent_errors()
+            # Obtém análise de erros recentes (últimos 7 dias)
+            error_analysis = self.error_analyzer.analyze_errors(days=7)
 
             if not error_analysis:
                 logger.debug("Nenhuma análise de erro disponível")
@@ -140,42 +140,41 @@ BOAS PRÁTICAS:
         """
         warnings = []
 
-        # Extrai padrões da análise
-        patterns = error_analysis.get('common_patterns', [])
+        # Extrai sugestões da análise
+        suggestions = error_analysis.get('suggested_improvements', [])
+        common_errors = error_analysis.get('most_common_errors', [])
 
-        for pattern in patterns:
-            pattern_type = pattern.get('type', '')
-            pattern_count = pattern.get('count', 0)
+        # Gera avisos a partir das sugestões (prioridade HIGH e MEDIUM)
+        for suggestion in suggestions:
+            if isinstance(suggestion, dict):
+                priority = suggestion.get('priority', 'LOW')
+                if priority in ['HIGH', 'MEDIUM']:
+                    issue = suggestion.get('issue', '')
+                    solution = suggestion.get('solution', '')
+                    warnings.append(f"⚠️ {issue}: {solution}")
 
-            # Gera avisos específicos por tipo de padrão
-            if pattern_type == 'column_not_found' and pattern_count >= 2:
-                column_name = pattern.get('details', {}).get('column', 'desconhecida')
+        # Gera avisos específicos por tipo de erro comum
+        for error in common_errors[:5]:  # Top 5
+            error_type = error.get('type', '')
+            count = error.get('count', 0)
+
+            if error_type == 'KeyError' and count >= 3:
                 warnings.append(
-                    f"Valide se a coluna '{column_name}' existe antes de usar"
+                    "⚠️ COLUNAS: Valide nomes de colunas usando df.columns antes de acessar"
                 )
 
-            elif pattern_type == 'invalid_value' and pattern_count >= 2:
+            elif error_type == 'ValueError' and count >= 2:
                 warnings.append(
-                    "Use valores EXATOS de segmentos/categorias conforme dados reais"
+                    "⚠️ VALORES: Valide valores antes de operações (ex: verificar se coluna 'DATA' existe)"
                 )
 
-            elif pattern_type == 'top_n_missing_head' and pattern_count >= 2:
+            elif error_type == 'AttributeError' and count >= 2:
                 warnings.append(
-                    "Se usuário pedir 'top N', SEMPRE use .head(N) ou LIMIT N"
+                    "⚠️ ATRIBUTOS: Verifique o tipo do objeto antes de chamar métodos"
                 )
 
-            elif pattern_type == 'missing_join' and pattern_count >= 2:
-                warnings.append(
-                    "Verifique se todas as tabelas necessárias estão com JOIN correto"
-                )
-
-            elif pattern_type == 'type_mismatch' and pattern_count >= 2:
-                warnings.append(
-                    "Valide tipos de dados antes de comparações e operações"
-                )
-
-        logger.debug("Gerados %d avisos a partir de %d padrões",
-                    len(warnings), len(patterns))
+        logger.debug("Gerados %d avisos a partir de %d sugestões e %d erros comuns",
+                    len(warnings), len(suggestions), len(common_errors))
 
         return warnings
 
