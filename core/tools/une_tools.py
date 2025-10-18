@@ -17,7 +17,7 @@ from functools import lru_cache
 
 # Validadores integrados (v3.0)
 from core.validators.schema_validator import SchemaValidator
-from core.utils.query_validator import validate_columns, handle_nulls, safe_filter, safe_convert_types
+from core.utils.query_validator import validate_columns, handle_nulls, safe_filter
 from core.utils.error_handler import error_handler_decorator
 
 logger = logging.getLogger(__name__)
@@ -161,16 +161,10 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
         if col in df.columns:
             df = handle_nulls(df, col, strategy="fill", fill_value=0)
 
-    # Converter tipos com segurança
-    type_mapping = {
-        'une': int,
-        'codigo': int,
-        'estoque_atual': float,
-        'linha_verde': float,
-        'mc': float,
-        'venda_30_d': float
-    }
-    df = safe_convert_types(df, {k: v for k, v in type_mapping.items() if k in df.columns})
+    # Converter tipos com segurança (usando pandas)
+    for col in ['estoque_atual', 'linha_verde', 'mc', 'venda_30_d']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     return df
 
