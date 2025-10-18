@@ -57,7 +57,8 @@ class CodeGenAgent:
             "VENDA_30DD": "Total de vendas nos últimos 30 dias",
             "ESTOQUE_UNE": "Quantidade em estoque",
             "LIQUIDO_38": "Preço de venda",
-            "UNE": "Nome da loja/unidade (ex: SCR, UBERLANDIA, MATRIZ)",
+            "UNE": "Nome da loja/unidade (ex: SCR, MAD, 261, ALC, NIL, etc.)",
+            "UNE_ID": "ID numérico da loja (ex: 1=SCR, 2720=MAD, 1685=261)",
             "NomeFabricante": "Fabricante do produto"
         }
 
@@ -235,6 +236,26 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 **REGRA DE OURO:** Interprete a intenção do usuário e mapeie para o valor EXATO da lista acima!
 """
 
+            # Lista de UNEs válidas
+            valid_unes = """
+**VALORES VÁLIDOS DE LOJAS/UNIDADES (coluna UNE - nomes):**
+Quando o usuário mencionar uma loja, use EXATAMENTE estes nomes:
+
+'SCR', 'ALC', 'DC', 'CFR', 'PET', 'VVL', 'VIL', 'REP', 'JFA', 'NIT',
+'CGR', 'OBE', 'CXA', '261', 'BGU', 'ALP', 'BAR', 'CP2', 'JRD', 'NIG',
+'ITA', 'MAD', 'JFJ', 'CAM', 'VRD', 'SGO', 'NFR', 'TIJ', 'ANG', 'BON',
+'IPA', 'BOT', 'NIL', 'TAQ', 'RDO', '3RS', 'STS', 'NAM'
+
+**EXEMPLOS DE MAPEAMENTO:**
+- Usuário diz "une mad" ou "une MAD" → Filtrar: df[df['UNE'] == 'MAD']
+- Usuário diz "une 261" → Filtrar: df[df['UNE'] == '261']
+- Usuário diz "une scr" → Filtrar: df[df['UNE'] == 'SCR']
+- Usuário diz "une nil" → Filtrar: df[df['UNE'] == 'NIL']
+
+**IMPORTANTE:** A coluna 'UNE' contém o NOME da loja (texto), não o ID numérico!
+Se precisar do ID numérico, use a coluna 'UNE_ID'.
+"""
+
             # 🎯 PILAR 2: Injetar exemplos contextuais baseados em padrões (Few-Shot Learning)
             examples_context = ""
             if self.pattern_matcher:
@@ -255,6 +276,8 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 {column_context}
 
 {valid_segments}
+
+{valid_unes}
 
 {examples_context}
 
