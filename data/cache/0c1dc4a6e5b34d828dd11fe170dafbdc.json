@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760829122.2743802,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"gere um ranking de vendas segmentos une MAD\"\n# Mapeando \"MAD\" para a unidade correta, assumindo que seja \"MATRIZ\" com base em exemplos comuns.\n# Se houver outra unidade específica para \"MAD\", ajuste aqui.\nunidade_mad = 'MATRIZ' \ndf_mad = df[df['UNE'] == unidade_mad]\nranking_vendas_mad = df_mad.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\n\n# Passo 3: Salvar resultado\nresult = ranking_vendas_mad\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "0c1dc4a6e5b34d828dd11fe170dafbdc"
+  }
+}
