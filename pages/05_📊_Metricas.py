@@ -97,19 +97,18 @@ st.markdown("---")
 st.subheader("📉 Tendência de Erros")
 
 if 'error_trend' in metrics and len(metrics['error_trend']) > 0:
-    error_df = pd.DataFrame(metrics['error_trend'])
+    # error_trend é um dict {data: count}, converter para DataFrame
+    error_df = pd.DataFrame(
+        list(metrics['error_trend'].items()),
+        columns=['date', 'error_count']
+    )
+    error_df['date'] = pd.to_datetime(error_df['date'])
+    error_df = error_df.set_index('date')
 
-    # Verificar se há colunas necessárias
-    if 'date' in error_df.columns and 'error_count' in error_df.columns:
-        error_df['date'] = pd.to_datetime(error_df['date'])
-        error_df = error_df.set_index('date')
-
-        st.line_chart(
-            error_df['error_count'],
-            use_container_width=True
-        )
-    else:
-        st.info("Dados de tendência de erros não disponíveis no formato esperado")
+    st.line_chart(
+        error_df['error_count'],
+        use_container_width=True
+    )
 else:
     st.info("Nenhum erro registrado no período selecionado")
 
