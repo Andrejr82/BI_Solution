@@ -26,6 +26,7 @@ from core.utils.json_utils import _clean_json_values # Import the cleaning funct
 from core.llm_base import BaseLLMAdapter
 from core.learning.pattern_matcher import PatternMatcher
 from core.validation.code_validator import CodeValidator
+from core.learning.dynamic_prompt import DynamicPrompt
 
 class CodeGenAgent:
     """
@@ -73,6 +74,14 @@ class CodeGenAgent:
         self.error_counts = defaultdict(int)
         self.logs_dir = os.path.join(os.getcwd(), "data", "learning")
         os.makedirs(self.logs_dir, exist_ok=True)
+
+        # Inicializar DynamicPrompt (Pilar 4)
+        try:
+            self.dynamic_prompt = DynamicPrompt()
+            self.logger.info("✅ DynamicPrompt inicializado (Pilar 4 ativo)")
+        except Exception as e:
+            self.logger.warning(f"⚠️ DynamicPrompt não disponível: {e}")
+            self.dynamic_prompt = None
 
         self.logger.info("CodeGenAgent inicializado.")
 
@@ -327,6 +336,16 @@ result = px.bar(vendas_por_grupo, x='NOMEGRUPO', y='VENDA_30DD', title='Top 5 Gr
 - Usuário diz: "armarinho" → Você usa: df[df['NOMESEGMENTO'] == 'ARMARINHO E CONFECÇÃO']
 
 Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
+
+            # 🚀 PILAR 4: Adicionar avisos dinâmicos baseados em erros recentes
+            if self.dynamic_prompt:
+                try:
+                    enhanced_prompt = self.dynamic_prompt.get_enhanced_prompt()
+                    # Adicionar avisos ao system_prompt
+                    system_prompt = system_prompt + "\n\n" + enhanced_prompt
+                    self.logger.info("✅ Prompt enriquecido com DynamicPrompt (Pilar 4)")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Erro ao enriquecer prompt: {e}")
 
             # O agente agora usa o prompt diretamente, sem construir um novo.
             messages = [
