@@ -85,16 +85,24 @@ def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.DataFrame:
     """
-    Carrega dados usando adapter apropriado (SQL ou Parquet)
+    Carrega dados usando adapter apropriado (SQL ou Parquet) com validação
 
     Args:
         filters: Filtros a aplicar (ex: {'une': 2586, 'codigo': 369947})
         columns: Colunas específicas a carregar (otimização)
 
     Returns:
-        DataFrame normalizado
+        DataFrame normalizado e validado
     """
     adapter = _get_data_adapter()
+
+    # Validar schema se for Parquet direto
+    if isinstance(adapter, dict):
+        validator = SchemaValidator()
+        is_valid, errors = validator.validate_parquet_file(adapter['path'])
+        if not is_valid:
+            logger.error(f"Schema inválido: {errors}")
+            raise ValueError(f"Schema do arquivo Parquet inválido: {errors}")
 
     if isinstance(adapter, dict):
         # Parquet direto
@@ -148,15 +156,30 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
     # Normalizar colunas
     df = _normalize_dataframe(df)
 
-    # Converter colunas numéricas
+    # Tratar nulls com validador (mais robusto)
     for col in ['estoque_atual', 'linha_verde', 'mc', 'venda_30_d']:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            df = handle_nulls(df, col, strategy="fill", fill_value=0)
+
+    # Converter tipos com segurança
+    type_mapping = {
+        'une': int,
+        'codigo': int,
+        'estoque_atual': float,
+        'linha_verde': float,
+        'mc': float,
+        'venda_30_d': float
+    }
+    df = safe_convert_types(df, {k: v for k, v in type_mapping.items() if k in df.columns})
 
     return df
 
 
 @tool
+@error_handler_decorator(
+    context_func=lambda une_id, segmento=None: {"une_id": une_id, "segmento": segmento, "funcao": "calcular_abastecimento_une"},
+    return_on_error={"error": "Erro ao calcular abastecimento", "total_produtos": 0, "produtos": []}
+)
 def calcular_abastecimento_une(une_id: int, segmento: str = None) -> Dict[str, Any]:
     """
     Calcula produtos que precisam de abastecimento em uma UNE.
@@ -179,91 +202,89 @@ def calcular_abastecimento_une(une_id: int, segmento: str = None) -> Dict[str, A
         >>> result = calcular_abastecimento_une(une_id=1, segmento="TECIDOS")
         >>> print(f"Total produtos: {result['total_produtos']}")
     """
-    try:
-        # Validação de inputs
-        if not isinstance(une_id, int) or une_id <= 0:
-            return {"error": "une_id deve ser um inteiro positivo"}
+    # Validação de inputs
+    if not isinstance(une_id, int) or une_id <= 0:
+        return {"error": "une_id deve ser um inteiro positivo"}
 
-        if not os.path.exists(PARQUET_PATH):
-            return {"error": f"Arquivo não encontrado: {PARQUET_PATH}"}
+    # Carregar dados com validação integrada
+    logger.info(f"Carregando dados de abastecimento para UNE {une_id}")
+    df = _load_data(filters={'une': une_id})
 
-        # Carregar dados do Parquet
-        logger.info(f"Carregando dados de abastecimento para UNE {une_id}")
-        df = pd.read_parquet(PARQUET_PATH)
+    # Validar colunas necessárias
+    required_cols = ['une', 'codigo', 'nome_produto', 'estoque_atual', 'linha_verde']
+    is_valid, missing = validate_columns(df, required_cols)
+    if not is_valid:
+        return {"error": f"Colunas ausentes: {missing}"}
 
-        # Filtrar por UNE
-        df_une = df[df['une'] == une_id].copy()
+    # Filtrar por UNE com segurança
+    df_une = safe_filter(df, 'une', une_id)
 
-        if df_une.empty:
-            return {
-                "error": f"Nenhum produto encontrado para UNE {une_id}",
-                "une_id": une_id
-            }
-
-        # Filtrar por segmento (se fornecido)
-        if segmento:
-            if 'nomesegmento' in df_une.columns:
-                df_une = df_une[
-                    df_une['nomesegmento'].str.contains(segmento, case=False, na=False)
-                ]
-                if df_une.empty:
-                    return {
-                        "error": f"Nenhum produto encontrado para segmento '{segmento}' na UNE {une_id}",
-                        "une_id": une_id,
-                        "segmento": segmento
-                    }
-            else:
-                logger.warning("Coluna 'nomesegmento' não encontrada no dataset")
-
-        # Filtrar produtos que precisam abastecimento
-        if 'precisa_abastecimento' not in df_une.columns:
-            return {"error": "Coluna 'precisa_abastecimento' não encontrada no dataset"}
-
-        df_abastecer = df_une[df_une['precisa_abastecimento'] == True].copy()
-
-        total_produtos = len(df_abastecer)
-
-        if total_produtos == 0:
-            return {
-                "total_produtos": 0,
-                "produtos": [],
-                "regra_aplicada": "ESTOQUE_UNE <= 50% LINHA_VERDE",
-                "une_id": une_id,
-                "segmento": segmento if segmento else "Todos",
-                "mensagem": "Nenhum produto precisa de abastecimento no momento"
-            }
-
-        # Ordenar por qtd_a_abastecer DESC e pegar top 20
-        df_abastecer = df_abastecer.sort_values('qtd_a_abastecer', ascending=False)
-        top_20 = df_abastecer.head(20)
-
-        # Preparar lista de produtos
-        produtos = []
-        for _, row in top_20.iterrows():
-            produto = {
-                "codigo": int(row['codigo']) if pd.notna(row['codigo']) else None,
-                "nome_produto": str(row['nome_produto']) if pd.notna(row['nome_produto']) else "N/A",
-                "segmento": str(row['nomesegmento']) if 'nomesegmento' in row and pd.notna(row['nomesegmento']) else "N/A",
-                "estoque_atual": float(row['estoque_atual']) if pd.notna(row['estoque_atual']) else 0.0,
-                "linha_verde": float(row['linha_verde']) if pd.notna(row['linha_verde']) else 0.0,
-                "qtd_a_abastecer": float(row['qtd_a_abastecer']) if pd.notna(row['qtd_a_abastecer']) else 0.0,
-                "percentual_estoque": round((float(row['estoque_atual']) / float(row['linha_verde']) * 100), 2) if pd.notna(row['linha_verde']) and row['linha_verde'] > 0 else 0.0
-            }
-            produtos.append(produto)
-
-        logger.info(f"Encontrados {total_produtos} produtos para abastecimento na UNE {une_id}")
-
+    if df_une.empty:
         return {
-            "total_produtos": total_produtos,
-            "produtos": produtos,
-            "regra_aplicada": "ESTOQUE_UNE <= 50% LINHA_VERDE",
-            "une_id": une_id,
-            "segmento": segmento if segmento else "Todos"
+            "error": f"Nenhum produto encontrado para UNE {une_id}",
+            "une_id": une_id
         }
 
-    except Exception as e:
-        logger.error(f"Erro em calcular_abastecimento_une: {e}", exc_info=True)
-        return {"error": f"Erro ao calcular abastecimento: {str(e)}"}
+    # Filtrar por segmento (se fornecido)
+    if segmento:
+        if 'nomesegmento' in df_une.columns:
+            df_une = df_une[
+                df_une['nomesegmento'].str.contains(segmento, case=False, na=False)
+            ]
+            if df_une.empty:
+                return {
+                    "error": f"Nenhum produto encontrado para segmento '{segmento}' na UNE {une_id}",
+                    "une_id": une_id,
+                    "segmento": segmento
+                }
+        else:
+            logger.warning("Coluna 'nomesegmento' não encontrada no dataset")
+
+    # Filtrar produtos que precisam abastecimento
+    if 'precisa_abastecimento' not in df_une.columns:
+        return {"error": "Coluna 'precisa_abastecimento' não encontrada no dataset"}
+
+    df_abastecer = df_une[df_une['precisa_abastecimento'] == True].copy()
+
+    total_produtos = len(df_abastecer)
+
+    if total_produtos == 0:
+        return {
+            "total_produtos": 0,
+            "produtos": [],
+            "regra_aplicada": "ESTOQUE_UNE <= 50% LINHA_VERDE",
+            "une_id": une_id,
+            "segmento": segmento if segmento else "Todos",
+            "mensagem": "Nenhum produto precisa de abastecimento no momento"
+        }
+
+    # Ordenar por qtd_a_abastecer DESC e pegar top 20
+    df_abastecer = df_abastecer.sort_values('qtd_a_abastecer', ascending=False)
+    top_20 = df_abastecer.head(20)
+
+    # Preparar lista de produtos
+    produtos = []
+    for _, row in top_20.iterrows():
+        produto = {
+            "codigo": int(row['codigo']) if pd.notna(row['codigo']) else None,
+            "nome_produto": str(row['nome_produto']) if pd.notna(row['nome_produto']) else "N/A",
+            "segmento": str(row['nomesegmento']) if 'nomesegmento' in row and pd.notna(row['nomesegmento']) else "N/A",
+            "estoque_atual": float(row['estoque_atual']) if pd.notna(row['estoque_atual']) else 0.0,
+            "linha_verde": float(row['linha_verde']) if pd.notna(row['linha_verde']) else 0.0,
+            "qtd_a_abastecer": float(row['qtd_a_abastecer']) if pd.notna(row['qtd_a_abastecer']) else 0.0,
+            "percentual_estoque": round((float(row['estoque_atual']) / float(row['linha_verde']) * 100), 2) if pd.notna(row['linha_verde']) and row['linha_verde'] > 0 else 0.0
+        }
+        produtos.append(produto)
+
+    logger.info(f"Encontrados {total_produtos} produtos para abastecimento na UNE {une_id}")
+
+    return {
+        "total_produtos": total_produtos,
+        "produtos": produtos,
+        "regra_aplicada": "ESTOQUE_UNE <= 50% LINHA_VERDE",
+        "une_id": une_id,
+        "segmento": segmento if segmento else "Todos"
+    }
 
 
 @tool
