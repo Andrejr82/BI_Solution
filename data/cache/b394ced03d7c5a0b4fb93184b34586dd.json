@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760745907.1302505,
+  "response": {
+    "content": "```python\ndf = load_data()\ndf_ascendente = df[df['VENDA_30DD'] > 0][['NOME', 'VENDA_30DD']].sort_values(by='VENDA_30DD', ascending=False).head(10)\ndf_declínio = df[df['VENDA_30DD'] <= 0][['NOME', 'VENDA_30DD']].sort_values(by='VENDA_30DD', ascending=True).head(10)\nresult = {\n    \"produtos_em_ascensão\": df_ascendente,\n    \"produtos_em_declínio\": df_declínio\n}\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "b394ced03d7c5a0b4fb93184b34586dd"
+  }
+}

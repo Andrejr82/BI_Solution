@@ -1,266 +1,392 @@
 {
   "ranking_completo": {
-    "description": "Ranking sem limite de resultados - lista completa ordenada",
-    "keywords": ["ranking", "todos", "completo", "lista", "ordenado"],
-    "exclude_keywords": ["top"],
+    "description": "Ranking sem limite de resultados - retorna TODOS os itens ordenados",
+    "keywords": ["ranking", "todos", "completo", "lista completa", "todas", "ordenar"],
     "examples": [
       {
         "user_query": "ranking de vendas no segmento tecidos",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = ranking",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nranking.columns = ['Produto', 'Vendas 30 Dias']\nresult = ranking",
         "expected_output": "DataFrame com N linhas ordenadas por vendas"
       },
       {
-        "user_query": "ranking completo de produtos de papelaria",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PAPELARIA']\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = ranking",
-        "expected_output": "DataFrame completo ordenado"
+        "user_query": "ranking completo de fabricantes por estoque",
+        "code": "df = load_data()\nranking = df.groupby('NOMEFABRICANTE')['ESTOQUE_UNE'].sum().sort_values(ascending=False).reset_index()\nranking.columns = ['Fabricante', 'Estoque Total']\nresult = ranking",
+        "expected_output": "DataFrame com todos fabricantes ordenados"
+      },
+      {
+        "user_query": "lista de todos os produtos do segmento alimentar ordenados por preço",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'ALIMENTAR']\nranking = df_filtered[['NOME', 'PRECO_38_PERCENT']].sort_values('PRECO_38_PERCENT', ascending=False).reset_index(drop=True)\nresult = ranking",
+        "expected_output": "Lista completa de produtos alimentares"
       }
     ]
   },
+
   "top_n": {
-    "description": "Rankings com limite específico (top 10, top 5, etc.)",
-    "keywords": ["top", "mais vendido", "maior", "mais vendidos", "maiores"],
+    "description": "Rankings com limite específico (top 10, top 5, top 20, etc.)",
+    "keywords": ["top", "mais vendido", "maior", "melhor", "principais", "primeiros"],
     "examples": [
       {
-        "user_query": "top 10 produtos de papelaria",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PAPELARIA']\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()\nresult = ranking",
+        "user_query": "top 10 produtos mais vendidos",
+        "code": "df = load_data()\nranking = df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()\nranking.columns = ['Produto', 'Vendas 30 Dias']\nresult = ranking",
         "expected_output": "DataFrame com exatamente 10 linhas"
       },
       {
-        "user_query": "top 5 segmentos por volume de vendas",
-        "code": "df = load_data()\nranking = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().sort_values(ascending=False).head(5).reset_index()\nresult = ranking",
-        "expected_output": "DataFrame com 5 segmentos"
+        "user_query": "top 5 fabricantes com maior estoque",
+        "code": "df = load_data()\nranking = df.groupby('NOMEFABRICANTE')['ESTOQUE_UNE'].sum().sort_values(ascending=False).head(5).reset_index()\nranking.columns = ['Fabricante', 'Estoque Total']\nresult = ranking",
+        "expected_output": "5 fabricantes com maior estoque"
       },
       {
-        "user_query": "3 produtos mais vendidos de limpeza",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'MATERIAL DE LIMPEZA']\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(3).reset_index()\nresult = ranking",
-        "expected_output": "DataFrame com 3 produtos"
+        "user_query": "top 20 produtos com maior preço no segmento perfumaria",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PERFUMARIA']\nranking = df_filtered[['NOME', 'PRECO_38_PERCENT']].sort_values('PRECO_38_PERCENT', ascending=False).head(20).reset_index(drop=True)\nresult = ranking",
+        "expected_output": "20 produtos mais caros de perfumaria"
       }
     ]
   },
-  "comparacao": {
-    "description": "Comparar múltiplos segmentos/categorias",
-    "keywords": ["comparar", "versus", "vs", "diferença entre", "comparação"],
+
+  "comparacao_segmentos": {
+    "description": "Comparar múltiplos segmentos ou categorias",
+    "keywords": ["comparar", "versus", "vs", "diferença entre", "comparação", "entre"],
     "examples": [
       {
-        "user_query": "compare vendas de tecidos vs papelaria",
-        "code": "df = load_data()\ncomparacao = df[df['NOMESEGMENTO'].isin(['TECIDOS', 'PAPELARIA'])].groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\nresult = comparacao",
-        "expected_output": "DataFrame com 2 linhas comparando segmentos"
+        "user_query": "comparar vendas entre segmentos tecidos e alimentar",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'].isin(['TECIDOS', 'ALIMENTAR'])]\ncomparacao = df_filtered.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\ncomparacao.columns = ['Segmento', 'Total Vendas']\nresult = comparacao",
+        "expected_output": "Comparação de vendas entre 2 segmentos"
       },
       {
-        "user_query": "diferença de estoque entre limpeza e higiene",
-        "code": "df = load_data()\ncomparacao = df[df['NOMESEGMENTO'].isin(['MATERIAL DE LIMPEZA', 'HIGIENE E BELEZA'])].groupby('NOMESEGMENTO')['ESTOQUE_UNE'].sum().reset_index()\nresult = comparacao",
-        "expected_output": "DataFrame comparando estoques"
+        "user_query": "diferença de estoque entre une 1 e une 3",
+        "code": "df = load_data()\ndf_filtered = df[df['UNE'].isin([1, 3])]\ncomparacao = df_filtered.groupby('UNE')['ESTOQUE_UNE'].sum().reset_index()\ncomparacao.columns = ['UNE', 'Estoque Total']\nresult = comparacao",
+        "expected_output": "Estoque total de cada UNE"
+      },
+      {
+        "user_query": "comparação de preço médio entre perfumaria e higiene pessoal",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'].isin(['PERFUMARIA', 'HIGIENE PESSOAL'])]\ncomparacao = df_filtered.groupby('NOMESEGMENTO')['PRECO_38_PERCENT'].mean().reset_index()\ncomparacao.columns = ['Segmento', 'Preço Médio']\nresult = comparacao",
+        "expected_output": "Preço médio de cada segmento"
       }
     ]
   },
+
   "agregacao_simples": {
-    "description": "Agregações simples - soma, média, contagem total",
-    "keywords": ["total", "soma", "média", "quantidade total", "quantos"],
+    "description": "Soma, média, total, contagem de uma métrica específica",
+    "keywords": ["total", "soma", "média", "quanto", "quantos", "contagem"],
     "examples": [
       {
-        "user_query": "qual o total de vendas de tecidos",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']\ntotal = df_filtered['VENDA_30DD'].sum()\nresult = f'Total de vendas: R$ {total:,.2f}'",
-        "expected_output": "Valor total formatado"
+        "user_query": "qual o total de vendas no segmento tecidos",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']\ntotal_vendas = df_filtered['VENDA_30DD'].sum()\nresult = pd.DataFrame({'Métrica': ['Total Vendas TECIDOS'], 'Valor': [total_vendas]})",
+        "expected_output": "Valor único com total de vendas"
       },
       {
-        "user_query": "quantos produtos temos em papelaria",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PAPELARIA']\ntotal = df_filtered['NOME'].nunique()\nresult = f'Total de produtos: {total}'",
+        "user_query": "quantos produtos temos em estoque na une 1",
+        "code": "df = load_data()\ndf_filtered = df[(df['UNE'] == 1) & (df['ESTOQUE_UNE'] > 0)]\ncontagem = len(df_filtered)\nresult = pd.DataFrame({'Métrica': ['Produtos com Estoque UNE 1'], 'Quantidade': [contagem]})",
         "expected_output": "Contagem de produtos"
       },
       {
-        "user_query": "média de estoque por produto",
-        "code": "df = load_data()\nmedia = df['ESTOQUE_UNE'].mean()\nresult = f'Média de estoque: {media:.2f} unidades'",
-        "expected_output": "Valor médio"
+        "user_query": "preço médio dos produtos de alimentar",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'ALIMENTAR']\npreco_medio = df_filtered['PRECO_38_PERCENT'].mean()\nresult = pd.DataFrame({'Métrica': ['Preço Médio ALIMENTAR'], 'Valor': [round(preco_medio, 2)]})",
+        "expected_output": "Preço médio calculado"
       }
     ]
   },
-  "filtro_segmento": {
+
+  "filtro_por_segmento": {
     "description": "Filtrar dados por segmento específico",
-    "keywords": ["segmento", "produtos de", "do segmento"],
+    "keywords": ["segmento", "categoria", "do segmento", "na categoria"],
     "examples": [
       {
-        "user_query": "produtos do segmento tecidos",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS'][['NOME', 'VENDA_30DD', 'ESTOQUE_UNE']].head(50)\nresult = df_filtered",
-        "expected_output": "DataFrame filtrado por segmento"
+        "user_query": "produtos do segmento perfumaria",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PERFUMARIA'][['NOME', 'PRECO_38_PERCENT', 'ESTOQUE_UNE', 'VENDA_30DD']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos do segmento perfumaria"
       },
       {
-        "user_query": "lista de produtos de limpeza",
-        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'MATERIAL DE LIMPEZA'][['NOME', 'VENDA_30DD']].head(50)\nresult = df_filtered",
-        "expected_output": "Lista de produtos do segmento"
+        "user_query": "lista de produtos alimentares com estoque maior que 100",
+        "code": "df = load_data()\ndf_filtered = df[(df['NOMESEGMENTO'] == 'ALIMENTAR') & (df['ESTOQUE_UNE'] > 100)][['NOME', 'ESTOQUE_UNE', 'VENDA_30DD']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos alimentares filtrados"
       }
     ]
   },
-  "filtro_categoria": {
-    "description": "Filtrar por categoria específica",
-    "keywords": ["categoria", "da categoria"],
+
+  "filtro_por_une": {
+    "description": "Filtrar ou agrupar dados por UNE específica",
+    "keywords": ["une", "loja", "unidade", "da une", "na loja"],
     "examples": [
       {
-        "user_query": "produtos da categoria algodão",
-        "code": "df = load_data()\ndf_filtered = df[df['NomeCategoria'].str.contains('ALGODAO', case=False, na=False)][['NOME', 'VENDA_30DD']].head(50)\nresult = df_filtered",
-        "expected_output": "Produtos filtrados por categoria"
-      }
-    ]
-  },
-  "estoque_baixo": {
-    "description": "Identificar produtos com estoque baixo ou zerado",
-    "keywords": ["estoque baixo", "estoque zero", "sem estoque", "falta"],
-    "examples": [
-      {
-        "user_query": "produtos com estoque zerado",
-        "code": "df = load_data()\ndf_filtered = df[df['ESTOQUE_UNE'] == 0][['NOME', 'NOMESEGMENTO', 'VENDA_30DD']].head(50)\nresult = df_filtered",
-        "expected_output": "Produtos sem estoque"
+        "user_query": "produtos com estoque na une 3",
+        "code": "df = load_data()\ndf_filtered = df[(df['UNE'] == 3) & (df['ESTOQUE_UNE'] > 0)][['NOME', 'ESTOQUE_UNE', 'VENDA_30DD']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos da UNE 3 com estoque"
       },
       {
-        "user_query": "produtos com estoque baixo no segmento tecidos",
-        "code": "df = load_data()\ndf_filtered = df[(df['NOMESEGMENTO'] == 'TECIDOS') & (df['ESTOQUE_UNE'] < 10)][['NOME', 'ESTOQUE_UNE', 'VENDA_30DD']].head(50)\nresult = df_filtered",
-        "expected_output": "Produtos com estoque < 10"
+        "user_query": "vendas da une 1 no segmento tecidos",
+        "code": "df = load_data()\ndf_filtered = df[(df['UNE'] == 1) & (df['NOMESEGMENTO'] == 'TECIDOS')]\ntotal_vendas = df_filtered['VENDA_30DD'].sum()\nresult = pd.DataFrame({'Métrica': ['Vendas UNE 1 - TECIDOS'], 'Valor': [total_vendas]})",
+        "expected_output": "Total de vendas filtrado"
       }
     ]
   },
-  "alto_giro": {
-    "description": "Produtos com alto volume de vendas",
-    "keywords": ["alto giro", "mais vendido", "best seller", "campeões de venda"],
+
+  "filtro_por_fabricante": {
+    "description": "Filtrar ou agrupar por fabricante",
+    "keywords": ["fabricante", "marca", "do fabricante", "da marca"],
     "examples": [
       {
-        "user_query": "produtos de alto giro",
-        "code": "df = load_data()\ndf_filtered = df[df['VENDA_30DD'] > df['VENDA_30DD'].quantile(0.75)][['NOME', 'VENDA_30DD', 'NOMESEGMENTO']].sort_values('VENDA_30DD', ascending=False).head(50)\nresult = df_filtered",
-        "expected_output": "Top 25% produtos mais vendidos"
-      }
-    ]
-  },
-  "distribuicao": {
-    "description": "Distribuição de vendas/estoque por segmento ou categoria",
-    "keywords": ["distribuição", "distribuir", "por segmento", "por categoria"],
-    "examples": [
-      {
-        "user_query": "distribuição de vendas por segmento",
-        "code": "df = load_data()\ndistribuicao = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = distribuicao",
-        "expected_output": "Vendas agregadas por segmento"
+        "user_query": "produtos do fabricante XYZ",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMEFABRICANTE'].str.contains('XYZ', case=False, na=False)][['NOME', 'PRECO_38_PERCENT', 'ESTOQUE_UNE']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos do fabricante XYZ"
       },
       {
-        "user_query": "distribuição de estoque por categoria",
-        "code": "df = load_data()\ndistribuicao = df.groupby('NomeCategoria')['ESTOQUE_UNE'].sum().sort_values(ascending=False).head(20).reset_index()\nresult = distribuicao",
-        "expected_output": "Top 20 categorias por estoque"
+        "user_query": "vendas por fabricante no segmento higiene pessoal",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'HIGIENE PESSOAL']\nvendas_fabricante = df_filtered.groupby('NOMEFABRICANTE')['VENDA_30DD'].sum().sort_values(ascending=False).head(20).reset_index()\nvendas_fabricante.columns = ['Fabricante', 'Total Vendas']\nresult = vendas_fabricante",
+        "expected_output": "Vendas agrupadas por fabricante"
       }
     ]
   },
-  "analise_fabricante": {
-    "description": "Análise por fabricante/fornecedor",
-    "keywords": ["fabricante", "fornecedor", "marca"],
+
+  "analise_estoque": {
+    "description": "Análises relacionadas a estoque (sem estoque, baixo estoque, etc.)",
+    "keywords": ["estoque", "sem estoque", "baixo estoque", "ruptura", "disponível"],
     "examples": [
       {
-        "user_query": "top 10 fabricantes por volume de vendas",
-        "code": "df = load_data()\nranking = df.groupby('NomeFabricante')['VENDA_30DD'].sum().sort_values(ascending=False).head(10).reset_index()\nresult = ranking",
-        "expected_output": "Top 10 fabricantes"
-      }
-    ]
-  },
-  "analise_une": {
-    "description": "Análise por UNE (unidade de negócio/loja)",
-    "keywords": ["une", "loja", "unidade", "por loja"],
-    "examples": [
-      {
-        "user_query": "vendas por une",
-        "code": "df = load_data()\nvendas_une = df.groupby('UNE_NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = vendas_une",
-        "expected_output": "Vendas agregadas por UNE"
+        "user_query": "produtos sem estoque no segmento tecidos",
+        "code": "df = load_data()\ndf_filtered = df[(df['NOMESEGMENTO'] == 'TECIDOS') & (df['ESTOQUE_UNE'] == 0)][['NOME', 'VENDA_30DD']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos em ruptura"
       },
       {
-        "user_query": "top 5 unes por faturamento",
-        "code": "df = load_data()\nranking = df.groupby('UNE_NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(5).reset_index()\nresult = ranking",
-        "expected_output": "Top 5 UNEs"
+        "user_query": "top 10 produtos com maior estoque",
+        "code": "df = load_data()\nranking = df.groupby('NOME')['ESTOQUE_UNE'].sum().sort_values(ascending=False).head(10).reset_index()\nranking.columns = ['Produto', 'Estoque Total']\nresult = ranking",
+        "expected_output": "Produtos com maior estoque"
+      },
+      {
+        "user_query": "produtos com estoque abaixo de 10 unidades",
+        "code": "df = load_data()\ndf_filtered = df[(df['ESTOQUE_UNE'] > 0) & (df['ESTOQUE_UNE'] < 10)][['NOME', 'ESTOQUE_UNE', 'VENDA_30DD']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos com estoque crítico"
       }
     ]
   },
-  "preco": {
-    "description": "Análise de preços e margens",
-    "keywords": ["preço", "valor", "custo", "margem"],
+
+  "analise_vendas": {
+    "description": "Análises focadas em vendas (mais vendidos, menos vendidos, performance)",
+    "keywords": ["vendas", "vendido", "vendeu", "performance", "faturamento"],
     "examples": [
       {
-        "user_query": "produtos com preço acima de 100 reais",
-        "code": "df = load_data()\ndf_filtered = df[df['LIQUIDO_38'] > 100][['NOME', 'LIQUIDO_38', 'NOMESEGMENTO']].sort_values('LIQUIDO_38', ascending=False).head(50)\nresult = df_filtered",
-        "expected_output": "Produtos com preço > 100"
+        "user_query": "produtos mais vendidos nos últimos 30 dias",
+        "code": "df = load_data()\nranking = df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).head(20).reset_index()\nranking.columns = ['Produto', 'Vendas 30 Dias']\nresult = ranking",
+        "expected_output": "Top 20 produtos mais vendidos"
       },
       {
-        "user_query": "média de preço por segmento",
-        "code": "df = load_data()\nmedia_preco = df.groupby('NOMESEGMENTO')['LIQUIDO_38'].mean().sort_values(ascending=False).reset_index()\nresult = media_preco",
+        "user_query": "total de vendas por segmento",
+        "code": "df = load_data()\nvendas_segmento = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nvendas_segmento.columns = ['Segmento', 'Total Vendas']\nresult = vendas_segmento",
+        "expected_output": "Vendas agrupadas por segmento"
+      },
+      {
+        "user_query": "produtos que venderam acima de 100 unidades",
+        "code": "df = load_data()\ndf_filtered = df[df['VENDA_30DD'] > 100][['NOME', 'VENDA_30DD', 'ESTOQUE_UNE']].sort_values('VENDA_30DD', ascending=False).head(100)\nresult = df_filtered",
+        "expected_output": "Produtos com alta performance"
+      }
+    ]
+  },
+
+  "analise_preco": {
+    "description": "Análises relacionadas a preço (mais caro, mais barato, faixa de preço)",
+    "keywords": ["preço", "valor", "caro", "barato", "custo"],
+    "examples": [
+      {
+        "user_query": "produtos mais caros do segmento perfumaria",
+        "code": "df = load_data()\ndf_filtered = df[df['NOMESEGMENTO'] == 'PERFUMARIA']\nranking = df_filtered[['NOME', 'PRECO_38_PERCENT']].sort_values('PRECO_38_PERCENT', ascending=False).head(20).reset_index(drop=True)\nresult = ranking",
+        "expected_output": "Produtos mais caros"
+      },
+      {
+        "user_query": "produtos com preço entre 10 e 50 reais",
+        "code": "df = load_data()\ndf_filtered = df[(df['PRECO_38_PERCENT'] >= 10) & (df['PRECO_38_PERCENT'] <= 50)][['NOME', 'PRECO_38_PERCENT', 'NOMESEGMENTO']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos na faixa de preço"
+      },
+      {
+        "user_query": "preço médio por segmento",
+        "code": "df = load_data()\npreco_medio = df.groupby('NOMESEGMENTO')['PRECO_38_PERCENT'].mean().sort_values(ascending=False).reset_index()\npreco_medio.columns = ['Segmento', 'Preço Médio']\npreco_medio['Preço Médio'] = preco_medio['Preço Médio'].round(2)\nresult = preco_medio",
         "expected_output": "Preço médio por segmento"
       }
     ]
   },
-  "crescimento": {
-    "description": "Análise de crescimento e tendências",
-    "keywords": ["crescimento", "evolução", "tendência", "aumentou", "cresceu"],
+
+  "analise_giro": {
+    "description": "Análises de giro de estoque e cobertura",
+    "keywords": ["giro", "cobertura", "dias de estoque", "rotatividade"],
     "examples": [
       {
-        "user_query": "produtos que mais cresceram em vendas",
-        "code": "df = load_data()\ndf_sorted = df.sort_values('VENDA_30DD', ascending=False).head(20)[['NOME', 'VENDA_30DD', 'NOMESEGMENTO']]\nresult = df_sorted",
-        "expected_output": "Top 20 produtos por vendas"
+        "user_query": "produtos com alto giro no segmento alimentar",
+        "code": "df = load_data()\ndf_filtered = df[(df['NOMESEGMENTO'] == 'ALIMENTAR') & (df['VENDA_30DD'] > 0) & (df['ESTOQUE_UNE'] > 0)]\ndf_filtered['giro'] = df_filtered['VENDA_30DD'] / df_filtered['ESTOQUE_UNE']\nranking = df_filtered[['NOME', 'VENDA_30DD', 'ESTOQUE_UNE', 'giro']].sort_values('giro', ascending=False).head(20)\nresult = ranking",
+        "expected_output": "Produtos com melhor giro"
+      },
+      {
+        "user_query": "produtos com cobertura de estoque acima de 30 dias",
+        "code": "df = load_data()\ndf_filtered = df[(df['VENDA_30DD'] > 0) & (df['ESTOQUE_UNE'] > 0)]\ndf_filtered['dias_cobertura'] = (df_filtered['ESTOQUE_UNE'] / df_filtered['VENDA_30DD']) * 30\ndf_filtered = df_filtered[df_filtered['dias_cobertura'] > 30]\nresult = df_filtered[['NOME', 'ESTOQUE_UNE', 'VENDA_30DD', 'dias_cobertura']].sort_values('dias_cobertura', ascending=False).head(50)",
+        "expected_output": "Produtos com excesso de estoque"
       }
     ]
   },
-  "pesquisa_produto": {
-    "description": "Buscar produto específico por nome",
-    "keywords": ["produto", "buscar", "procurar", "encontrar"],
+
+  "busca_produto": {
+    "description": "Buscar informações de produto específico por nome ou código",
+    "keywords": ["produto", "código", "informações sobre", "detalhes do"],
     "examples": [
       {
-        "user_query": "buscar produto linha",
-        "code": "df = load_data()\ndf_filtered = df[df['NOME'].str.contains('LINHA', case=False, na=False)][['NOME', 'VENDA_30DD', 'ESTOQUE_UNE', 'LIQUIDO_38']].head(50)\nresult = df_filtered",
-        "expected_output": "Produtos contendo 'linha' no nome"
+        "user_query": "informações do produto sabonete dove",
+        "code": "df = load_data()\ndf_filtered = df[df['NOME'].str.contains('DOVE', case=False, na=False)][['NOME', 'PRECO_38_PERCENT', 'ESTOQUE_UNE', 'VENDA_30DD', 'NOMESEGMENTO']].head(20)\nresult = df_filtered",
+        "expected_output": "Informações de produtos Dove"
+      },
+      {
+        "user_query": "buscar produto código 12345",
+        "code": "df = load_data()\ndf_filtered = df[df['PRODUTO'].astype(str).str.contains('12345', na=False)]\nresult = df_filtered[['PRODUTO', 'NOME', 'PRECO_38_PERCENT', 'ESTOQUE_UNE', 'VENDA_30DD']]",
+        "expected_output": "Produto com código específico"
       }
     ]
   },
-  "percentual": {
-    "description": "Análise de percentuais e participação",
-    "keywords": ["percentual", "participação", "proporção", "%"],
+
+  "analise_multipla": {
+    "description": "Análises que combinam múltiplas métricas (vendas vs estoque, preço vs vendas, etc.)",
+    "keywords": ["relação", "proporção", "correlação", "versus"],
+    "examples": [
+      {
+        "user_query": "produtos com alto estoque mas baixa venda",
+        "code": "df = load_data()\ndf_filtered = df[(df['ESTOQUE_UNE'] > 50) & (df['VENDA_30DD'] < 5)]\ndf_filtered['razao'] = df_filtered['ESTOQUE_UNE'] / (df_filtered['VENDA_30DD'] + 1)\nresult = df_filtered[['NOME', 'ESTOQUE_UNE', 'VENDA_30DD', 'NOMESEGMENTO']].sort_values('razao', ascending=False).head(30)",
+        "expected_output": "Produtos com excesso relativo"
+      },
+      {
+        "user_query": "produtos caros que vendem muito",
+        "code": "df = load_data()\ndf_filtered = df[(df['PRECO_38_PERCENT'] > 50) & (df['VENDA_30DD'] > 20)]\nresult = df_filtered[['NOME', 'PRECO_38_PERCENT', 'VENDA_30DD', 'NOMESEGMENTO']].sort_values('VENDA_30DD', ascending=False).head(20)",
+        "expected_output": "Produtos premium com alta demanda"
+      }
+    ]
+  },
+
+  "agrupamento_personalizado": {
+    "description": "Agrupamentos personalizados por diferentes dimensões",
+    "keywords": ["agrupar", "por", "dividir", "separar"],
+    "examples": [
+      {
+        "user_query": "agrupar vendas por une e segmento",
+        "code": "df = load_data()\nvendas_agrupadas = df.groupby(['UNE', 'NOMESEGMENTO'])['VENDA_30DD'].sum().reset_index()\nvendas_agrupadas.columns = ['UNE', 'Segmento', 'Total Vendas']\nresult = vendas_agrupadas.sort_values('Total Vendas', ascending=False).head(50)",
+        "expected_output": "Vendas por UNE e segmento"
+      },
+      {
+        "user_query": "total de produtos por fabricante e segmento",
+        "code": "df = load_data()\ncontagem = df.groupby(['NOMEFABRICANTE', 'NOMESEGMENTO']).size().reset_index(name='Quantidade')\nresult = contagem.sort_values('Quantidade', ascending=False).head(50)",
+        "expected_output": "Contagem agrupada"
+      }
+    ]
+  },
+
+  "percentual_participacao": {
+    "description": "Cálculos de participação percentual (share, porcentagem)",
+    "keywords": ["participação", "percentual", "porcentagem", "share", "%"],
     "examples": [
       {
         "user_query": "participação de cada segmento nas vendas totais",
-        "code": "df = load_data()\ntotal_vendas = df['VENDA_30DD'].sum()\nparticipacao = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\nparticipacao['Percentual'] = (participacao['VENDA_30DD'] / total_vendas * 100).round(2)\nparticipacao = participacao.sort_values('Percentual', ascending=False)\nresult = participacao",
-        "expected_output": "Participação percentual por segmento"
+        "code": "df = load_data()\nvendas_segmento = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\ntotal_vendas = vendas_segmento['VENDA_30DD'].sum()\nvendas_segmento['Participação %'] = (vendas_segmento['VENDA_30DD'] / total_vendas * 100).round(2)\nvendas_segmento.columns = ['Segmento', 'Total Vendas', 'Participação %']\nresult = vendas_segmento.sort_values('Participação %', ascending=False)",
+        "expected_output": "Share de vendas por segmento"
+      },
+      {
+        "user_query": "porcentagem de produtos em ruptura por segmento",
+        "code": "df = load_data()\ntotal_por_seg = df.groupby('NOMESEGMENTO').size()\nsem_estoque = df[df['ESTOQUE_UNE'] == 0].groupby('NOMESEGMENTO').size()\npercentual = (sem_estoque / total_por_seg * 100).reset_index(name='% Ruptura')\npercentual.columns = ['Segmento', '% Ruptura']\npercentual['% Ruptura'] = percentual['% Ruptura'].round(2)\nresult = percentual.sort_values('% Ruptura', ascending=False)",
+        "expected_output": "Percentual de ruptura"
       }
     ]
   },
-  "grupo": {
-    "description": "Análise por grupo de produtos",
-    "keywords": ["grupo", "do grupo", "por grupo"],
+
+  "faixa_valor": {
+    "description": "Análises por faixas de valores (alto, médio, baixo)",
+    "keywords": ["faixa", "entre", "acima de", "abaixo de", "maior que", "menor que"],
     "examples": [
       {
-        "user_query": "vendas por grupo de produtos",
-        "code": "df = load_data()\nvendas_grupo = df.groupby('NOMEGRUPO')['VENDA_30DD'].sum().sort_values(ascending=False).head(20).reset_index()\nresult = vendas_grupo",
-        "expected_output": "Top 20 grupos por vendas"
+        "user_query": "quantos produtos custam acima de 100 reais",
+        "code": "df = load_data()\ndf_filtered = df[df['PRECO_38_PERCENT'] > 100]\ncontagem = len(df_filtered)\nresult = pd.DataFrame({'Métrica': ['Produtos acima de R$ 100'], 'Quantidade': [contagem]})",
+        "expected_output": "Contagem de produtos caros"
+      },
+      {
+        "user_query": "produtos com vendas entre 10 e 50 unidades",
+        "code": "df = load_data()\ndf_filtered = df[(df['VENDA_30DD'] >= 10) & (df['VENDA_30DD'] <= 50)]\nresult = df_filtered[['NOME', 'VENDA_30DD', 'ESTOQUE_UNE', 'NOMESEGMENTO']].head(100)",
+        "expected_output": "Produtos na faixa de vendas"
       }
     ]
   },
-  "relacao_estoque_vendas": {
-    "description": "Relação entre estoque e vendas - cobertura",
-    "keywords": ["cobertura", "giro de estoque", "relação estoque"],
+
+  "zero_vendas": {
+    "description": "Produtos sem movimentação ou vendas zeradas",
+    "keywords": ["sem venda", "não vendeu", "zero vendas", "parado"],
     "examples": [
       {
-        "user_query": "produtos com estoque alto mas baixa venda",
-        "code": "df = load_data()\ndf['Relacao'] = df['ESTOQUE_UNE'] / (df['VENDA_30DD'] + 1)\ndf_filtered = df[df['Relacao'] > 5][['NOME', 'ESTOQUE_UNE', 'VENDA_30DD', 'Relacao']].sort_values('Relacao', ascending=False).head(50)\nresult = df_filtered",
-        "expected_output": "Produtos com cobertura > 5 dias"
+        "user_query": "produtos sem vendas nos últimos 30 dias",
+        "code": "df = load_data()\ndf_filtered = df[df['VENDA_30DD'] == 0][['NOME', 'ESTOQUE_UNE', 'PRECO_38_PERCENT', 'NOMESEGMENTO']].head(100)\nresult = df_filtered",
+        "expected_output": "Produtos sem movimentação"
+      },
+      {
+        "user_query": "quantos produtos não venderam no segmento tecidos",
+        "code": "df = load_data()\ndf_filtered = df[(df['NOMESEGMENTO'] == 'TECIDOS') & (df['VENDA_30DD'] == 0)]\ncontagem = len(df_filtered)\nresult = pd.DataFrame({'Métrica': ['Produtos sem vendas - TECIDOS'], 'Quantidade': [contagem]})",
+        "expected_output": "Contagem de produtos parados"
       }
     ]
   },
-  "consolidado": {
-    "description": "Visão consolidada geral",
-    "keywords": ["resumo", "consolidado", "visão geral", "overview"],
+
+  "curva_abc": {
+    "description": "Análises de classificação ABC (Pareto)",
+    "keywords": ["curva abc", "classificação", "pareto", "80/20"],
     "examples": [
       {
-        "user_query": "resumo de vendas por segmento",
-        "code": "df = load_data()\nresumo = df.groupby('NOMESEGMENTO').agg({\n    'VENDA_30DD': 'sum',\n    'ESTOQUE_UNE': 'sum',\n    'NOME': 'nunique'\n}).round(2).reset_index()\nresumo.columns = ['Segmento', 'Vendas', 'Estoque', 'Qtd_Produtos']\nresult = resumo.sort_values('Vendas', ascending=False)",
-        "expected_output": "Consolidado multi-métrica por segmento"
+        "user_query": "curva abc de vendas por produto",
+        "code": "df = load_data()\nvendas_produto = df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nvendas_produto['acumulado'] = vendas_produto['VENDA_30DD'].cumsum()\ntotal = vendas_produto['VENDA_30DD'].sum()\nvendas_produto['% acumulado'] = (vendas_produto['acumulado'] / total * 100).round(2)\nvendas_produto['Classe'] = 'C'\nvendas_produto.loc[vendas_produto['% acumulado'] <= 80, 'Classe'] = 'A'\nvendas_produto.loc[(vendas_produto['% acumulado'] > 80) & (vendas_produto['% acumulado'] <= 95), 'Classe'] = 'B'\nresult = vendas_produto[['NOME', 'VENDA_30DD', '% acumulado', 'Classe']].head(100)",
+        "expected_output": "Produtos classificados ABC"
       }
     ]
   },
-  "multiplos_filtros": {
-    "description": "Queries com múltiplos filtros combinados",
-    "keywords": ["e", "com", "que tenha"],
+
+  "resumo_geral": {
+    "description": "Resumos e totalizações gerais do negócio",
+    "keywords": ["resumo", "visão geral", "panorama", "totais", "overview"],
     "examples": [
       {
-        "user_query": "produtos de tecidos com estoque e vendas acima da média",
-        "code": "df = load_data()\nmedia_venda = df['VENDA_30DD'].mean()\nmedia_estoque = df['ESTOQUE_UNE'].mean()\ndf_filtered = df[\n    (df['NOMESEGMENTO'] == 'TECIDOS') & \n    (df['VENDA_30DD'] > media_venda) & \n    (df['ESTOQUE_UNE'] > media_estoque)\n][['NOME', 'VENDA_30DD', 'ESTOQUE_UNE']].head(50)\nresult = df_filtered",
-        "expected_output": "Produtos filtrados por múltiplos critérios"
+        "user_query": "resumo geral de vendas e estoque",
+        "code": "df = load_data()\ntotal_vendas = df['VENDA_30DD'].sum()\ntotal_estoque = df['ESTOQUE_UNE'].sum()\ntotal_produtos = len(df['PRODUTO'].unique())\nresumo = pd.DataFrame({\n    'Métrica': ['Total Vendas 30d', 'Total Estoque', 'Total Produtos'],\n    'Valor': [total_vendas, total_estoque, total_produtos]\n})\nresult = resumo",
+        "expected_output": "Resumo com métricas principais"
+      },
+      {
+        "user_query": "visão geral por segmento",
+        "code": "df = load_data()\nvisao = df.groupby('NOMESEGMENTO').agg({\n    'VENDA_30DD': 'sum',\n    'ESTOQUE_UNE': 'sum',\n    'PRODUTO': 'nunique'\n}).reset_index()\nvisao.columns = ['Segmento', 'Total Vendas', 'Total Estoque', 'Qtd Produtos']\nresult = visao.sort_values('Total Vendas', ascending=False)",
+        "expected_output": "Resumo por segmento"
+      }
+    ]
+  },
+
+  "menor_que": {
+    "description": "Rankings invertidos - piores, menores, menos vendidos",
+    "keywords": ["pior", "menor", "menos", "bottom", "últimos"],
+    "examples": [
+      {
+        "user_query": "produtos menos vendidos",
+        "code": "df = load_data()\ndf_filtered = df[df['VENDA_30DD'] > 0]\nranking = df_filtered.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=True).head(20).reset_index()\nranking.columns = ['Produto', 'Vendas 30 Dias']\nresult = ranking",
+        "expected_output": "Bottom 20 em vendas"
+      },
+      {
+        "user_query": "segmentos com menor estoque",
+        "code": "df = load_data()\nestoque_seg = df.groupby('NOMESEGMENTO')['ESTOQUE_UNE'].sum().sort_values(ascending=True).reset_index()\nestoque_seg.columns = ['Segmento', 'Estoque Total']\nresult = estoque_seg",
+        "expected_output": "Segmentos com menos estoque"
+      }
+    ]
+  },
+
+  "contagem_condicional": {
+    "description": "Contagens com condições específicas",
+    "keywords": ["quantos", "contar", "número de", "quantidade de"],
+    "examples": [
+      {
+        "user_query": "quantos produtos têm estoque acima de 100 unidades",
+        "code": "df = load_data()\ndf_filtered = df[df['ESTOQUE_UNE'] > 100]\ncontagem = len(df_filtered)\nresult = pd.DataFrame({'Métrica': ['Produtos com estoque > 100'], 'Quantidade': [contagem]})",
+        "expected_output": "Número de produtos na condição"
+      },
+      {
+        "user_query": "quantas unes temos no sistema",
+        "code": "df = load_data()\nunes_unicas = df['UNE'].nunique()\nresult = pd.DataFrame({'Métrica': ['Total de UNEs'], 'Quantidade': [unes_unicas]})",
+        "expected_output": "Contagem de UNEs"
+      },
+      {
+        "user_query": "quantos segmentos existem",
+        "code": "df = load_data()\nsegmentos_unicos = df['NOMESEGMENTO'].nunique()\nresult = pd.DataFrame({'Métrica': ['Total de Segmentos'], 'Quantidade': [segmentos_unicos]})",
+        "expected_output": "Número de segmentos"
       }
     ]
   }

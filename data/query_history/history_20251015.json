@@ -1,0 +1,47 @@
+[
+  {
+    "query": "Análise cross-selling: produtos frequentemente vendidos juntos",
+    "session_id": "4ae54337-7433-4158-b2cf-af1b7508056d",
+    "timestamp": "2025-10-15T20:31:11.150545",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.57437
+  },
+  {
+    "query": "Análise ABC: distribuição de produtos por classificação",
+    "session_id": "4ae54337-7433-4158-b2cf-af1b7508056d",
+    "timestamp": "2025-10-15T20:33:39.591617",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 11.573141
+  },
+  {
+    "query": "Ranking de fabricantes por volume de vendas",
+    "session_id": "75cef19f-aacd-40f5-9a34-99ac31a19aed",
+    "timestamp": "2025-10-15T21:23:14.540579",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 13.84959
+  },
+  {
+    "query": "gráfico evolução produto 369947",
+    "session_id": "359d9d45-323c-45ae-aa8f-bf64a2590290",
+    "timestamp": "2025-10-15T23:34:30.440040",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 12.115185
+  },
+  {
+    "query": "gráfico de vendas evoluçao do produto 59294",
+    "session_id": "359d9d45-323c-45ae-aa8f-bf64a2590290",
+    "timestamp": "2025-10-15T23:35:46.895006",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 18.948155
+  }
+]

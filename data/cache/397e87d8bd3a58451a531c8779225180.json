@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760582060.9765072,
+  "response": {
+    "content": "```python\ndf = load_data()\ndf_filtered = df[df['PRODUTO'].astype(str).str.contains('369947', na=False)]\nresult = px.line(df_filtered, x='NOME', y='VENDA_30DD', title='Evolução de Vendas do Produto 369947')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "397e87d8bd3a58451a531c8779225180"
+  }
+}

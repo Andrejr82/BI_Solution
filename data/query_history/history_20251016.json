@@ -1,0 +1,47 @@
+[
+  {
+    "query": "Quais são os 5 produtos mais vendidos na UNE SCR no último mês?",
+    "session_id": "46789599-47bd-4d10-bd15-f5a2d1bdc7d7",
+    "timestamp": "2025-10-16T19:41:05.273822",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 12.820949
+  },
+  {
+    "query": "Top 10 produtos por margem de crescimento nos últimos 3 meses",
+    "session_id": "46789599-47bd-4d10-bd15-f5a2d1bdc7d7",
+    "timestamp": "2025-10-16T19:41:40.973671",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 10.833821
+  },
+  {
+    "query": "Produtos com maior leadtime vs performance de vendas",
+    "session_id": "53140a59-cd21-4805-bb7c-41ba2f127ef2",
+    "timestamp": "2025-10-16T20:55:11.963580",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 11.06684
+  },
+  {
+    "query": "quais produtos estão em excesso na une 1685",
+    "session_id": "20f80715-704f-43da-863f-adb699e45e20",
+    "timestamp": "2025-10-16T21:09:50.492299",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.775742
+  },
+  {
+    "query": "Produtos com padrão de vendas sazonal no segmento FESTAS",
+    "session_id": "f37dc819-ab41-4c88-953b-b7dc33e4c684",
+    "timestamp": "2025-10-16T21:22:26.485582",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 17.776478
+  }
+]
