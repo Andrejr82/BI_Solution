@@ -21,10 +21,22 @@ class ParquetAdapter(DatabaseAdapter):
     """
 
     def __init__(self, file_path: str):
-        if not os.path.exists(file_path):
+        # 🚀 Suportar padrões como "*.parquet" (Dask resolve automaticamente)
+        if "*" not in file_path and not os.path.exists(file_path):
             raise FileNotFoundError(f"Parquet file not found at: {file_path}")
+        elif "*" in file_path:
+            # Verificar se o diretório existe
+            import glob
+            base_dir = os.path.dirname(file_path)
+            if not os.path.exists(base_dir):
+                raise FileNotFoundError(f"Parquet directory not found at: {base_dir}")
+            # Verificar se há arquivos Parquet
+            matching_files = glob.glob(file_path)
+            if not matching_files:
+                raise FileNotFoundError(f"No Parquet files matching pattern: {file_path}")
+            logger.info(f"ParquetAdapter (Dask) found {len(matching_files)} file(s) matching pattern: {file_path}")
         self.file_path = file_path
-        logger.info(f"ParquetAdapter (Dask) initialized with file: {file_path}")
+        logger.info(f"ParquetAdapter (Dask) initialized with pattern: {file_path}")
 
     def connect(self) -> None:
         """

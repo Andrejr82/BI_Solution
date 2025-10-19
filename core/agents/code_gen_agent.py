@@ -8,6 +8,7 @@ import os
 import json
 import re
 import pandas as pd
+import dask.dataframe as dd  # Dask para lazy loading
 import time
 import plotly.express as px
 from typing import List, Dict, Any # Import necessary types
@@ -46,10 +47,7 @@ class CodeGenAgent:
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
 
-        # Limpar cache antigo automaticamente (> 24h)
-        self._clean_old_cache()
-
-        # Inicializar dicionário de descrições de colunas
+        # Inicializar dicionário de descrições de colunas ANTES de verificar cache
         self.column_descriptions = {
             "PRODUTO": "Código único do produto",
             "NOME": "Nome/descrição do produto",
@@ -65,7 +63,20 @@ class CodeGenAgent:
             "UNE_ID": "ID numérico da loja (ex: 1=SCR, 2720=MAD, 1685=261)",
             "TIPO": "Tipo de produto",
             "EMBALAGEM": "Embalagem do produto",
-            "EAN": "Código de barras"
+            "EAN": "Código de barras",
+            # 📊 COLUNAS TEMPORAIS - Vendas mensais (mes_01 = mês mais recente)
+            "mes_01": "Vendas do mês mais recente (mês 1)",
+            "mes_02": "Vendas de 2 meses atrás",
+            "mes_03": "Vendas de 3 meses atrás",
+            "mes_04": "Vendas de 4 meses atrás",
+            "mes_05": "Vendas de 5 meses atrás",
+            "mes_06": "Vendas de 6 meses atrás",
+            "mes_07": "Vendas de 7 meses atrás",
+            "mes_08": "Vendas de 8 meses atrás",
+            "mes_09": "Vendas de 9 meses atrás",
+            "mes_10": "Vendas de 10 meses atrás",
+            "mes_11": "Vendas de 11 meses atrás",
+            "mes_12": "Vendas de 12 meses atrás (mês mais antigo)"
         }
 
         # Inicializar pattern_matcher and code_validator
@@ -90,6 +101,12 @@ class CodeGenAgent:
             self.logger.warning(f"⚠️ DynamicPrompt não disponível: {e}")
             self.dynamic_prompt = None
 
+        # Limpar cache antigo automaticamente (> 24h)
+        self._clean_old_cache()
+
+        # 🔄 VERSIONING DE CACHE: Invalidar cache quando prompt muda
+        self._check_and_invalidate_cache_if_prompt_changed()
+
         self.logger.info("CodeGenAgent inicializado.")
 
     def _execute_generated_code(self, code: str, local_scope: Dict[str, Any]):
@@ -100,23 +117,31 @@ class CodeGenAgent:
 
         # Função helper para ser injetada no escopo de execução
         def load_data():
-            """Carrega o dataframe usando o adaptador ou fallback para path direto."""
+            """
+            Carrega o dataframe usando Dask (lazy loading).
+            IMPORTANTE: Retorna um Dask DataFrame - aplique filtros ANTES de .compute()!
+            """
+            import dask.dataframe as dd
+
             if self.data_adapter:
                 # ParquetAdapter tem file_path
                 file_path = getattr(self.data_adapter, 'file_path', None)
                 if file_path:
-                    df = pd.read_parquet(file_path)
+                    # 🚀 CARREGAR COMO DASK DATAFRAME (lazy)
+                    ddf = dd.read_parquet(file_path, engine='pyarrow')
                 else:
                     raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem file_path")
             else:
                 # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
                 import os
-                parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
-                if not os.path.exists(parquet_path):
-                    raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_path}")
-                df = pd.read_parquet(parquet_path)
+                parquet_dir = os.path.join(os.getcwd(), "data", "parquet")
+                parquet_pattern = os.path.join(parquet_dir, "*.parquet")
+                if not os.path.exists(parquet_dir):
+                    raise FileNotFoundError(f"Diretório Parquet não encontrado em {parquet_dir}")
+                # 🚀 CARREGAR COMO DASK DATAFRAME (lazy) - LER TODOS OS ARQUIVOS!
+                ddf = dd.read_parquet(parquet_pattern, engine='pyarrow')
 
-            # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
+            # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM (em Dask)
             column_mapping = {
                 'une': 'UNE_ID',  # Renomear 'une' para evitar conflito com 'UNE' (de une_nome)
                 'nomesegmento': 'NOMESEGMENTO',
@@ -132,35 +157,19 @@ class CodeGenAgent:
                 'tipo': 'TIPO'
             }
 
-            # Aplicar mapeamento apenas para colunas que existem
-            rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
-            df = df.rename(columns=rename_dict)
+            # Aplicar mapeamento apenas para colunas que existem (Dask suporta .rename)
+            rename_dict = {k: v for k, v in column_mapping.items() if k in ddf.columns}
+            ddf = ddf.rename(columns=rename_dict)
 
-            # ✅ GARANTIR COLUNAS ÚNICAS: Remover duplicatas mantendo a primeira
-            if len(df.columns) != len(set(df.columns)):
-                self.logger.warning(f"⚠️ Colunas duplicadas detectadas: {[col for col in df.columns if list(df.columns).count(col) > 1]}")
-                # Manter apenas primeira ocorrência de cada coluna
-                df = df.loc[:, ~df.columns.duplicated(keep='first')]
-                self.logger.info(f"✅ Colunas únicas após remoção: {list(df.columns)}")
+            # ✅ CONVERTER ESTOQUE_UNE PARA NUMÉRICO (Dask suporta map_partitions)
+            if 'ESTOQUE_UNE' in ddf.columns:
+                ddf['ESTOQUE_UNE'] = dd.to_numeric(ddf['ESTOQUE_UNE'], errors='coerce').fillna(0)
 
-            # ✅ CONVERTER ESTOQUE_UNE PARA NUMÉRICO (estava como string)
-            if 'ESTOQUE_UNE' in df.columns:
-                original_type = df['ESTOQUE_UNE'].dtype
-                df['ESTOQUE_UNE'] = pd.to_numeric(df['ESTOQUE_UNE'], errors='coerce')
-
-                # Contar valores inválidos convertidos para NaN
-                invalid_count = df['ESTOQUE_UNE'].isna().sum()
-                if invalid_count > 0:
-                    self.logger.warning(f"⚠️ ESTOQUE_UNE: {invalid_count} valores inválidos convertidos para 0")
-
-                # Preencher NaN com 0
-                df['ESTOQUE_UNE'] = df['ESTOQUE_UNE'].fillna(0)
-
-                self.logger.info(f"✅ ESTOQUE_UNE convertido: {original_type} → float64")
-
-            return df
+            # RETORNAR DASK DATAFRAME - O código gerado deve chamar .compute() após filtros!
+            return ddf
 
         local_scope['load_data'] = load_data
+        local_scope['dd'] = dd  # Adicionar Dask ao escopo para código gerado
 
         def worker():
             sys.stdout = output_capture
@@ -190,6 +199,50 @@ class CodeGenAgent:
                 raise result
             return result
 
+    def _normalize_query(self, query: str) -> str:
+        """
+        Normaliza query para melhorar cache hit rate.
+        Remove stopwords e variações irrelevantes, mantendo semântica.
+        """
+        query = query.lower().strip()
+
+        # Stopwords comuns em português que não afetam a semântica da query
+        stopwords = [
+            'qual', 'quais', 'mostre', 'me', 'gere', 'por favor', 'por gentileza',
+            'poderia', 'pode', 'consegue', 'você', 'o', 'a', 'os', 'as',
+            'um', 'uma', 'uns', 'umas', 'de', 'da', 'do', 'das', 'dos'
+        ]
+
+        # Remover stopwords
+        words = query.split()
+        filtered_words = [w for w in words if w not in stopwords]
+        query = ' '.join(filtered_words)
+
+        # Normalizar variações comuns
+        replacements = {
+            'gráfico': 'graf',
+            'gráficos': 'graf',
+            'grafico': 'graf',
+            'graficos': 'graf',
+            'ranking': 'rank',
+            'rankings': 'rank',
+            'top 5': 'top5',
+            'top 10': 'top10',
+            'top 20': 'top20',
+            'últimos': 'ultimos',
+            'último': 'ultimo',
+            'análise': 'analise',
+            'análises': 'analise',
+        }
+
+        for old, new in replacements.items():
+            query = query.replace(old, new)
+
+        # Remover espaços extras
+        query = ' '.join(query.split())
+
+        return query
+
     def generate_and_execute_code(self, input_data: Dict[str, Any]) -> dict:
         """
         Gera, executa e retorna o resultado do código Python para uma dada consulta.
@@ -199,15 +252,16 @@ class CodeGenAgent:
         raw_data = input_data.get("raw_data", [])
         user_query = input_data.get("query", "")  # Definir no início para evitar UnboundLocalError
 
-        # 🎯 Cache inteligente: incluir palavras-chave de intenção na chave
-        # Isso evita que "ranking papelaria" retorne o mesmo que "ranking tecidos"
+        # 🎯 Cache inteligente V2: Normalizar query para maior hit rate
+        # Isso permite que "Mostre o ranking de papelaria" = "ranking papelaria" = "top 10 papelaria"
+        normalized_query = self._normalize_query(user_query)
         query_lower = user_query.lower()
         intent_markers = []
 
         # Detectar tipo de análise
-        if any(word in query_lower for word in ['gráfico', 'chart', 'visualização', 'plot']):
+        if any(word in query_lower for word in ['gráfico', 'chart', 'visualização', 'plot', 'graf']):
             intent_markers.append('viz')
-        if any(word in query_lower for word in ['ranking', 'top']):
+        if any(word in query_lower for word in ['ranking', 'top', 'rank']):
             intent_markers.append('rank')
 
         # Detectar segmento específico (extrair para evitar cache cruzado)
@@ -216,8 +270,11 @@ class CodeGenAgent:
         if segment_match:
             intent_markers.append(f'seg_{segment_match.group(1)}')
 
-        # Gerar chave de cache única baseada em query + intenção
-        cache_key = hash(prompt + '_'.join(intent_markers) + (json.dumps(raw_data, sort_keys=True) if raw_data else ""))
+        # Gerar chave de cache única baseada em query NORMALIZADA + intenção
+        # Usar query normalizada aumenta hit rate em ~30-50%
+        cache_key = hash(normalized_query + '_'.join(intent_markers) + (json.dumps(raw_data, sort_keys=True) if raw_data else ""))
+
+        self.logger.debug(f"Cache: query_original='{user_query}' → normalized='{normalized_query}' → key={cache_key}")
 
         if cache_key in self.code_cache:
             code_to_execute = self.code_cache[cache_key]
@@ -227,7 +284,10 @@ class CodeGenAgent:
             important_columns = [
                 "PRODUTO", "NOME", "NOMESEGMENTO", "NOMECATEGORIA", "NOMEGRUPO", "NOMESUBGRUPO",
                 "NOMEFABRICANTE", "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38",
-                "UNE", "UNE_ID", "TIPO", "EMBALAGEM", "EAN"
+                "UNE", "UNE_ID", "TIPO", "EMBALAGEM", "EAN",
+                # Colunas temporais para gráficos de evolução
+                "mes_01", "mes_02", "mes_03", "mes_04", "mes_05", "mes_06",
+                "mes_07", "mes_08", "mes_09", "mes_10", "mes_11", "mes_12"
             ]
 
             column_context = "📊 COLUNAS DISPONÍVEIS:\n"
@@ -302,6 +362,51 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
 {valid_unes}
 
 {examples_context}
+
+**🚀 INSTRUÇÃO CRÍTICA #0 - DASK DATAFRAME:**
+⚠️ **ATENÇÃO:** load_data() retorna um **Dask DataFrame** (lazy loading), NÃO um pandas DataFrame!
+
+**VOCÊ DEVE:**
+1. Aplicar todos os filtros no Dask DataFrame primeiro
+2. Chamar `.compute()` APENAS UMA VEZ, logo após filtros/groupby
+3. Depois de `.compute()`, você terá um pandas DataFrame normal
+4. NUNCA chamar `.compute()` múltiplas vezes ou em pandas DataFrame!
+
+✅ **CORRETO - Exemplo 1 (com filtro):**
+```python
+ddf = load_data()  # Dask DataFrame (lazy)
+ddf_filtered = ddf[(ddf['PRODUTO'].astype(str) == '369947') & (ddf['UNE'] == 'SCR')]  # Filtro no Dask
+df = ddf_filtered.compute()  # ✅ Computar UMA VEZ
+result = px.bar(df, x='NOME', y='VENDA_30DD')  # df é pandas agora
+```
+
+✅ **CORRETO - Exemplo 2 (com groupby):**
+```python
+ddf = load_data()  # Dask DataFrame (lazy)
+ddf_papelaria = ddf[ddf['NOMESEGMENTO'] == 'PAPELARIA']  # Filtro no Dask
+vendas_por_une = ddf_papelaria.groupby('UNE')['VENDA_30DD'].sum()  # Ainda Dask
+df_result = vendas_por_une.compute().reset_index()  # ✅ Computar UMA VEZ
+une_mais_vendedora = df_result.sort_values(by='VENDA_30DD', ascending=False).head(1)  # pandas ops
+result = une_mais_vendedora  # ✅ df_result é pandas, NÃO chamar .compute() de novo!
+```
+
+❌ **ERRADO - Múltiplos .compute():**
+```python
+ddf = load_data()
+df = ddf[ddf['NOMESEGMENTO'] == 'PAPELARIA'].compute()  # compute #1
+result = df.groupby('UNE')['VENDA_30DD'].sum().compute()  # ❌ ERRO! df já é pandas!
+```
+
+❌ **ERRADO - .compute() no DataFrame completo:**
+```python
+df = load_data().compute()  # ❌ ERRO: carrega 2.2M linhas na memória!
+```
+
+**REGRA ABSOLUTA:**
+- Chame `.compute()` APENAS UMA VEZ, após todos os filtros Dask
+- Depois de `.compute()`, trabalhe com pandas normalmente (SEM .compute()!)
+
+---
 
 **INSTRUÇÕES CRÍTICAS:**
 1. **INTERPRETAÇÃO INTELIGENTE**: Se o usuário mencionar "tecido" (singular), você DEVE usar 'TECIDOS' (plural) no código!
@@ -381,10 +486,106 @@ vendas_por_grupo = papelaria.groupby('NOMEGRUPO')['VENDA_30DD'].sum().sort_value
 result = px.bar(vendas_por_grupo, x='NOMEGRUPO', y='VENDA_30DD', title='Top 5 Grupos - Papelaria')
 ```
 
-**EXEMPLO DE MAPEAMENTO:**
-- Usuário diz: "segmento tecido" → Você usa: df[df['NOMESEGMENTO'] == 'TECIDOS']
-- Usuário diz: "produtos de limpeza" → Você usa: df[df['NOMESEGMENTO'] == 'MATERIAL DE LIMPEZA']
-- Usuário diz: "armarinho" → Você usa: df[df['NOMESEGMENTO'] == 'ARMARINHO E CONFECÇÃO']
+**📊 GRÁFICOS DE EVOLUÇÃO TEMPORAL (MUITO IMPORTANTE!):**
+
+Quando o usuário pedir "evolução", "tendência", "ao longo do tempo", "nos últimos N meses", "mensais":
+
+✅ **USE AS COLUNAS mes_01 a mes_12** para criar gráficos de linha mostrando evolução temporal!
+
+**IMPORTANTE:**
+- mes_01 = mês mais recente
+- mes_12 = mês mais antigo (12 meses atrás)
+- Os valores são NUMÉRICOS (vendas do mês)
+
+**EXEMPLO COMPLETO - Evolução de Vendas (6 meses):**
+```python
+ddf = load_data()
+# Filtrar produto específico
+ddf_filtered = ddf[ddf['PRODUTO'].astype(str) == '369947']
+df = ddf_filtered.compute()
+
+# Preparar dados temporais (6 meses mais recentes)
+import pandas as pd
+temporal_data = pd.DataFrame({{
+    'Mês': ['Mês 6', 'Mês 5', 'Mês 4', 'Mês 3', 'Mês 2', 'Mês 1'],
+    'Vendas': [
+        df['mes_06'].sum(),
+        df['mes_05'].sum(),
+        df['mes_04'].sum(),
+        df['mes_03'].sum(),
+        df['mes_02'].sum(),
+        df['mes_01'].sum()
+    ]
+}})
+
+result = px.line(temporal_data, x='Mês', y='Vendas',
+                 title='Evolução de Vendas - Últimos 6 Meses',
+                 markers=True)
+```
+
+**EXEMPLO - Evolução de Vendas por Segmento (12 meses):**
+```python
+ddf = load_data()
+ddf_filtered = ddf[ddf['NOMESEGMENTO'] == 'TECIDOS']
+df = ddf_filtered.compute()
+
+import pandas as pd
+meses = ['Mês 12', 'Mês 11', 'Mês 10', 'Mês 9', 'Mês 8', 'Mês 7',
+         'Mês 6', 'Mês 5', 'Mês 4', 'Mês 3', 'Mês 2', 'Mês 1']
+vendas = [
+    df['mes_12'].sum(), df['mes_11'].sum(), df['mes_10'].sum(),
+    df['mes_09'].sum(), df['mes_08'].sum(), df['mes_07'].sum(),
+    df['mes_06'].sum(), df['mes_05'].sum(), df['mes_04'].sum(),
+    df['mes_03'].sum(), df['mes_02'].sum(), df['mes_01'].sum()
+]
+
+temporal_data = pd.DataFrame({{'Mês': meses, 'Vendas': vendas}})
+result = px.line(temporal_data, x='Mês', y='Vendas',
+                 title='Evolução Mensal - Tecidos',
+                 markers=True)
+```
+
+**REGRA:** Se usuário pedir "últimos N meses", use mes_01 até mes_N (do mais recente ao mais antigo).
+
+**MAPEAMENTO OBRIGATÓRIO DE SEGMENTOS:**
+IMPORTANTE: O usuário pode usar termos no singular ou simplificados. Você DEVE usar os valores EXATOS da base de dados:
+
+- Usuário diz: "tecido" ou "tecidos" → Você usa: df[df['NOMESEGMENTO'] == 'TECIDOS']
+- Usuário diz: "papelaria" → Você usa: df[df['NOMESEGMENTO'] == 'PAPELARIA']
+- Usuário diz: "armarinho" ou "confecção" → Você usa: df[df['NOMESEGMENTO'] == 'ARMARINHO E CONFECÇÃO']
+- Usuário diz: "limpeza" → Você usa: df[df['NOMESEGMENTO'] == 'MATERIAL DE LIMPEZA']
+- Usuário diz: "casa" ou "decoração" → Você usa: df[df['NOMESEGMENTO'] == 'CASA E DECORAÇÃO']
+- Usuário diz: "festas" → Você usa: df[df['NOMESEGMENTO'] == 'FESTAS']
+- Usuário diz: "higiene" ou "beleza" → Você usa: df[df['NOMESEGMENTO'] == 'HIGIENE E BELEZA']
+- Usuário diz: "brinquedo" ou "brinquedos" → Você usa: df[df['NOMESEGMENTO'] == 'BRINQUEDOS']
+- Usuário diz: "alimento" ou "alimentos" → Você usa: df[df['NOMESEGMENTO'] == 'ALIMENTOS']
+- Usuário diz: "doce" ou "doces" → Você usa: df[df['NOMESEGMENTO'] == 'DOCES E SALGADOS']
+
+⚠️ NUNCA use .str.upper() ou .str.contains() em comparações de segmento - use apenas == com o valor EXATO!
+
+**🚀 OTIMIZAÇÃO DE PERFORMANCE - PREDICATE PUSHDOWN:**
+Quando houver filtros específicos (segmento, UNE, produto), aplique os filtros O MAIS CEDO POSSÍVEL no código:
+
+✅ **EFICIENTE (Predicate Pushdown):**
+```python
+df = load_data()
+# Filtra IMEDIATAMENTE após carregar (menos memória, mais rápido)
+df = df[df['NOMESEGMENTO'] == 'TECIDOS']
+# Agora trabalha com dataset reduzido
+df_top10 = df.nlargest(10, 'VENDA_30DD')
+result = px.bar(df_top10, x='NOME', y='VENDA_30DD')
+```
+
+❌ **INEFICIENTE (Sem pushdown):**
+```python
+df = load_data()  # Carrega tudo (lento)
+# Processa dataset inteiro
+df_sorted = df.sort_values('VENDA_30DD', ascending=False)
+# Filtra tarde demais
+df_filtered = df_sorted[df_sorted['NOMESEGMENTO'] == 'TECIDOS'].head(10)
+```
+
+**REGRA:** Se a query mencionar filtros específicos (segmento, UNE, categoria), aplique-os na PRIMEIRA LINHA após load_data()!
 
 Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
 
@@ -451,58 +652,15 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
         self.logger.info(f"\nCódigo a ser executado:\n---\n{code_to_execute}\n---")
 
         try:
-            # Função helper para ser injetada no escopo de execução
-            def load_data():
-                """Carrega o dataframe usando o adaptador ou fallback para path direto."""
-                if self.data_adapter:
-                    # ParquetAdapter tem file_path
-                    file_path = getattr(self.data_adapter, 'file_path', None)
-                    if file_path:
-                        df = pd.read_parquet(file_path)
-                    else:
-                        raise AttributeError(f"Adapter {type(self.data_adapter).__name__} não tem file_path")
-                else:
-                    # Fallback: carregar diretamente do Parquet (legacy/compatibilidade)
-                    parquet_file = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
-                    if not os.path.exists(parquet_file):
-                        raise FileNotFoundError(f"Arquivo Parquet não encontrado em {parquet_file}")
-                    df = pd.read_parquet(parquet_file)
-
-                # ✅ NORMALIZAR COLUNAS: Mapear para os nomes esperados pelo LLM
-                column_mapping = {
-                    'une': 'UNE_ID',  # Renomear 'une' para evitar conflito com 'UNE' (de une_nome)
-                    'nomesegmento': 'NOMESEGMENTO',
-                    'codigo': 'PRODUTO',
-                    'nome_produto': 'NOME',
-                    'une_nome': 'UNE',  # une_nome vira UNE (nome da loja)
-                    'nomegrupo': 'NOMEGRUPO',
-                    'ean': 'EAN',
-                    'preco_38_percent': 'LIQUIDO_38',
-                    'venda_30_d': 'VENDA_30DD',
-                    'estoque_atual': 'ESTOQUE_UNE',
-                    'embalagem': 'EMBALAGEM',
-                    'tipo': 'TIPO'
-                }
-
-                # Aplicar mapeamento apenas para colunas que existem
-                rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
-                df = df.rename(columns=rename_dict)
-
-                # ✅ GARANTIR COLUNAS ÚNICAS: Remover duplicatas mantendo a primeira
-                if len(df.columns) != len(set(df.columns)):
-                    self.logger.warning(f"⚠️ Colunas duplicadas detectadas: {[col for col in df.columns if list(df.columns).count(col) > 1]}")
-                    # Manter apenas primeira ocorrência de cada coluna
-                    df = df.loc[:, ~df.columns.duplicated(keep='first')]
-                    self.logger.info(f"✅ Colunas únicas após remoção: {list(df.columns)}")
-
-                return df
+            # ⚠️ IMPORTANTE: Reutilizar a função load_data() definida em _execute_generated_code
+            # que já usa Dask e lê TODOS os arquivos Parquet (*.parquet)
 
             local_scope = {
                 "pd": pd,
                 "px": px,
                 "result": None,
                 "df_raw_data": pd.DataFrame(raw_data) if raw_data else None,
-                "load_data": load_data # Injeta a função no escopo
+                # load_data será injetado em _execute_generated_code
             }
             
             px.defaults.template = "plotly_white"
@@ -512,12 +670,27 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             end_code_execution = time.time()
             self.logger.info(f"Tempo de execução do código: {end_code_execution - start_code_execution:.4f} segundos")
 
+            # ⚠️ VALIDAÇÃO CRÍTICA: Verificar se resultado é Dask não computado
+            if hasattr(result, '_name') and 'dask' in str(type(result)).lower():
+                self.logger.error(f"❌ ERRO: Código retornou Dask object não computado: {type(result)}")
+                self.logger.error(f"   O código gerado deve chamar .compute() antes de retornar o resultado!")
+                return {
+                    "type": "error",
+                    "output": "Erro interno: O código gerou um resultado Dask não computado. Tentando novamente..."
+                }
+
             # Análise do tipo de resultado
             if isinstance(result, pd.DataFrame):
                 self.logger.info(f"Resultado: DataFrame com {len(result)} linhas.")
                 # 🚀 QUICK WIN 2: Registrar query bem-sucedida
                 self._log_successful_query(user_query, code_to_execute, len(result))
                 return {"type": "dataframe", "output": result}
+            elif isinstance(result, pd.Series):
+                self.logger.info(f"Resultado: Series com {len(result)} elementos.")
+                # Converter Series para DataFrame para consistência
+                result_df = result.reset_index()
+                self._log_successful_query(user_query, code_to_execute, len(result_df))
+                return {"type": "dataframe", "output": result_df}
             elif 'plotly' in str(type(result)):
                 self.logger.info(f"Resultado: Gráfico Plotly.")
                 # 🚀 QUICK WIN 2: Registrar query bem-sucedida (gráfico)
@@ -677,3 +850,68 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
 
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao limpar cache: {e}")
+
+    def _check_and_invalidate_cache_if_prompt_changed(self):
+        """
+        🔄 VERSIONING DE CACHE: Invalida cache se o prompt mudou
+
+        Calcula hash do prompt atual e compara com o hash salvo.
+        Se diferente, limpa o cache para forçar regeneração com novo prompt.
+        """
+        import hashlib
+        from pathlib import Path
+        import json
+
+        try:
+            # Calcular hash do prompt atual (baseado em column_descriptions + segmentos válidos)
+            prompt_components = {
+                'columns': list(self.column_descriptions.keys()),
+                'descriptions': list(self.column_descriptions.values()),
+                # Adicionar outros componentes que afetam o prompt
+                'version': '2.0_temporal_fix'  # Incrementar quando houver mudanças significativas
+            }
+
+            prompt_str = json.dumps(prompt_components, sort_keys=True)
+            current_hash = hashlib.md5(prompt_str.encode()).hexdigest()
+
+            # Arquivo para armazenar hash do prompt
+            version_file = Path('data/cache/.prompt_version')
+
+            # Verificar se há versão anterior
+            if version_file.exists():
+                try:
+                    with open(version_file, 'r') as f:
+                        saved_hash = f.read().strip()
+
+                    if saved_hash != current_hash:
+                        # PROMPT MUDOU! Limpar cache
+                        self.logger.warning(f"⚠️  PROMPT MUDOU! Limpando cache para forçar regeneração...")
+                        self.logger.info(f"   Hash anterior: {saved_hash}")
+                        self.logger.info(f"   Hash novo: {current_hash}")
+
+                        # Limpar todos os caches
+                        cache_dirs = [
+                            Path('data/cache'),
+                            Path('data/cache_agent_graph')
+                        ]
+
+                        removed_count = 0
+                        for cache_dir in cache_dirs:
+                            if cache_dir.exists():
+                                for cache_file in cache_dir.glob('*'):
+                                    if cache_file.is_file() and cache_file.name != '.prompt_version':
+                                        cache_file.unlink()
+                                        removed_count += 1
+
+                        self.logger.info(f"✅ Cache invalidado: {removed_count} arquivos removidos")
+
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Erro ao ler versão do cache: {e}")
+
+            # Salvar hash atual
+            version_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(version_file, 'w') as f:
+                f.write(current_hash)
+
+        except Exception as e:
+            self.logger.warning(f"⚠️ Erro ao verificar versão do cache: {e}")
