@@ -46,6 +46,9 @@ class CodeGenAgent:
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
 
+        # Limpar cache antigo automaticamente (> 24h)
+        self._clean_old_cache()
+
         # Inicializar dicionário de descrições de colunas
         self.column_descriptions = {
             "PRODUTO": "Código único do produto",
@@ -142,7 +145,18 @@ class CodeGenAgent:
 
             # ✅ CONVERTER ESTOQUE_UNE PARA NUMÉRICO (estava como string)
             if 'ESTOQUE_UNE' in df.columns:
-                df['ESTOQUE_UNE'] = pd.to_numeric(df['ESTOQUE_UNE'], errors='coerce').fillna(0)
+                original_type = df['ESTOQUE_UNE'].dtype
+                df['ESTOQUE_UNE'] = pd.to_numeric(df['ESTOQUE_UNE'], errors='coerce')
+
+                # Contar valores inválidos convertidos para NaN
+                invalid_count = df['ESTOQUE_UNE'].isna().sum()
+                if invalid_count > 0:
+                    self.logger.warning(f"⚠️ ESTOQUE_UNE: {invalid_count} valores inválidos convertidos para 0")
+
+                # Preencher NaN com 0
+                df['ESTOQUE_UNE'] = df['ESTOQUE_UNE'].fillna(0)
+
+                self.logger.info(f"✅ ESTOQUE_UNE convertido: {original_type} → float64")
 
             return df
 
@@ -630,3 +644,36 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             self.logger.debug(f"⚠️ Erro registrado: {error_type} (total: {self.error_counts[error_type]})")
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao registrar erro: {e}")
+
+    def _clean_old_cache(self):
+        """Limpa cache antigo (> 24 horas) automaticamente"""
+        import os
+        import time
+        from pathlib import Path
+
+        try:
+            cache_dirs = [
+                Path('data/cache'),
+                Path('data/cache_agent_graph')
+            ]
+
+            now = time.time()
+            max_age = 24 * 60 * 60  # 24 horas em segundos
+            removed_count = 0
+
+            for cache_dir in cache_dirs:
+                if not cache_dir.exists():
+                    continue
+
+                for cache_file in cache_dir.glob('*'):
+                    if cache_file.is_file():
+                        file_age = now - cache_file.stat().st_mtime
+                        if file_age > max_age:
+                            cache_file.unlink()
+                            removed_count += 1
+
+            if removed_count > 0:
+                self.logger.info(f"🧹 Cache limpo: {removed_count} arquivos removidos (> 24h)")
+
+        except Exception as e:
+            self.logger.warning(f"⚠️ Erro ao limpar cache: {e}")
