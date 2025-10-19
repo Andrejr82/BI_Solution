@@ -408,6 +408,78 @@ df = load_data().compute()  # ❌ ERRO: carrega 2.2M linhas na memória!
 
 ---
 
+**🚨 INSTRUÇÃO CRÍTICA #1 - TRATAMENTO DE VALORES NA/NULL:**
+⚠️ **ATENÇÃO:** Colunas do Parquet podem conter valores NA (null/NaN) que causam erros!
+
+**VOCÊ DEVE:**
+1. SEMPRE preencher ou remover NA ANTES de comparações
+2. NUNCA usar `.apply()` com lambdas que comparam valores (use operações vetorizadas!)
+3. Se precisar de `.apply()`, forneça `meta=` e trate NA na função
+
+❌ **ERRADO - Causa erro 'boolean value of NA is ambiguous':**
+```python
+ddf = load_data()
+# Comparação direta com NA causa erro
+ddf['flag'] = ddf.apply(lambda row: row['exposicao_minima'] < row['VENDA_30DD'], axis=1)
+```
+
+✅ **CORRETO - Opção 1 (PREFERIDA - mais rápida):**
+```python
+ddf = load_data()
+# Preencher NA com 0 ANTES de comparar
+ddf['exposicao_minima'] = ddf['exposicao_minima'].fillna(0)
+ddf['VENDA_30DD'] = ddf['VENDA_30DD'].fillna(0)
+# Operação vetorizada (SEM apply!)
+ddf['flag'] = ddf['exposicao_minima'] < ddf['VENDA_30DD']
+df = ddf.compute()
+result = df
+```
+
+✅ **CORRETO - Opção 2 (remover NA):**
+```python
+ddf = load_data()
+# Remover linhas com NA nas colunas relevantes
+ddf = ddf.dropna(subset=['exposicao_minima', 'VENDA_30DD'])
+ddf['flag'] = ddf['exposicao_minima'] < ddf['VENDA_30DD']
+df = ddf.compute()
+result = df
+```
+
+✅ **CORRETO - Opção 3 (apenas se apply for REALMENTE necessário):**
+```python
+ddf = load_data()
+# Usar apply com meta= e tratamento de NA
+ddf['flag'] = ddf.apply(
+    lambda row: (
+        row['exposicao_minima'] < row['VENDA_30DD']
+        if pd.notna(row['exposicao_minima']) and pd.notna(row['VENDA_30DD'])
+        else False
+    ),
+    axis=1,
+    meta=('flag', 'bool')  # OBRIGATÓRIO!
+)
+df = ddf.compute()
+result = df
+```
+
+**REGRA DE OURO:** Sempre use operações vetorizadas (opção 1). Evite `.apply()` sempre que possível!
+
+**COLUNAS COMUNS COM NA:**
+- `exposicao_minima` - pode ter NA
+- `ESTOQUE_UNE` - pode ter NA
+- Colunas de vendas mensais (`mes_01` a `mes_12`) - podem ter NA
+
+**ANTES DE QUALQUER COMPARAÇÃO:**
+```python
+# Sempre preencher NA nas colunas que vai usar
+ddf['coluna1'] = ddf['coluna1'].fillna(0)
+ddf['coluna2'] = ddf['coluna2'].fillna(0)
+# Agora pode comparar com segurança
+ddf['resultado'] = ddf['coluna1'] > ddf['coluna2']
+```
+
+---
+
 **INSTRUÇÕES CRÍTICAS:**
 1. **INTERPRETAÇÃO INTELIGENTE**: Se o usuário mencionar "tecido" (singular), você DEVE usar 'TECIDOS' (plural) no código!
 2. **MAPEAMENTO AUTOMÁTICO**: Use a lista de valores válidos acima para mapear termos do usuário → valores exatos do banco
