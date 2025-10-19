@@ -42,9 +42,9 @@ def start_backend():
             return None
 
     try:
-        # Executar FastAPI (uvicorn)
+        # Executar FastAPI usando uvicorn
         proc = subprocess.Popen(
-            [sys.executable, "main.py"],
+            [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
