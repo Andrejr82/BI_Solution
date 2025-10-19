@@ -140,6 +140,10 @@ class CodeGenAgent:
                 df = df.loc[:, ~df.columns.duplicated(keep='first')]
                 self.logger.info(f"✅ Colunas únicas após remoção: {list(df.columns)}")
 
+            # ✅ CONVERTER ESTOQUE_UNE PARA NUMÉRICO (estava como string)
+            if 'ESTOQUE_UNE' in df.columns:
+                df['ESTOQUE_UNE'] = pd.to_numeric(df['ESTOQUE_UNE'], errors='coerce').fillna(0)
+
             return df
 
         local_scope['load_data'] = load_data
@@ -293,6 +297,12 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
 5. **VENDAS**: Sempre use VENDA_30DD para métricas de vendas
 6. **ESTOQUE**: Use ESTOQUE_UNE para estoque
 7. **USE OS EXEMPLOS ACIMA** como referência se foram fornecidos!
+
+**⚠️ DETECÇÃO DE RUPTURA:**
+Se o usuário perguntar sobre "ruptura", "produtos em falta", "estoque zero":
+- Ruptura significa ESTOQUE_UNE == 0 OU ESTOQUE_UNE < exposicao_minima
+- Para identificar segmentos com ruptura: agrupe por NOMESEGMENTO onde ESTOQUE_UNE <= 0
+- Exemplo: `df[df['ESTOQUE_UNE'] <= 0].groupby('NOMESEGMENTO')['PRODUTO'].count()`
 
 **REGRAS PARA RANKINGS/TOP N:**
 - Se a pergunta mencionar "ranking", "top", "maior", "mais vendido" → você DEVE fazer groupby + sum + sort_values
