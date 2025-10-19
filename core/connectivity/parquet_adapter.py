@@ -43,7 +43,12 @@ class ParquetAdapter(DatabaseAdapter):
 
     def execute_query(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Executes a query using Dask, applying predicate pushdown via filters.
+        Executes a query using Dask.
+
+        Strategy:
+        1. Apply only STRING filters to Dask (safe for PyArrow)
+        2. Load data and convert types (ESTOQUE_UNE, etc.)
+        3. Apply NUMERIC filters in pandas after conversion
         """
         logger.info(f"Starting Dask query with filters: {query_filters}")
 
@@ -57,7 +62,13 @@ class ParquetAdapter(DatabaseAdapter):
             logger.error(f"Failed to read Parquet schema: {e}")
             return [{"error": "Falha ao ler o esquema do arquivo Parquet.", "details": str(e)}]
 
+        # Separate filters: string filters (safe for PyArrow) vs numeric filters (apply in pandas)
         pyarrow_filters = []
+        pandas_filters = []
+
+        # Columns that need type conversion BEFORE filtering
+        NUMERIC_COLUMNS_IN_STRING_FORMAT = ['estoque_une', 'ESTOQUE_UNE', 'estoque_atual']
+
         for column, condition in query_filters.items():
             try:
                 if column not in schema:
@@ -65,7 +76,7 @@ class ParquetAdapter(DatabaseAdapter):
                     continue
 
                 col_type = schema[column]
-                
+
                 op = '='
                 value = condition
 
@@ -76,6 +87,17 @@ class ParquetAdapter(DatabaseAdapter):
                         op = op.strip()
                         value_str = value_str.strip()
 
+                        # Check if this is a numeric comparison on a string-typed column
+                        if column in NUMERIC_COLUMNS_IN_STRING_FORMAT and op in ['>=', '<=', '>', '<']:
+                            # Defer to pandas (after type conversion)
+                            try:
+                                numeric_value = float(value_str) if '.' in value_str else int(value_str)
+                                pandas_filters.append((column, op, numeric_value))
+                                logger.info(f"Deferred numeric filter to pandas: {column} {op} {numeric_value}")
+                                continue
+                            except ValueError:
+                                pass
+
                         if pd.api.types.is_string_dtype(col_type):
                             value = value_str.strip("'\"")
                         elif pd.api.types.is_numeric_dtype(col_type):
@@ -85,10 +107,10 @@ class ParquetAdapter(DatabaseAdapter):
                                 else:
                                     value = int(value_str)
                             except ValueError:
-                                value = value_str.strip("'\"") # Fallback to string if conversion fails
+                                value = value_str.strip("'\"")
                         else:
                             value = value_str.strip("'\"")
-                
+
                 pyarrow_filters.append((column, op, value))
 
             except Exception as e:
@@ -96,22 +118,57 @@ class ParquetAdapter(DatabaseAdapter):
                 return [{"error": f"Filtro inválido para a coluna '{column}'"}]
 
         try:
-            logger.info(f"Applying filters to Dask read_parquet: {pyarrow_filters}")
-            ddf = dd.read_parquet(
-                self.file_path,
-                engine='pyarrow',
-                filters=pyarrow_filters
-            )
-
-            vendas_colunas = [f'mes_{i:02d}' for i in range(1, 13)]
-            vendas_colunas_existentes = [col for col in vendas_colunas if col in ddf.columns]
-            if vendas_colunas_existentes:
-                for col in vendas_colunas_existentes:
-                    ddf[col] = dd.to_numeric(ddf[col], errors='coerce')
-                ddf['vendas_total'] = ddf[vendas_colunas_existentes].fillna(0).sum(axis=1)
+            # Read Parquet with only string filters (safe for PyArrow)
+            if pyarrow_filters:
+                logger.info(f"Applying PyArrow filters: {pyarrow_filters}")
+                ddf = dd.read_parquet(
+                    self.file_path,
+                    engine='pyarrow',
+                    filters=pyarrow_filters
+                )
+            else:
+                logger.info("No PyArrow filters. Reading full dataset.")
+                ddf = dd.read_parquet(self.file_path, engine='pyarrow')
 
             logger.info("Computing Dask query...")
             computed_df = ddf.compute()
+
+            # Convert types BEFORE applying numeric filters
+            logger.info("Converting data types...")
+
+            # Convert ESTOQUE columns from string to numeric
+            for col in ['estoque_une', 'ESTOQUE_UNE', 'estoque_atual']:
+                if col in computed_df.columns:
+                    original_type = computed_df[col].dtype
+                    computed_df[col] = pd.to_numeric(computed_df[col], errors='coerce')
+                    invalid_count = computed_df[col].isna().sum()
+                    computed_df[col] = computed_df[col].fillna(0)
+                    logger.info(f"✅ {col} converted: {original_type} → float64 ({invalid_count} invalid values → 0)")
+
+            # Convert vendas columns
+            vendas_colunas = [f'mes_{i:02d}' for i in range(1, 13)]
+            vendas_colunas_existentes = [col for col in vendas_colunas if col in computed_df.columns]
+            if vendas_colunas_existentes:
+                for col in vendas_colunas_existentes:
+                    computed_df[col] = pd.to_numeric(computed_df[col], errors='coerce')
+                computed_df['vendas_total'] = computed_df[vendas_colunas_existentes].fillna(0).sum(axis=1)
+
+            # NOW apply numeric filters in pandas (after type conversion)
+            if pandas_filters:
+                logger.info(f"Applying pandas filters after type conversion: {pandas_filters}")
+                for column, op, value in pandas_filters:
+                    if op == '>=':
+                        computed_df = computed_df[computed_df[column] >= value]
+                    elif op == '<=':
+                        computed_df = computed_df[computed_df[column] <= value]
+                    elif op == '>':
+                        computed_df = computed_df[computed_df[column] > value]
+                    elif op == '<':
+                        computed_df = computed_df[computed_df[column] < value]
+                    elif op == '=':
+                        computed_df = computed_df[computed_df[column] == value]
+                    elif op == '!=':
+                        computed_df = computed_df[computed_df[column] != value]
 
             results = computed_df.to_dict(orient="records")
             logger.info(f"Dask query successful. {len(results)} rows returned.")
