@@ -706,11 +706,36 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             self._log_error(user_query, code_to_execute, "timeout", str(e))
             return {"type": "error", "output": "A análise demorou muito e foi interrompida."}
         except Exception as e:
+            error_msg = str(e)
+            error_type = type(e).__name__
+
+            # 🔄 AUTO-RECOVERY: Detectar erro de .compute() em pandas DataFrame
+            if "'DataFrame' object has no attribute 'compute'" in error_msg or \
+               "'Series' object has no attribute 'compute'" in error_msg:
+
+                self.logger.warning(f"⚠️ Detectado código com .compute() inválido em pandas object")
+                self.logger.info(f"🔄 Limpando cache e tentando novamente com prompt atualizado...")
+
+                # Limpar apenas o cache desta query específica
+                if cache_key in self.code_cache:
+                    del self.code_cache[cache_key]
+                    self.logger.info(f"✅ Cache da query removido: {cache_key[:50]}...")
+
+                # Tentar novamente (recursivo) - APENAS UMA VEZ
+                if not hasattr(self, '_retry_flag'):
+                    self._retry_flag = True
+                    try:
+                        result = self.generate_and_execute_code(user_query, raw_data, **kwargs)
+                        return result
+                    finally:
+                        delattr(self, '_retry_flag')
+                else:
+                    self.logger.error(f"❌ Retry falhou. Erro persistente após limpeza de cache.")
+
             self.logger.error(f"Erro ao executar o código gerado: {e}", exc_info=True)
             # 🚀 QUICK WIN 3: Registrar erro
-            error_type = type(e).__name__
-            self._log_error(user_query, code_to_execute, error_type, str(e))
-            return {"type": "error", "output": f"Ocorreu um erro ao executar a análise: {e}"}
+            self._log_error(user_query, code_to_execute, error_type, error_msg)
+            return {"type": "error", "output": f"Ocorreu um erro ao executar a análise: {error_msg}"}
     def _extract_python_code(self, text: str) -> str | None:
         """Extrai o bloco de código Python da resposta do LLM."""
         match = re.search(r'```python\n(.*)```', text, re.DOTALL)
