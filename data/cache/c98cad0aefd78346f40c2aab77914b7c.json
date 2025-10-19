@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760831606.6795824,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"ranking de vendas une mad 2720\"\n# Mapeando \"mad 2720\" para a coluna 'UNE'\n# Calculando o ranking de vendas por produto para a unidade específica\nranking_vendas_mad2720 = df[df['UNE'] == 'MAD 2720'].groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\n\n# Passo 3: Salvar resultado\nresult = ranking_vendas_mad2720\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "c98cad0aefd78346f40c2aab77914b7c"
+  }
+}
