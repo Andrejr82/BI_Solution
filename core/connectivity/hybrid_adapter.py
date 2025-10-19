@@ -45,22 +45,25 @@ class HybridDataAdapter:
         try:
             from .parquet_adapter import ParquetAdapter
 
-            parquet_path = Path(os.getcwd()) / "data" / "parquet" / "admmat.parquet"
+            # 🚀 USAR PADRÃO *.parquet PARA LER TODOS OS ARQUIVOS (múltiplas partições)
+            parquet_dir = Path(os.getcwd()) / "data" / "parquet"
+            parquet_pattern = str(parquet_dir / "*.parquet")
 
-            if not parquet_path.exists():
+            if not parquet_dir.exists():
                 # Tentar paths alternativos
-                alt_paths = [
-                    Path(__file__).parent.parent.parent / "data" / "parquet" / "admmat.parquet",
-                    Path("data/parquet/admmat.parquet"),
+                alt_dirs = [
+                    Path(__file__).parent.parent.parent / "data" / "parquet",
+                    Path("data/parquet"),
                 ]
 
-                for alt_path in alt_paths:
-                    if alt_path.exists():
-                        parquet_path = alt_path
+                for alt_dir in alt_dirs:
+                    if alt_dir.exists():
+                        parquet_dir = alt_dir
+                        parquet_pattern = str(alt_dir / "*.parquet")
                         break
 
-            self.parquet_adapter = ParquetAdapter(file_path=str(parquet_path))
-            logger.info(f"[OK] Parquet adapter inicializado: {parquet_path}")
+            self.parquet_adapter = ParquetAdapter(file_path=parquet_pattern)
+            logger.info(f"[OK] Parquet adapter inicializado: {parquet_pattern}")
 
         except Exception as e:
             logger.critical(f"[ERRO CRITICO] Parquet adapter falhou: {e}")
