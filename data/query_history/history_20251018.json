@@ -43,5 +43,23 @@
     "results_count": 0,
     "error": null,
     "processing_time": 7.766004
+  },
+  {
+    "query": "ranking de vendas une MAD",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:48:00.169507",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 0.023697
+  },
+  {
+    "query": "ranking de vendas une mad 2720",
+    "session_id": "fbdda960-4657-4633-9ab1-26363bffea04",
+    "timestamp": "2025-10-18T20:53:32.819704",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.420647
   }
 ]
