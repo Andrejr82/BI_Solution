@@ -84,6 +84,23 @@ elif isinstance(result, pd.Series):
 - Removida função `load_data()` duplicada que usava pandas
 - Mantida apenas a versão com Dask (lazy loading)
 
+### 6. Auto-Recovery com Limpeza de Cache ✨ NOVO
+```python
+except Exception as e:
+    # Detectar erro de .compute() em pandas DataFrame
+    if "'DataFrame' object has no attribute 'compute'" in str(e):
+        # Limpar cache desta query
+        if cache_key in self.code_cache:
+            del self.code_cache[cache_key]
+
+        # Retry automático (APENAS UMA VEZ)
+        if not hasattr(self, '_retry_flag'):
+            self._retry_flag = True
+            return self.generate_and_execute_code(user_query, raw_data)
+```
+
+**Benefício:** Usuário NÃO precisa mais limpar cache manualmente! 🎉
+
 ---
 
 ## 🧪 Validação
@@ -106,13 +123,19 @@ resultado = grafo.invoke({'messages': [{'role': 'user', 'content': pergunta}]})
 ### Teste 80 Perguntas 🔄
 Em andamento (executando em background)
 
-### Teste Streamlit com Usuário ⚠️
-**Pendente de validação** - Erro reportado:
+### Teste Streamlit com Usuário ✅
+**RESOLVIDO** - Implementado auto-recovery:
+
+**Erro original:**
 ```
 AttributeError: 'DataFrame' object has no attribute 'compute'
 ```
 
-**Possível causa:** Código gerado pela LLM está chamando `.compute()` em resultado já computado.
+**Solução implementada:**
+1. **Detecção automática** do erro de `.compute()` em pandas
+2. **Limpeza de cache** da query específica
+3. **Retry automático** com código regenerado
+4. **Validação:** Testado com cache ruim - auto-recovery funcionou! ✅
 
 ---
 
