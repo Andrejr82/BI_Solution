@@ -51,15 +51,18 @@ class CodeGenAgent:
             "PRODUTO": "Código único do produto",
             "NOME": "Nome/descrição do produto",
             "NOMESEGMENTO": "Segmento do produto (TECIDOS, PAPELARIA, etc.)",
-            "NomeCategoria": "Categoria do produto",
+            "NOMECATEGORIA": "Categoria do produto",
             "NOMEGRUPO": "Grupo do produto",
-            "NomeSUBGRUPO": "Subgrupo do produto",
+            "NOMESUBGRUPO": "Subgrupo do produto",
+            "NOMEFABRICANTE": "Fabricante do produto",
             "VENDA_30DD": "Total de vendas nos últimos 30 dias",
             "ESTOQUE_UNE": "Quantidade em estoque",
             "LIQUIDO_38": "Preço de venda",
             "UNE": "Nome da loja/unidade (ex: SCR, MAD, 261, ALC, NIL, etc.)",
             "UNE_ID": "ID numérico da loja (ex: 1=SCR, 2720=MAD, 1685=261)",
-            "NomeFabricante": "Fabricante do produto"
+            "TIPO": "Tipo de produto",
+            "EMBALAGEM": "Embalagem do produto",
+            "EAN": "Código de barras"
         }
 
         # Inicializar pattern_matcher and code_validator
@@ -204,8 +207,9 @@ class CodeGenAgent:
         else:
             # Construir contexto com descrições das colunas mais importantes
             important_columns = [
-                "PRODUTO", "NOME", "NOMESEGMENTO", "NomeCategoria", "NOMEGRUPO",
-                "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38", "UNE", "NomeFabricante"
+                "PRODUTO", "NOME", "NOMESEGMENTO", "NOMECATEGORIA", "NOMEGRUPO", "NOMESUBGRUPO",
+                "NOMEFABRICANTE", "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38",
+                "UNE", "UNE_ID", "TIPO", "EMBALAGEM", "EAN"
             ]
 
             column_context = "📊 COLUNAS DISPONÍVEIS:\n"
