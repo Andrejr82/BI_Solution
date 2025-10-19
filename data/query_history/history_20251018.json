@@ -97,5 +97,23 @@
     "results_count": 0,
     "error": null,
     "processing_time": 3.63803
+  },
+  {
+    "query": "quais segmentos estão com ruptura?",
+    "session_id": "e120fe72-581c-4c3f-a5ee-1f924f95501a",
+    "timestamp": "2025-10-18T21:42:00.956458",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 0.021281
+  },
+  {
+    "query": "quais segmentos estão com ruptura?",
+    "session_id": "e120fe72-581c-4c3f-a5ee-1f924f95501a",
+    "timestamp": "2025-10-18T21:42:31.086860",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 1.542685
   }
 ]
