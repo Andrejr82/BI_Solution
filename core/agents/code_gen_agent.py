@@ -101,8 +101,8 @@ class CodeGenAgent:
             self.logger.warning(f"⚠️ DynamicPrompt não disponível: {e}")
             self.dynamic_prompt = None
 
-        # Limpar cache antigo automaticamente (> 24h)
-        self._clean_old_cache()
+        # Limpar cache antigo automaticamente (> 2h - reduzido para evitar código obsoleto)
+        self._clean_old_cache(max_age_hours=2)
 
         # 🔄 VERSIONING DE CACHE: Invalidar cache quando prompt muda
         self._check_and_invalidate_cache_if_prompt_changed()
@@ -781,9 +781,23 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             error_msg = str(e)
             error_type = type(e).__name__
 
-            # 🔄 AUTO-RECOVERY: Detectar erro de .compute() em pandas DataFrame
+            # 🔄 AUTO-RECOVERY: Detectar erros comuns e limpar cache
+            should_retry = False
+
             if "'DataFrame' object has no attribute 'compute'" in error_msg or \
                "'Series' object has no attribute 'compute'" in error_msg:
+                should_retry = True
+                self.logger.warning(f"⚠️ Detectado código com .compute() inválido")
+
+            elif "boolean value of NA is ambiguous" in error_msg:
+                should_retry = True
+                self.logger.warning(f"⚠️ Detectado código sem tratamento de NA")
+
+            elif "Invalid comparison between dtype=" in error_msg:
+                should_retry = True
+                self.logger.warning(f"⚠️ Detectado código sem conversão de tipos")
+
+            if should_retry:
 
                 self.logger.warning(f"⚠️ Detectado código com .compute() inválido em pandas object")
                 self.logger.info(f"🔄 Limpando cache e tentando novamente com prompt atualizado...")
@@ -915,8 +929,8 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao registrar erro: {e}")
 
-    def _clean_old_cache(self):
-        """Limpa cache antigo (> 24 horas) automaticamente"""
+    def _clean_old_cache(self, max_age_hours=2):
+        """Limpa cache antigo automaticamente (padrão: 2 horas)"""
         import os
         import time
         from pathlib import Path
@@ -928,7 +942,7 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             ]
 
             now = time.time()
-            max_age = 24 * 60 * 60  # 24 horas em segundos
+            max_age = max_age_hours * 60 * 60  # Converte horas para segundos
             removed_count = 0
 
             for cache_dir in cache_dirs:
