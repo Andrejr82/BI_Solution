@@ -500,8 +500,18 @@ Se o usuário perguntar sobre "ruptura", "produtos em falta", "estoque zero":
 - Se mencionar "top 10", "top 5" → adicione .head(N) ou .nlargest(N) ANTES de criar gráfico
 - SEMPRE agrupe por NOME (nome do produto) para rankings de produtos
 - SEMPRE ordene por VENDA_30DD (vendas em 30 dias) de forma DECRESCENTE (ascending=False)
-- Use .reset_index() no final para criar um DataFrame limpo
+- **🚨 CRÍTICO:** SEMPRE use `.reset_index()` após `.groupby().sum()` ou `.groupby().agg()` ANTES de chamar `.sort_values()`
 - **IMPORTANTE:** NÃO retorne apenas o filtro! Sempre faça o groupby quando houver ranking/top!
+
+**⚠️ REGRA ANTI-ERRO SERIES:**
+Ao fazer agregações (groupby + sum/mean/count), SEMPRE use `.reset_index()` ANTES de `.sort_values()`:
+```python
+# ❌ ERRADO: Series não tem .sort_values() confiável
+result = df.groupby('NOME')['VENDA_30DD'].sum().sort_values()
+
+# ✅ CORRETO: Converter para DataFrame primeiro
+result = df.groupby('NOME')['VENDA_30DD'].sum().reset_index().sort_values(by='VENDA_30DD', ascending=False)
+```
 
 **🎯 DETECÇÃO DE GRÁFICOS - REGRA ABSOLUTA:**
 Se o usuário mencionar qualquer uma destas palavras-chave, você DEVE gerar um gráfico Plotly:
@@ -796,6 +806,11 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             elif "Invalid comparison between dtype=" in error_msg:
                 should_retry = True
                 self.logger.warning(f"⚠️ Detectado código sem conversão de tipos")
+
+            elif "'Series' object has no attribute 'sort_values'" in error_msg or \
+                 "AttributeError: 'Series'" in error_msg:
+                should_retry = True
+                self.logger.warning(f"⚠️ Detectado código com erro em Series (falta .reset_index()?)")
 
             if should_retry:
 
