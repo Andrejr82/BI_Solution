@@ -165,11 +165,16 @@ class CodeGenAgent:
             if 'ESTOQUE_UNE' in ddf.columns:
                 ddf['ESTOQUE_UNE'] = dd.to_numeric(ddf['ESTOQUE_UNE'], errors='coerce').fillna(0)
 
-            # RETORNAR DASK DATAFRAME - O código gerado deve chamar .compute() após filtros!
-            return ddf
+            # 🔄 MODO HÍBRIDO: Computar Dask para pandas para compatibilidade
+            # Isso garante que código gerado funcione com pandas (modo padrão)
+            # Filtros devem ser aplicados DEPOIS do load_data() no código gerado
+            self.logger.info(f"⚡ load_data(): Convertendo Dask → pandas ({ddf.npartitions} partições)")
+            df_pandas = ddf.compute()
+            self.logger.info(f"✅ load_data(): {len(df_pandas)} registros carregados")
+            return df_pandas
 
         local_scope['load_data'] = load_data
-        local_scope['dd'] = dd  # Adicionar Dask ao escopo para código gerado
+        local_scope['dd'] = dd  # Adicionar Dask ao escopo para código gerado (se necessário)
 
         def worker():
             sys.stdout = output_capture
@@ -363,36 +368,32 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
 
 {examples_context}
 
-**🚀 INSTRUÇÃO CRÍTICA #0 - DASK DATAFRAME:**
-⚠️ **ATENÇÃO:** load_data() retorna um **Dask DataFrame** (lazy loading), NÃO um pandas DataFrame!
+**🚀 INSTRUÇÃO CRÍTICA #0 - PANDAS DATAFRAME:**
+⚠️ **ATENÇÃO:** load_data() retorna um **pandas DataFrame** (já computado)!
 
 **VOCÊ DEVE:**
-1. Aplicar todos os filtros no Dask DataFrame primeiro
-2. Chamar `.compute()` APENAS UMA VEZ, logo após filtros/groupby
-3. Depois de `.compute()`, você terá um pandas DataFrame normal
-4. NUNCA chamar `.compute()` múltiplas vezes ou em pandas DataFrame!
+1. Aplicar filtros IMEDIATAMENTE com pandas (.loc[], máscaras, etc.)
+2. NUNCA chamar `.compute()` - load_data() já retorna pandas!
+3. Usar pandas normal (.groupby(), .sort_values(), .reset_index(), etc.)
 
 ✅ **CORRETO - Exemplo 1 (com filtro):**
 ```python
-ddf = load_data()  # Dask DataFrame (lazy)
-ddf_filtered = ddf[(ddf['PRODUTO'].astype(str) == '369947') & (ddf['UNE'] == 'SCR')]  # Filtro no Dask
-df = ddf_filtered.compute()  # ✅ Computar UMA VEZ
-result = px.bar(df, x='NOME', y='VENDA_30DD')  # df é pandas agora
+df = load_data()  # pandas DataFrame (já pronto para usar)
+df_filtered = df[(df['PRODUTO'].astype(str) == '369947') & (df['UNE'] == 'SCR')]
+result = px.bar(df_filtered, x='NOME', y='VENDA_30DD')
 ```
 
 ✅ **CORRETO - Exemplo 2 (com groupby):**
 ```python
-ddf = load_data()  # Dask DataFrame (lazy)
-ddf_papelaria = ddf[ddf['NOMESEGMENTO'] == 'PAPELARIA']  # Filtro no Dask
-vendas_por_une = ddf_papelaria.groupby('UNE')['VENDA_30DD'].sum()  # Ainda Dask
-df_result = vendas_por_une.compute().reset_index()  # ✅ Computar UMA VEZ
-une_mais_vendedora = df_result.sort_values(by='VENDA_30DD', ascending=False).head(1)  # pandas ops
-result = une_mais_vendedora  # ✅ df_result é pandas, NÃO chamar .compute() de novo!
+df = load_data()  # pandas DataFrame
+papelaria = df[df['NOMESEGMENTO'] == 'PAPELARIA']  # Filtrar primeiro!
+vendas_por_une = papelaria.groupby('UNE')['VENDA_30DD'].sum().reset_index()
+result = vendas_por_une.sort_values(by='VENDA_30DD', ascending=False).head(10)
 ```
 
-❌ **ERRADO - Múltiplos .compute():**
+❌ **ERRADO - Tentar usar .compute() (NÃO EXISTE EM PANDAS):**
 ```python
-ddf = load_data()
+df = load_data()
 df = ddf[ddf['NOMESEGMENTO'] == 'PAPELARIA'].compute()  # compute #1
 result = df.groupby('UNE')['VENDA_30DD'].sum().compute()  # ❌ ERRO! df já é pandas!
 ```
