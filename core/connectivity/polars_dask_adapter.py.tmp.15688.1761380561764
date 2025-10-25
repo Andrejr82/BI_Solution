@@ -27,10 +27,15 @@ import dask.dataframe as dd
 try:
     import polars as pl
     POLARS_AVAILABLE = True
-except ImportError:
+    logging.info(f"✅ Polars carregado com sucesso (versão {pl.__version__})")
+except ImportError as e:
     POLARS_AVAILABLE = False
     pl = None
-    logging.warning("Polars não disponível. Usando apenas Dask.")
+    logging.warning(f"⚠️ Polars não disponível: {e}. Usando apenas Dask.")
+except Exception as e:
+    POLARS_AVAILABLE = False
+    pl = None
+    logging.error(f"❌ Erro ao importar Polars: {e}. Usando apenas Dask.")
 
 from .base import DatabaseAdapter
 
@@ -242,16 +247,16 @@ class PolarsDaskAdapter(DatabaseAdapter):
                         value = value_str
 
                 # Converter value para tipo correto baseado no schema
-                if col_dtype is not None:
-                    import polars as pl
+                if col_dtype is not None and POLARS_AVAILABLE:
                     # Se coluna é numérica mas value é string, converter
-                    if col_dtype in [pl.Int64, pl.Int32, pl.Int16, pl.Int8, pl.UInt64, pl.UInt32, pl.UInt16, pl.UInt8]:
+                    dtype_str = str(col_dtype)
+                    if any(t in dtype_str.lower() for t in ['int', 'uint']):
                         try:
                             value = int(value) if isinstance(value, str) else value
                             logger.info(f"Convertendo {column} para int: {value}")
                         except ValueError:
                             pass
-                    elif col_dtype in [pl.Float64, pl.Float32]:
+                    elif 'float' in dtype_str.lower():
                         try:
                             value = float(value) if isinstance(value, str) else value
                             logger.info(f"Convertendo {column} para float: {value}")
