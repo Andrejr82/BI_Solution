@@ -389,5 +389,78 @@
         "expected_output": "Número de segmentos"
       }
     ]
+  },
+
+  "grafico_barras_ranking": {
+    "description": "Gráficos de barras para rankings e comparações - Top N produtos/segmentos/UNEs",
+    "keywords": ["gráfico", "chart", "barras", "ranking visual", "top 10 gráfico", "comparar graficamente"],
+    "examples": [
+      {
+        "user_query": "gere um gráfico de vendas do produto 369947 na UNE SCR",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_filtered = df[(df['PRODUTO'] == 369947) & (df['UNE'] == 'SCR')]\ndf_vendas = df_filtered.groupby('NOME')['VENDA_30DD'].sum().reset_index()\nresult = px.bar(df_vendas, x='NOME', y='VENDA_30DD', title='Vendas Produto 369947 - UNE SCR', labels={'VENDA_30DD': 'Vendas (30d)', 'NOME': 'Produto'})",
+        "expected_output": "Gráfico de barras Plotly"
+      },
+      {
+        "user_query": "top 10 produtos mais vendidos em gráfico",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_top10 = df.groupby('NOME')['VENDA_30DD'].sum().nlargest(10).reset_index()\nresult = px.bar(df_top10, x='NOME', y='VENDA_30DD', title='Top 10 Produtos Mais Vendidos', labels={'VENDA_30DD': 'Vendas (30d)', 'NOME': 'Produto'})",
+        "expected_output": "Gráfico de barras com top 10"
+      },
+      {
+        "user_query": "ranking visual de vendas por segmento",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_seg = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = px.bar(df_seg, x='NOMESEGMENTO', y='VENDA_30DD', title='Ranking de Vendas por Segmento', labels={'VENDA_30DD': 'Total Vendas', 'NOMESEGMENTO': 'Segmento'})",
+        "expected_output": "Gráfico de barras por segmento"
+      }
+    ]
+  },
+
+  "grafico_linha_evolucao": {
+    "description": "Gráficos de linha para tendências temporais e evoluções",
+    "keywords": ["evolução", "tendência", "histórico", "ao longo do tempo", "linha temporal", "sazonalidade"],
+    "examples": [
+      {
+        "user_query": "mostre a evolução de vendas mensais do produto 369947",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_produto = df[df['PRODUTO'] == 369947]\nif 'DATA' in df_produto.columns:\n    df_produto['MES'] = pd.to_datetime(df_produto['DATA']).dt.to_period('M').astype(str)\n    vendas_mes = df_produto.groupby('MES')['VENDA_30DD'].sum().reset_index()\n    result = px.line(vendas_mes, x='MES', y='VENDA_30DD', title='Evolução Mensal - Produto 369947', markers=True)\nelse:\n    result = px.bar(df_produto.groupby('NOME')['VENDA_30DD'].sum().reset_index(), x='NOME', y='VENDA_30DD', title='Vendas Produto 369947')",
+        "expected_output": "Gráfico de linha temporal"
+      },
+      {
+        "user_query": "análise de sazonalidade no segmento FESTAS",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_festas = df[df['NOMESEGMENTO'] == 'FESTAS']\nif 'DATA' in df_festas.columns:\n    df_festas['MES'] = pd.to_datetime(df_festas['DATA']).dt.month\n    vendas_mes = df_festas.groupby('MES')['VENDA_30DD'].sum().reset_index()\n    result = px.line(vendas_mes, x='MES', y='VENDA_30DD', title='Sazonalidade - Segmento FESTAS', markers=True)\nelse:\n    vendas = df_festas.groupby('NOMECATEGORIA')['VENDA_30DD'].sum().reset_index()\n    result = px.bar(vendas, x='NOMECATEGORIA', y='VENDA_30DD', title='Vendas por Categoria - FESTAS')",
+        "expected_output": "Gráfico de sazonalidade"
+      }
+    ]
+  },
+
+  "grafico_pizza_distribuicao": {
+    "description": "Gráficos de pizza para distribuições e proporções percentuais",
+    "keywords": ["distribuição", "proporção", "pizza", "participação", "share visual"],
+    "examples": [
+      {
+        "user_query": "distribuição de vendas por categoria dentro do segmento PAPELARIA",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_papelaria = df[df['NOMESEGMENTO'] == 'PAPELARIA']\nvendas_cat = df_papelaria.groupby('NOMECATEGORIA')['VENDA_30DD'].sum().reset_index()\nresult = px.pie(vendas_cat, names='NOMECATEGORIA', values='VENDA_30DD', title='Distribuição de Vendas - PAPELARIA')",
+        "expected_output": "Gráfico de pizza"
+      },
+      {
+        "user_query": "participação percentual de cada segmento nas vendas totais",
+        "code": "import plotly.express as px\ndf = load_data()\nvendas_seg = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\nresult = px.pie(vendas_seg, names='NOMESEGMENTO', values='VENDA_30DD', title='Participação por Segmento')",
+        "expected_output": "Gráfico de pizza de participação"
+      }
+    ]
+  },
+
+  "grafico_comparacao": {
+    "description": "Gráficos para comparar múltiplos itens lado a lado",
+    "keywords": ["comparar", "versus", "vs", "comparação visual", "entre"],
+    "examples": [
+      {
+        "user_query": "compare as vendas do produto 369947 entre todas as UNEs",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_produto = df[df['PRODUTO'] == 369947]\nvendas_une = df_produto.groupby('UNE')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()\nresult = px.bar(vendas_une, x='UNE', y='VENDA_30DD', title='Comparação de Vendas por UNE - Produto 369947', labels={'VENDA_30DD': 'Vendas', 'UNE': 'Unidade'})",
+        "expected_output": "Gráfico comparativo entre UNEs"
+      },
+      {
+        "user_query": "comparar vendas entre segmentos ARMARINHO E CONFECÇÃO vs TECIDOS",
+        "code": "import plotly.express as px\ndf = load_data()\ndf_comp = df[df['NOMESEGMENTO'].isin(['ARMARINHO E CONFECÇÃO', 'TECIDOS'])]\nvendas = df_comp.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()\nresult = px.bar(vendas, x='NOMESEGMENTO', y='VENDA_30DD', title='Comparação: ARMARINHO vs TECIDOS', color='NOMESEGMENTO')",
+        "expected_output": "Gráfico comparativo de segmentos"
+      }
+    ]
   }
 }

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761350048.0407934,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta\n# Mapear \"promocionais\" para o segmento correto. Assumindo que \"promocionais\" se refere a \"SAZONAIS\" ou \"FESTAS\"\n# Se houver um segmento específico para \"promocionais\", ajuste aqui.\n# Para este exemplo, vamos considerar \"SAZONAIS\" e \"FESTAS\" como promocionais.\nsegmentos_promocionais = ['SAZONAIS', 'FESTAS']\ndf_promocionais = df[df['NOMESEGMENTO'].isin(segmentos_promocionais)]\n\n# Calcular as vendas totais por produto para os segmentos promocionais\nvendas_promocionais = df_promocionais.groupby('NOME')['VENDA_30DD'].sum().reset_index()\n\n# Gerar o gráfico de barras\nimport plotly.express as px\nresult = px.bar(vendas_promocionais.nlargest(10, 'VENDA_30DD'), x='NOME', y='VENDA_30DD',\n                title='Top 10 Produtos em Vendas - Segmentos Promocionais')\n\n# Passo 3: Salvar resultado\n# A variável 'result' já contém o gráfico Plotly\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "cd171fb205382f81728b8f28a1aaacc5"
+  }
+}

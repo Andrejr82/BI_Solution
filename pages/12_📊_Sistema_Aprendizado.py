@@ -95,7 +95,14 @@ with tab1:
                 }
             ))
 
-            fig.update_layout(height=300)
+            # Aplicar tema escuro ChatGPT
+            fig.update_layout(
+                height=300,
+                plot_bgcolor='#2a2b32',
+                paper_bgcolor='#2a2b32',
+                font=dict(color='#ececf1', family='sans-serif'),
+                title=dict(font=dict(color='#ececf1', size=18))
+            )
             st.plotly_chart(fig, use_container_width=True)
 
         # Queries problemáticas
@@ -165,11 +172,32 @@ with tab2:
                 textposition='outside'
             ))
 
+            # Aplicar tema escuro ChatGPT
             fig.update_layout(
                 title="Top 10 Tipos de Erro",
                 xaxis_title="Tipo de Erro",
                 yaxis_title="Quantidade",
-                height=400
+                height=400,
+                plot_bgcolor='#2a2b32',
+                paper_bgcolor='#2a2b32',
+                font=dict(color='#ececf1', family='sans-serif'),
+                title_font=dict(color='#ececf1', size=18),
+                xaxis=dict(
+                    gridcolor='#444654',
+                    tickfont=dict(color='#ececf1'),
+                    title=dict(font=dict(color='#ececf1'))
+                ),
+                yaxis=dict(
+                    gridcolor='#444654',
+                    tickfont=dict(color='#ececf1'),
+                    title=dict(font=dict(color='#ececf1'))
+                ),
+                margin=dict(l=60, r=40, t=40, b=80),
+                hoverlabel=dict(
+                    bgcolor='#2a2b32',
+                    bordercolor='#10a37f',
+                    font=dict(color='#ececf1')
+                )
             )
 
             st.plotly_chart(fig, use_container_width=True)

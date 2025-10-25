@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761350304.651874,
+  "response": {
+    "content": "```python\n# Passo 1: Carregar dados\ndf = load_data()\n\n# Passo 2: Responder à pergunta \"gere um gráfico de vendas promocionais\"\n# Assumindo que \"vendas promocionais\" se refere a produtos com VENDA_30DD > 0\n# e que queremos visualizar os top 10 produtos com maior venda promocional.\n# Se houver uma coluna específica para \"promoção\", ela deveria ser usada.\n# Como não há, vamos usar VENDA_30DD como proxy para vendas gerais.\n\n# Filtrar produtos com vendas (considerados \"promocionais\" neste contexto)\nvendas_promocionais = df[df['VENDA_30DD'] > 0]\n\n# Obter os top 10 produtos por VENDA_30DD\ntop_10_promocionais = vendas_promocionais.nlargest(10, 'VENDA_30DD')\n\n# Gerar o gráfico de barras\nimport plotly.express as px\nresult = px.bar(top_10_promocionais, x='NOME', y='VENDA_30DD', title='Top 10 Produtos em Vendas Promocionais')\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "07d0ce339d15f3eff693a6f4b5c71d00"
+  }
+}

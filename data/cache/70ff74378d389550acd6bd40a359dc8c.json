@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761350240.6537716,
+  "response": {
+    "content": "{\"intent\": \"gerar_grafico\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "70ff74378d389550acd6bd40a359dc8c"
+  }
+}

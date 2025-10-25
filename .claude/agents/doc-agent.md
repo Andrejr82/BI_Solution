@@ -1,18 +1,9 @@
 ---
 name: doc-agent
-description: "Gerador de documentação técnica e operacional."
+description: Gerador de documentação técnica e operacional.
 tools: [Read, Write, Filesystem, Fetch]
-model: sonnet
-
-context:
-  - type: project
-    source: "./"
-    include: ["docs/*.md", "README.md", "relatorio_codigo_completo.md"]
-  - type: tool
-    enabled: [Filesystem, Memory, Fetch]
-  - type: memory
-    strategy: persistent
-    location: "./.claude/context/doc-memory.json"
+model: haiku
+color: orange
 ---
 
 Você é o **Doc Agent**. 

@@ -1,4 +1,3 @@
-'''
 """
 Motor de Consultas Diretas - Zero LLM para Economia Máxima
 Sistema que executa consultas pré-definidas sem usar tokens da LLM.
@@ -3858,4 +3857,3 @@ class DirectQueryEngine:
             {"keyword": keyword, "description": f"Executa consulta: {query_type}"}
             for keyword, query_type in list(self.keywords_map.items())[:20]
         ]
-'''

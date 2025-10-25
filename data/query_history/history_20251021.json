@@ -1,0 +1,92 @@
+[
+  {
+    "query": "ranking de vendas dos segmentos une scr",
+    "session_id": "8a28f629-96d0-4719-b465-f4716257ac37",
+    "timestamp": "2025-10-21T05:22:14.618656",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 49.404086
+  },
+  {
+    "query": "quais produtos está sem giro na une NIG ?",
+    "session_id": "49684be1-e233-474d-b9a4-00193560fa8c",
+    "timestamp": "2025-10-21T18:15:04.398022",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 35.771
+  },
+  {
+    "query": "Dashboard executivo: KPIs principais por segmento",
+    "session_id": "49684be1-e233-474d-b9a4-00193560fa8c",
+    "timestamp": "2025-10-21T18:26:25.495555",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 20.204144
+  },
+  {
+    "query": "KPIs principais por segmento une mad",
+    "session_id": "49684be1-e233-474d-b9a4-00193560fa8c",
+    "timestamp": "2025-10-21T18:27:17.633918",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.029383
+  },
+  {
+    "query": "Indicadores de saúde do negócio por segmento",
+    "session_id": "12e877c7-5964-488e-a3b8-6424fa26e276",
+    "timestamp": "2025-10-21T19:01:27.315859",
+    "success": false,
+    "results_count": 0,
+    "error": "⏰ **Tempo Limite Excedido**\n\nO processamento da sua consulta demorou muito tempo (>40s).\n\n**Sugestões:**\n- Tente uma consulta mais específica\n- Simplifique a pergunta\n- Verifique sua conexão de internet",
+    "processing_time": 0.0
+  },
+  {
+    "query": "Produtos com risco de ruptura baseado em tendências",
+    "session_id": "3f1c1ddf-66b1-4440-876c-6d2f9653118c",
+    "timestamp": "2025-10-21T19:39:00.619645",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.350388
+  },
+  {
+    "query": "Análise de sazonalidade: quais meses vendem mais no segmento FESTAS?",
+    "session_id": "3f1c1ddf-66b1-4440-876c-6d2f9653118c",
+    "timestamp": "2025-10-21T20:05:41.235976",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.932203
+  },
+  {
+    "query": "quais produtos na une MAD estão precisando de ajuste na Linha Verde?",
+    "session_id": "fc9a46df-5505-4bb2-aeb9-71dc8e42ceff",
+    "timestamp": "2025-10-21T20:13:37.118832",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.017956
+  },
+  {
+    "query": "quais produtos precisam de alteração na linha verde na une 261 ?",
+    "session_id": "5506735f-134a-4bf5-bd4e-3ef65a360219",
+    "timestamp": "2025-10-21T20:55:10.377531",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.028721
+  },
+  {
+    "query": "gráfico de evolução segmento unes SCR",
+    "session_id": "5506735f-134a-4bf5-bd4e-3ef65a360219",
+    "timestamp": "2025-10-21T21:14:30.476609",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.008903
+  }
+]

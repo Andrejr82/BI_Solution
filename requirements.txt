@@ -309,6 +309,10 @@ pluggy==1.6.0
     # via
     #   pytest
     #   pytest-cov
+polars==1.34.0
+    # via -r requirements.in
+polars-runtime-32==1.34.0
+    # via polars
 propcache==0.3.2
     # via
     #   aiohttp
