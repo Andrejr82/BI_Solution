@@ -51,17 +51,26 @@ st.markdown("""
 <style>
 /* ==================== GLOBAL ==================== */
 :root {
-    --bg-primary: #343541;
-    --bg-secondary: #444654;
-    --bg-sidebar: #202123;
-    --bg-card: #2a2b32;
-    --bg-input: #40414f;
-    --border-color: #444654;
-    --text-primary: #ececf1;
-    --text-secondary: #8e8ea0;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-sidebar: #f1f3f4;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --border-color: #dee2e6;
+    --text-primary: #2C3E50;
+    --text-secondary: #7F8C8D;
     --color-primary: #10a37f;
     --color-secondary: #5436DA;
     --color-danger: #ef4444;
+}
+
+/* Fundo branco global */
+.stApp {
+    background-color: white !important;
+}
+
+.main {
+    background-color: white !important;
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -123,7 +132,7 @@ section[data-testid="stSidebar"] button:hover {
 
 /* ==================== INPUT AREA ==================== */
 .stChatInput textarea {
-    background-color: var(--bg-input) !important;
+    background-color: white !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 12px !important;
     color: var(--text-primary) !important;
@@ -133,6 +142,31 @@ section[data-testid="stSidebar"] button:hover {
 .stChatInput textarea:focus {
     border-color: var(--color-primary) !important;
     box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1) !important;
+}
+
+/* Text Inputs gerais */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stNumberInput > div > div > input {
+    background-color: white !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1) !important;
+}
+
+/* Labels dos inputs */
+.stTextInput > label,
+.stTextArea > label,
+.stNumberInput > label {
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
 }
 
 /* ==================== BOTÕES ==================== */

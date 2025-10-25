@@ -80,38 +80,62 @@ def login():
         st.markdown(
             """
             <style>
+                /* Fundo branco global */
+                .stApp {
+                    background-color: white !important;
+                }
+
                 .login-container {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: white;
                     padding: 2.5rem 3rem;
                     border-radius: 15px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
                     text-align: center;
                     margin-bottom: 1.5rem;
+                    border: 2px solid #00FF00;
                 }
                 .login-title {
-                    color: white;
-                    font-size: 2.5rem;
+                    color: #2C3E50;
+                    font-size: 2rem;
                     font-weight: bold;
-                    margin: 1rem 0 0.5rem 0;
+                    margin: 0.5rem 0;
                     letter-spacing: -0.5px;
                 }
                 .login-subtitle {
-                    color: rgba(255,255,255,0.95);
-                    font-size: 1.1rem;
+                    color: #7F8C8D;
+                    font-size: 1rem;
                     margin-top: 0.5rem;
-                    font-weight: 300;
+                    font-weight: 400;
+                }
+                .login-logo {
+                    margin-bottom: 1rem;
+                }
+                /* Corrigir áreas sombreadas dos inputs */
+                .stTextInput > div > div > input {
+                    background-color: white !important;
+                    color: #2C3E50 !important;
+                    border: 1px solid #BDC3C7 !important;
+                    border-radius: 8px !important;
+                    padding: 12px !important;
+                }
+                .stTextInput > div > div > input:focus {
+                    border-color: #00FF00 !important;
+                    box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.1) !important;
+                }
+                /* Labels dos inputs */
+                .stTextInput > label {
+                    color: #2C3E50 !important;
+                    font-weight: 500 !important;
                 }
             </style>
             <div class='login-container'>
-                <svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom: 0.5rem; opacity: 0.9;">
-                    <rect x="15" y="60" width="10" height="30" fill="white" opacity="0.7"/>
-                    <rect x="30" y="45" width="10" height="45" fill="white" opacity="0.8"/>
-                    <rect x="45" y="30" width="10" height="60" fill="white" opacity="0.9"/>
-                    <rect x="60" y="20" width="10" height="70" fill="white"/>
-                    <rect x="75" y="35" width="10" height="55" fill="white" opacity="0.85"/>
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="white" stroke-width="2" opacity="0.3"/>
-                </svg>
-                <h2 class='login-title'>Agente de Negócios</h2>
+                <div class='login-logo'>
+                    <img src="https://yt3.googleusercontent.com/ytc/AIdro_lqPBVMFmYx3S7Kk_V8YqB0Z0Gz5p8t3oQvVaQPvWNx4A=s900-c-k-c0x00ffffff-no-rj"
+                         alt="Caçula Logo"
+                         width="120"
+                         style="border-radius: 10px; margin-bottom: 1rem;">
+                </div>
+                <h2 class='login-title'>Agente de Business Intelligence</h2>
                 <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
             </div>
             """,
@@ -119,8 +143,8 @@ def login():
         )
 
         with st.form("login_form"):
-            username = st.text_input("Usuário", placeholder="Digite seu usuário")
-            password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+            username = st.text_input("Usuário", placeholder="Digite seu usuário", key="login_username")
+            password = st.text_input("Senha", type="password", placeholder="Digite sua senha", key="login_password")
 
             col1, col2 = st.columns([3, 1])
             with col1:
