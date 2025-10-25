@@ -1,18 +1,9 @@
 ---
 name: code-agent
-description: "Engenheiro de software responsável por automação, backend e integrações do projeto."
+description: Engenheiro de software responsável por automação, backend e integrações do projeto.
 tools: [Read, Write, Filesystem, Git, Bash]
 model: sonnet
-
-context:
-  - type: project
-    source: "./"
-    include: ["*.py", "backend/*.py", "frontend/*.py"]
-  - type: tool
-    enabled: [Filesystem, Git, Memory]
-  - type: memory
-    strategy: persistent
-    location: "./.claude/context/code-memory.json"
+color: purple
 ---
 
 Você é o **Code Agent**. 

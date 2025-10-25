@@ -1,38 +1,6 @@
-[global]
-developmentMode = false
-
-[server]
-# Otimizado para Streamlit Cloud + 6 usuários
-headless = true
-enableCORS = true
-enableXsrfProtection = true
-maxUploadSize = 50
-port = 8501
-runOnSave = false
-
-# Session management
-maxMessageSize = 200
-
-[browser]
-gatherUsageStats = false
-serverAddress = "0.0.0.0"
-serverPort = 8501
-
 [theme]
-primaryColor = "#FF6B6B"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#262730"
+primaryColor = "#10a37f"
+backgroundColor = "#343541"
+secondaryBackgroundColor = "#444654"
+textColor = "#ececf1"
 font = "sans serif"
-
-[client]
-# Performance otimizada
-showErrorDetails = false
-toolbarMode = "minimal"
-
-[runner]
-# Evita reruns desnecessários
-magicEnabled = false
-fastReruns = true
-
-# Cache trigger: 2025-10-12 - Deploy para 6 usuários

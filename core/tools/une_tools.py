@@ -204,11 +204,41 @@ def calcular_abastecimento_une(une_id: int, segmento: str = None) -> Dict[str, A
     logger.info(f"Carregando dados de abastecimento para UNE {une_id}")
     df = _load_data(filters={'une': une_id})
 
+    # Verificar se dataframe não está vazio
+    if df.empty:
+        logger.warning(f"Query retornou 0 linhas para UNE {une_id}")
+        return {
+            "error": f"Nenhum dado encontrado para UNE {une_id}",
+            "une_id": une_id,
+            "total_produtos": 0,
+            "produtos": []
+        }
+
+    # Normalizar DataFrame (garantir mapeamento de colunas SQL -> padrão)
+    df = _normalize_dataframe(df)
+
     # Validar colunas necessárias
     required_cols = ['une', 'codigo', 'nome_produto', 'estoque_atual', 'linha_verde']
     is_valid, missing = validate_columns(df, required_cols)
     if not is_valid:
-        return {"error": f"Colunas ausentes: {missing}"}
+        logger.error(f"Colunas disponíveis: {list(df.columns)}")
+        logger.error(f"Colunas faltantes: {missing}")
+        return {
+            "error": f"Colunas ausentes após normalização: {missing}",
+            "colunas_disponiveis": list(df.columns),
+            "une_id": une_id
+        }
+
+    # Calcular colunas derivadas se não existirem
+    if 'precisa_abastecimento' not in df.columns:
+        logger.info("Calculando coluna 'precisa_abastecimento' (não encontrada nos dados)")
+        # Regra: ESTOQUE_UNE <= 50% LINHA_VERDE
+        df['precisa_abastecimento'] = (df['estoque_atual'] <= (df['linha_verde'] * 0.5))
+
+    if 'qtd_a_abastecer' not in df.columns:
+        logger.info("Calculando coluna 'qtd_a_abastecer' (não encontrada nos dados)")
+        # Quantidade a abastecer = LINHA_VERDE - ESTOQUE_ATUAL (se positivo)
+        df['qtd_a_abastecer'] = (df['linha_verde'] - df['estoque_atual']).clip(lower=0)
 
     # Filtrar por UNE com segurança
     df_une = safe_filter(df, 'une', une_id)
@@ -235,9 +265,7 @@ def calcular_abastecimento_une(une_id: int, segmento: str = None) -> Dict[str, A
             logger.warning("Coluna 'nomesegmento' não encontrada no dataset")
 
     # Filtrar produtos que precisam abastecimento
-    if 'precisa_abastecimento' not in df_une.columns:
-        return {"error": "Coluna 'precisa_abastecimento' não encontrada no dataset"}
-
+    # (coluna já foi calculada anteriormente se não existia)
     df_abastecer = df_une[df_une['precisa_abastecimento'] == True].copy()
 
     total_produtos = len(df_abastecer)

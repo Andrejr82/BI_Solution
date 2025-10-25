@@ -115,5 +115,23 @@
     "results_count": 0,
     "error": null,
     "processing_time": 1.542685
+  },
+  {
+    "query": "quais segmentos estão com ruptura?",
+    "session_id": "14c93661-f84e-48c7-8b81-9e656e5c949b",
+    "timestamp": "2025-10-18T21:52:19.398871",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.090066
+  },
+  {
+    "query": "Produtos classificados como ABC 'A' no segmento TECIDOS",
+    "session_id": "14c93661-f84e-48c7-8b81-9e656e5c949b",
+    "timestamp": "2025-10-18T21:54:23.516778",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.07671
   }
 ]

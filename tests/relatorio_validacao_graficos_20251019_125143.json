@@ -1,0 +1,92 @@
+{
+  "data": "2025-10-19T12:51:43.137494",
+  "objetivo": "Validar correções de max_tokens e Dask",
+  "queries_executadas": 10,
+  "metricas": {
+    "graficos_gerados": 9,
+    "taxa_graficos": 90.0,
+    "taxa_sucesso": 100.0,
+    "erros": 0,
+    "tempo_medio": 20.441384387016296,
+    "tempo_total": 204.41384387016296,
+    "tempo_min": 7.904383182525635,
+    "tempo_max": 38.054731130599976
+  },
+  "baseline": {
+    "taxa_graficos": 0,
+    "tempo_medio": 17.45,
+    "taxa_sucesso": 100
+  },
+  "resultados_detalhados": [
+    {
+      "query": "Gere um gráfico de barras mostrando as vendas do produto 369947 na UNE SCR nos últimos 30 dias",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 27.88354730606079,
+      "erro": null
+    },
+    {
+      "query": "Mostre em um gráfico de barras o estoque dos 5 produtos mais vendidos na UNE SCR",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 23.465954542160034,
+      "erro": null
+    },
+    {
+      "query": "Crie um gráfico de barras com a venda dos últimos 7 dias do produto 369947",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 15.266522884368896,
+      "erro": null
+    },
+    {
+      "query": "Gere um gráfico de linha mostrando a evolução das vendas do produto 369947 nos últimos 30 dias",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 33.02085518836975,
+      "erro": null
+    },
+    {
+      "query": "Mostre em um gráfico de linha a tendência de estoque do produto 369947 na UNE SCR",
+      "sucesso": true,
+      "tem_grafico": false,
+      "tempo": 38.054731130599976,
+      "erro": null
+    },
+    {
+      "query": "Crie um gráfico de pizza mostrando a distribuição de vendas por UNE do produto 369947",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 13.420219421386719,
+      "erro": null
+    },
+    {
+      "query": "Gere um gráfico de pizza com a participação de cada produto nas vendas totais",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 16.889570236206055,
+      "erro": null
+    },
+    {
+      "query": "Mostre em gráficos a comparação de vendas entre os produtos 369947 e 370000",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 7.904383182525635,
+      "erro": null
+    },
+    {
+      "query": "Gere gráficos comparando estoque atual vs venda dos últimos 30 dias por UNE",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 10.489757061004639,
+      "erro": null
+    },
+    {
+      "query": "Crie um gráfico mostrando a relação entre estoque e ruptura por produto",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 18.01830291748047,
+      "erro": null
+    }
+  ]
+}

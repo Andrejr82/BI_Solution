@@ -1,0 +1,11 @@
+{
+  "timestamp": 1760916065.6208072,
+  "response": {
+    "content": "```python\nimport pandas as pd\nimport plotly.express as px\n\n# Passo 1: Carregar dados\nddf = load_data()\n\n# 2.1: Tratar valores NA para 'exposicao_minima' e 'VENDA_30DD'\n# Conforme instrução crítica, preencher NA com 0 antes de qualquer comparação.\n# Assumimos que 'exposicao_minima' é uma coluna numérica presente no DataFrame,\n# conforme indicado nas instruções críticas sobre tratamento de NA e ruptura.\nddf['exposicao_minima'] = ddf['exposicao_minima'].fillna(0)\nddf['VENDA_30DD'] = ddf['VENDA_30DD'].fillna(0)\n\n# 2.2: Identificar produtos onde as vendas estão abaixo da exposição mínima\n# A interpretação da \"análise de exposição vs vendas\" é identificar produtos\n# cujas vendas nos últimos 30 dias (VENDA_30DD) são inferiores ao seu valor de exposição mínima.\nddf_abaixo_exposicao = ddf[ddf['VENDA_30DD'] < ddf['exposicao_minima']]\n\n# 2.3: Calcular a diferença entre exposição mínima e vendas para quantificar o desvio\n# Usamos .assign() para criar uma nova coluna no Dask DataFrame de forma eficiente,\n# representando o quanto as vendas estão abaixo da exposição mínima.\nddf_abaixo_exposicao = ddf_abaixo_exposicao.assign(\n    DIFERENCA_EXPOSICAO_VENDA=ddf_abaixo_exposicao['exposicao_minima'] - ddf_abaixo_exposicao['VENDA_30DD']\n)\n\n# 2.4: Selecionar colunas relevantes e computar o Dask DataFrame para Pandas DataFrame\n# Chamamos .compute() APENAS UMA VEZ, após todos os filtros e operações Dask,\n# para converter o Dask DataFrame em um Pandas DataFrame.\ndf_result = ddf_abaixo_exposicao[['NOME', 'VENDA_30DD', 'exposicao_minima', 'DIFERENCA_EXPOSICAO_VENDA']].compute()\n\n# 2.5: Ordenar o resultado (agora em Pandas)\n# Ordenamos pela diferença em ordem decrescente para destacar os produtos\n# com o maior desvio negativo (ou seja, aqueles que estão mais abaixo da sua exposição mínima).\ndf_result = df_result.sort_values(by='DIFERENCA_EXPOSICAO_VENDA', ascending=False)\n\n# 2.6: Limitar o resultado para uma visualização prática\n# Retornamos os top 100 produtos que estão mais abaixo da sua exposição mínima,\n# fornecendo uma lista focada para análise.\nresult = df_result.head(100)\n```"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "34191a3098e7bc70e88bc36184ade07b"
+  }
+}

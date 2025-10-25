@@ -187,6 +187,29 @@ class CodeValidator:
                 code = code.replace(".reset_index()", f".head({n}).reset_index()")
                 fixes_applied.append(f"Adicionado .head({n}) para limitar top {n}")
 
+        # Fix 4: ✅ NOVO - Corrigir queries de ranking sem groupby
+        if "Query pede ranking mas código não tem groupby()" in str(validation_result["errors"]):
+            # Detectar se é um caso simples de filtro seguido de sort
+            if ".sort_values(" in code and "result =" in code:
+                # Tentar inferir a coluna de agrupamento
+                if any(kw in user_query.lower() for kw in ["produto", "produtos"]):
+                    # Adicionar groupby por NOME (nome do produto)
+                    lines = code.split('\n')
+                    new_lines = []
+                    for line in lines:
+                        if "result =" in line and ".sort_values(" in line:
+                            # Inserir groupby antes do sort
+                            var_name = line.split('=')[0].strip()
+                            if "groupby" not in line:
+                                # Reconstruir com groupby
+                                new_lines.append(f"{var_name} = {var_name}.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()")
+                                fixes_applied.append("Adicionado groupby('NOME') para ranking de produtos")
+                            else:
+                                new_lines.append(line)
+                        else:
+                            new_lines.append(line)
+                    code = '\n'.join(new_lines)
+
         # Validar novamente após correções
         new_validation = self.validate(code, user_query)
 

@@ -44,7 +44,7 @@ class GeminiLLMAdapter:
             content = chunk.choices[0].delta.content or ""
             yield content
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=1024, json_mode=False, stream=False):
+    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False, stream=False):
         try:
             if not stream and self.cache_enabled and self.cache:
                 cached_response = self.cache.get(messages, model, temperature)
@@ -162,7 +162,7 @@ class DeepSeekLLMAdapter:
 
         logger.info("Adaptador do DeepSeekLLMAdapter inicializado com sucesso.")
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=1024, json_mode=False):
+    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False):
         """
         Obtém uma conclusão do modelo DeepSeek.
         """
@@ -245,7 +245,7 @@ class CustomLangChainLLM(BaseChatModel):
         response = self.llm_adapter.get_completion(
             messages=openai_messages,
             temperature=kwargs.get("temperature", 0),
-            max_tokens=kwargs.get("max_tokens", 1024)
+            max_tokens=kwargs.get("max_tokens", 4096)
         )
 
         # Converter resposta para formato LangChain

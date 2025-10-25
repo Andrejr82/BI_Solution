@@ -1,0 +1,20 @@
+INFO:faiss.loader:Loading faiss with AVX512 support.
+INFO:faiss.loader:Could not load library with AVX512 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx512'")
+INFO:faiss.loader:Loading faiss with AVX2 support.
+INFO:faiss.loader:Successfully loaded faiss with AVX2 support.
+INFO:core.config.safe_settings:[INFO] Carregando configurações simples...
+INFO:core.config.safe_settings:[OK] Configurações carregadas com sucesso
+================================================================================
+TESTE SIMPLES DE VALIDACAO
+================================================================================
+
+Pergunta: Quais sao os 5 produtos mais vendidos na UNE SCR no ultimo mes?
+
+Inicializando sistema...
+
+Traceback (most recent call last):
+  File "C:\Users\André\Documents\Agent_Solution_BI\tests\test_validacao_simples.py", line 29, in <module>
+    llm_adapter = GeminiLLMAdapter(api_key=settings.GEMINI_API_KEY)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: GeminiLLMAdapter.__init__() missing 1 required positional argument: 'model_name'

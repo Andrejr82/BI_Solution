@@ -51,24 +51,37 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
             - "qual a MC do produto 704559?" → `{{"intent": "une_operation"}}`
             - "calcule o preço de R$ 800 ranking 0 a vista" → `{{"intent": "une_operation"}}`
 
-    2.  **`python_analysis`**: Use para perguntas que exigem **análise, ranking, agregação ou comparações**.
-        - Palavras-chave: "qual mais", "top", "maior", "menor", "evolução", "comparar", "análise de", "ranking de".
+    2.  **`python_analysis`**: Use para perguntas que exigem **análise, ranking, agregação ou comparações** SEM visualização.
+        - Palavras-chave: "qual mais", "top", "maior", "menor", "análise de", "ranking de", "liste", "mostre dados".
         - **Exemplos:**
             - "qual produto mais vende no segmento tecidos?" → `{{"intent": "python_analysis"}}`
             - "top 5 categorias por venda" → `{{"intent": "python_analysis"}}`
 
-    3.  **`gerar_grafico`**: Use para pedidos **diretos e simples** de gráficos.
+    3.  **`gerar_grafico`**: Use para pedidos que mencionem **visualizações, gráficos, tendências temporais ou comparações visuais**.
+        - **Palavras-chave VISUAIS:** "gráfico", "chart", "visualização", "plotar", "plot", "barras", "pizza", "linha"
+        - **Palavras-chave ANALÍTICAS:** "evolução", "tendência", "distribuição", "comparar visualmente", "sazonalidade", "histórico", "ao longo do tempo"
         - **Exemplos:**
             - "gere um gráfico de vendas por categoria" → `{{"intent": "gerar_grafico"}}`
+            - "mostre a evolução de vendas mensais" → `{{"intent": "gerar_grafico"}}`
+            - "compare vendas entre UNEs visualmente" → `{{"intent": "gerar_grafico"}}`
+            - "distribuição por segmento" → `{{"intent": "gerar_grafico"}}`
+            - "análise de sazonalidade" → `{{"intent": "gerar_grafico"}}`
+            - "tendência dos últimos 6 meses" → `{{"intent": "gerar_grafico"}}`
 
     4.  **`resposta_simples`**: Use para perguntas com **filtragem direta**.
         - **Exemplos:**
             - "liste os produtos da categoria 'AVIAMENTOS'" → `{{"intent": "resposta_simples"}}`
             - "qual o estoque do produto 12345?" → `{{"intent": "resposta_simples"}}`
 
-    **REGRAS:**
-    - Priorize `une_operation` se mencionar UNE, abastecimento, MC ou cálculo de preço.
-    - Responda APENAS com o objeto JSON contendo a chave 'intent'.
+    **REGRAS DE PRIORIZAÇÃO:**
+    1. Priorize `une_operation` se mencionar UNE, abastecimento, MC ou cálculo de preço.
+    2. Priorize `gerar_grafico` se mencionar palavras visuais/temporais (gráfico, evolução, tendência, distribuição, sazonalidade).
+    3. Use `python_analysis` apenas se NÃO for visualização e exigir análise complexa.
+    4. Use `resposta_simples` apenas para queries muito básicas de filtro direto.
+
+    **IMPORTANTE:** Se houver QUALQUER menção a visualização ou análise temporal, escolha `gerar_grafico`!
+
+    Responda APENAS com o objeto JSON contendo a chave 'intent'.
 
     **Consulta do Usuário:**
     "{user_query}"
@@ -76,10 +89,16 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     **JSON de Saída:**
     """
     
+    # 🔍 LOGGING DETALHADO - Diagnóstico de classificação
+    logger.info(f"[CLASSIFY_INTENT] 📝 Query original: '{user_query}'")
+
     # Use json_mode=True para forçar a resposta em JSON
     response_dict = llm_adapter.get_completion(messages=[{"role": "user", "content": prompt}], json_mode=True)
     plan_str = response_dict.get("content", "{}")
-    
+
+    # 🔍 LOGGING: Resposta raw da LLM
+    logger.info(f"[CLASSIFY_INTENT] 🤖 Resposta LLM raw: {plan_str[:200]}...")
+
     # Fallback para extrair JSON de blocos de markdown
     if "```json" in plan_str:
         match = re.search(r"```json\n(.*?)```", plan_str, re.DOTALL)
@@ -94,6 +113,18 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
         plan = {"intent": "python_analysis", "entities": {}}
 
     intent = plan.get('intent', 'python_analysis')
+
+    # 🔍 LOGGING DETALHADO - Intent final
+    logger.info(f"[CLASSIFY_INTENT] ✅ Intent classificada: '{intent}'")
+
+    # 🔍 LOGGING: Alertar se query pede gráfico mas não foi classificada como tal
+    keywords_visuais = ['gráfico', 'chart', 'visualização', 'evolução', 'tendência', 'distribuição', 'sazonalidade', 'comparar']
+    query_lower = user_query.lower()
+    tem_keyword_visual = any(kw in query_lower for kw in keywords_visuais)
+
+    if tem_keyword_visual and intent != 'gerar_grafico':
+        logger.warning(f"[CLASSIFY_INTENT] ⚠️ POSSÍVEL ERRO: Query tem palavra visual ({[kw for kw in keywords_visuais if kw in query_lower]}) mas intent='{intent}' (não 'gerar_grafico')")
+
     logger.info(f"[NODE] classify_intent: Intenção classificada como '{intent}'")
     
     # Assegura que o plan sempre tenha a chave 'intent'

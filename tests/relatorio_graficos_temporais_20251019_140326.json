@@ -1,0 +1,64 @@
+{
+  "data": "2025-10-19T14:03:26.145689",
+  "objetivo": "Validar geração de gráficos de evolução temporal",
+  "queries_executadas": 6,
+  "metricas": {
+    "graficos_gerados": 4,
+    "taxa_graficos": 66.66666666666666,
+    "taxa_sucesso": 100.0,
+    "erros": 0,
+    "tempo_medio": 10.954546729723612,
+    "tempo_total": 65.72728037834167,
+    "tempo_min": 0.663069486618042,
+    "tempo_max": 17.645795583724976
+  },
+  "correcoes_implementadas": {
+    "colunas_documentadas": "mes_01 a mes_12 adicionadas ao column_descriptions",
+    "instrucoes_adicionadas": "Seção completa sobre gráficos de evolução temporal",
+    "exemplos_adicionados": "Exemplos de código para 6 e 12 meses"
+  },
+  "resultados_detalhados": [
+    {
+      "query": "Gere um gráfico de linha mostrando a tendência de vendas dos últimos 6 meses",
+      "sucesso": true,
+      "tem_grafico": false,
+      "tempo": 0.663069486618042,
+      "erro": null
+    },
+    {
+      "query": "Mostre a evolução de vendas mensais em um gráfico de linha",
+      "sucesso": true,
+      "tem_grafico": false,
+      "tempo": 9.106979131698608,
+      "erro": null
+    },
+    {
+      "query": "Crie um gráfico mostrando a evolução das vendas nos últimos 12 meses",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 8.673755168914795,
+      "erro": null
+    },
+    {
+      "query": "Mostre um gráfico de linha com as vendas mensais do último ano",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 13.811612129211426,
+      "erro": null
+    },
+    {
+      "query": "Gere um gráfico de linha mostrando a evolução de vendas do produto 369947 nos últimos 6 meses",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 17.645795583724976,
+      "erro": null
+    },
+    {
+      "query": "Mostre um gráfico de linha com a evolução de vendas do segmento TECIDOS nos últimos 12 meses",
+      "sucesso": true,
+      "tem_grafico": true,
+      "tempo": 15.826068878173828,
+      "erro": null
+    }
+  ]
+}

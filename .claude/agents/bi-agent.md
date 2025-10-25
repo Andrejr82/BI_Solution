@@ -1,22 +1,9 @@
 ---
 name: bi-agent
-description: "Agente de inteligência de negócios. Calcula KPIs, cria relatórios e gera insights."
+description: Agente de inteligência de negócios. Calcula KPIs, cria relatórios e gera insights.
 tools: [Read, Write, Filesystem, SQL]
 model: sonnet
-
-context:
-  - type: project
-    source: "./"
-    include: ["data/processed/*.parquet", "reports/*.md"]
-  - type: tool
-    enabled: [Filesystem, Memory, Time]
-  - type: memory
-    strategy: persistent
-    location: "./.claude/context/bi-memory.json"
-  - type: environment
-    vars:
-      REPORTS_PATH: "./reports/"
-      KPI_CONFIG: "./config/kpi_targets.json"
+color: cyan
 ---
 
 Você é o **BI Agent** (Caçulinha BI). 

@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent BI - Sistema Completo Multi-Páginas</title>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #343541;
+            color: #ececf1;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* SIDEBAR COM NAVEGAÇÃO DE PÁGINAS */
+        .sidebar {
+            width: 280px;
+            background: #202123;
+            border-right: 1px solid #444654;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #444654;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #10a37f;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #2a2b32;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            background: #10a37f;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .user-role {
+            font-size: 11px;
+            color: #8e8ea0;
+        }
+
+        .logout-btn {
+            width: 100%;
+            background: #40414f;
+            border: 1px solid #444654;
+            color: #ececf1;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #ef4444;
+        }
+
+        /* NAVEGAÇÃO DE PÁGINAS - ESTILO STREAMLIT */
+        .nav-section {
+            padding: 16px;
+        }
+
+        .nav-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #8e8ea0;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #ececf1;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: #2a2b32;
+            border-color: #444654;
+        }
+
+        .nav-item.active {
+            background: #10a37f;
+            color: white;
+            font-weight: 600;
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .divider {
+            height: 1px;
+            background: #444654;
+            margin: 12px 16px;
+        }
+
+        /* MAIN CONTENT */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #343541;
+            padding: 16px 24px;
+            border-bottom: 1px solid #444654;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .breadcrumb {
+            font-size: 13px;
+            color: #8e8ea0;
+        }
+
+        .page-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .page-content.hidden {
+            display: none;
+        }
+
+        /* CARDS */
+        .card {
+            background: #2a2b32;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #444654;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #ececf1;
+        }
+
+        .card-description {
+            color: #8e8ea0;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        /* MÉTRICAS */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 20px;
+            color: white;
+        }
+
+        .metric-card.green {
+            background: linear-gradient(135deg, #10a37f 0%, #0d8a6a 100%);
+        }
+
+        .metric-card.blue {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+        }
+
+        .metric-card.orange {
+            background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+        }
+
+        .metric-label {
+            font-size: 13px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        /* BOTÕES */
+        .btn {
+            background: #10a37f;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: #0d8a6a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 163, 127, 0.4);
+        }
+
+        .btn-secondary {
+            background: #40414f;
+            border: 1px solid #444654;
+        }
+
+        .btn-secondary:hover {
+            background: #4a4b57;
+        }
+
+        /* TABELAS */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        th {
+            background: #2a2b32;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #10a37f;
+            font-size: 13px;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #444654;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: rgba(16, 163, 127, 0.05);
+        }
+
+        /* STATUS BADGES */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.success {
+            background: rgba(16, 163, 127, 0.2);
+            color: #10a37f;
+        }
+
+        .badge.warning {
+            background: rgba(246, 173, 85, 0.2);
+            color: #ed8936;
+        }
+
+        .badge.info {
+            background: rgba(66, 153, 225, 0.2);
+            color: #4299e1;
+        }
+
+        /* CHAT (Para página principal) */
+        .chat-container {
+            background: #343541;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .assistant-avatar {
+            background: #5436DA;
+        }
+
+        .message-content {
+            flex: 1;
+            background: #2a2b32;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.6;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #343541;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #565869;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR COM TODAS AS PÁGINAS -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">🤖 Agent BI</div>
+
+            <div class="user-info">
+                <div class="user-avatar">👤</div>
+                <div class="user-details">
+                    <div class="user-name">Usuário Admin</div>
+                    <div class="user-role">Administrador</div>
+                </div>
+            </div>
+
+            <button class="logout-btn">🚪 Logout</button>
+        </div>
+
+        <!-- NAVEGAÇÃO DE PÁGINAS -->
+        <div class="nav-section">
+            <div class="nav-title">Principal</div>
+            <div class="nav-item active" onclick="showPage('chat')">
+                <span class="nav-icon">💬</span>
+                <span>Chat BI</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nav-section">
+            <div class="nav-title">Análises</div>
+            <div class="nav-item" onclick="showPage('metricas')">
+                <span class="nav-icon">📊</span>
+                <span>Métricas</span>
+            </div>
+            <div class="nav-item" onclick="showPage('graficos')">
+                <span class="nav-icon">📈</span>
+                <span>Gráficos Salvos</span>
+            </div>
+            <div class="nav-item" onclick="showPage('monitoramento')">
+                <span class="nav-icon">🔍</span>
+                <span>Monitoramento</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nav-section">
+            <div class="nav-title">Operações</div>
+            <div class="nav-item" onclick="showPage('transferencias')">
+                <span class="nav-icon">📦</span>
+                <span>Transferências</span>
+            </div>
+            <div class="nav-item" onclick="showPage('relatorio-transf')">
+                <span class="nav-icon">📊</span>
+                <span>Relatório Transferências</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nav-section">
+            <div class="nav-title">Configuração</div>
+            <div class="nav-item" onclick="showPage('exemplos')">
+                <span class="nav-icon">📚</span>
+                <span>Exemplos de Perguntas</span>
+            </div>
+            <div class="nav-item" onclick="showPage('ajuda')">
+                <span class="nav-icon">❓</span>
+                <span>Ajuda</span>
+            </div>
+            <div class="nav-item" onclick="showPage('senha')">
+                <span class="nav-icon">🔐</span>
+                <span>Alterar Senha</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nav-section">
+            <div class="nav-title">Admin</div>
+            <div class="nav-item" onclick="showPage('gemini-playground')">
+                <span class="nav-icon">🤖</span>
+                <span>Gemini Playground</span>
+            </div>
+            <div class="nav-item" onclick="showPage('aprendizado')">
+                <span class="nav-icon">📊</span>
+                <span>Sistema Aprendizado</span>
+            </div>
+            <div class="nav-item" onclick="showPage('admin')">
+                <span class="nav-icon">⚙️</span>
+                <span>Painel Administração</span>
+            </div>
+            <div class="nav-item" onclick="showPage('diagnostico')">
+                <span class="nav-icon">🔧</span>
+                <span>Diagnóstico DB</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <!-- HEADER -->
+        <div class="header">
+            <h1 id="pageTitle">💬 Chat BI - Assistente Inteligente</h1>
+            <div class="breadcrumb" id="breadcrumb">Principal > Chat BI</div>
+        </div>
+
+        <!-- PÁGINA: CHAT BI (Principal) -->
+        <div class="page-content" id="page-chat">
+            <div class="card">
+                <div class="card-title">🤖 Assistente de Business Intelligence</div>
+                <div class="card-description">
+                    Faça perguntas sobre vendas, estoque, produtos e análises de dados.
+                    Sistema 100% IA com Gemini 2.5.
+                </div>
+
+                <div class="chat-container">
+                    <div class="message">
+                        <div class="message-avatar assistant-avatar">🤖</div>
+                        <div class="message-content">
+                            Olá! Sou seu assistente de BI. Posso ajudar com:
+                            <ul style="margin-top: 8px; margin-left: 20px;">
+                                <li>Análise de vendas e rankings</li>
+                                <li>Consultas de estoque e produtos</li>
+                                <li>Gráficos e visualizações</li>
+                                <li>Transferências entre UNEs</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <input type="text" placeholder="Faça sua pergunta..."
+                           style="width: 100%; padding: 12px; background: #40414f; border: 1px solid #444654;
+                                  border-radius: 8px; color: #ececf1; font-size: 14px;">
+                </div>
+            </div>
+        </div>
+
+        <!-- PÁGINA: MÉTRICAS -->
+        <div class="page-content hidden" id="page-metricas">
+            <div class="card">
+                <div class="card-title">📊 Métricas de Performance</div>
+                <div class="card-description">Dashboard com principais indicadores do sistema</div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card green">
+                        <div class="metric-label">Queries Processadas</div>
+                        <div class="metric-value">1,245</div>
+                    </div>
+                    <div class="metric-card blue">
+                        <div class="metric-label">Taxa de Sucesso</div>
+                        <div class="metric-value">85%</div>
+                    </div>
+                    <div class="metric-card orange">
+                        <div class="metric-label">Tempo Médio</div>
+                        <div class="metric-value">26.9s</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Cache Hit Rate</div>
+                        <div class="metric-value">60%</div>
+                    </div>
+                </div>
+
+                <div id="metricsChart" style="width: 100%; height: 400px; background: #2a2b32; border-radius: 12px;"></div>
+            </div>
+        </div>
+
+        <!-- PÁGINA: GRÁFICOS SALVOS -->
+        <div class="page-content hidden" id="page-graficos">
+            <div class="card">
+                <div class="card-title">📈 Gráficos Salvos</div>
+                <div class="card-description">Visualizações salvas e relatórios</div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Ranking de Vendas Q1</td>
+                            <td>Gráfico de Barras</td>
+                            <td>20/10/2025</td>
+                            <td><span class="badge success">Ativo</span></td>
+                            <td><button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver</button></td>
+                        </tr>
+                        <tr>
+                            <td>Evolução Mensal TECIDOS</td>
+                            <td>Gráfico de Linha</td>
+                            <td>19/10/2025</td>
+                            <td><span class="badge success">Ativo</span></td>
+                            <td><button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver</button></td>
+                        </tr>
+                        <tr>
+                            <td>Distribuição por Segmento</td>
+                            <td>Gráfico de Pizza</td>
+                            <td>18/10/2025</td>
+                            <td><span class="badge info">Arquivado</span></td>
+                            <td><button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PÁGINA: MONITORAMENTO -->
+        <div class="page-content hidden" id="page-monitoramento">
+            <div class="card">
+                <div class="card-title">🔍 Monitoramento do Sistema</div>
+                <div class="card-description">Status em tempo real dos componentes</div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card green">
+                        <div class="metric-label">Backend Status</div>
+                        <div class="metric-value" style="font-size: 20px;">✅ Online</div>
+                    </div>
+                    <div class="metric-card green">
+                        <div class="metric-label">LLM (Gemini)</div>
+                        <div class="metric-value" style="font-size: 20px;">✅ OK</div>
+                    </div>
+                    <div class="metric-card green">
+                        <div class="metric-label">Parquet Adapter</div>
+                        <div class="metric-value" style="font-size: 20px;">✅ OK</div>
+                    </div>
+                    <div class="metric-card blue">
+                        <div class="metric-label">Uptime</div>
+                        <div class="metric-value" style="font-size: 20px;">12h 34m</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PÁGINA: TRANSFERÊNCIAS -->
+        <div class="page-content hidden" id="page-transferencias">
+            <div class="card">
+                <div class="card-title">📦 Gestão de Transferências</div>
+                <div class="card-description">Consultar e gerenciar transferências entre UNEs</div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+                    <input type="text" placeholder="UNE Origem" style="padding: 10px; background: #40414f; border: 1px solid #444654; border-radius: 6px; color: #ececf1;">
+                    <input type="text" placeholder="UNE Destino" style="padding: 10px; background: #40414f; border: 1px solid #444654; border-radius: 6px; color: #ececf1;">
+                    <button class="btn">🔍 Buscar</button>
+                </div>
+
+                <p style="color: #8e8ea0; font-size: 14px;">
+                    💡 Consulte transferências por UNE, data ou produto
+                </p>
+            </div>
+        </div>
+
+        <!-- PÁGINA: EXEMPLOS -->
+        <div class="page-content hidden" id="page-exemplos">
+            <div class="card">
+                <div class="card-title">📚 Exemplos de Perguntas</div>
+                <div class="card-description">Perguntas prontas para testar o sistema</div>
+
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    <button class="btn btn-secondary">Top 10 produtos mais vendidos</button>
+                    <button class="btn btn-secondary">Ranking de vendas por UNE</button>
+                    <button class="btn btn-secondary">Qual segmento mais vendeu?</button>
+                    <button class="btn btn-secondary">Produtos com estoque zero</button>
+                    <button class="btn btn-secondary">Evolução mensal de TECIDOS</button>
+                    <button class="btn btn-secondary">Gráfico de vendas por categoria</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PÁGINA: AJUDA -->
+        <div class="page-content hidden" id="page-ajuda">
+            <div class="card">
+                <div class="card-title">❓ Central de Ajuda</div>
+                <div class="card-description">Documentação e suporte</div>
+
+                <h3 style="margin: 20px 0 10px 0; color: #10a37f;">Como fazer perguntas?</h3>
+                <p style="color: #8e8ea0; line-height: 1.8;">
+                    • Use linguagem natural<br>
+                    • Seja específico (mencione UNE, produto, período)<br>
+                    • Peça gráficos quando necessário
+                </p>
+
+                <h3 style="margin: 20px 0 10px 0; color: #10a37f;">Tipos de análises disponíveis</h3>
+                <ul style="color: #8e8ea0; line-height: 1.8; margin-left: 20px;">
+                    <li>Rankings e Top N</li>
+                    <li>Evoluções temporais</li>
+                    <li>Comparações entre UNEs</li>
+                    <li>Análises de estoque</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- OUTRAS PÁGINAS (placeholder) -->
+        <div class="page-content hidden" id="page-senha">
+            <div class="card">
+                <div class="card-title">🔐 Alterar Senha</div>
+                <p>Funcionalidade de alteração de senha...</p>
+            </div>
+        </div>
+
+        <div class="page-content hidden" id="page-gemini-playground">
+            <div class="card">
+                <div class="card-title">🤖 Gemini Playground</div>
+                <p>Teste direto com API Gemini...</p>
+            </div>
+        </div>
+
+        <div class="page-content hidden" id="page-aprendizado">
+            <div class="card">
+                <div class="card-title">📊 Sistema de Aprendizado</div>
+                <p>Estatísticas e logs de aprendizado da IA...</p>
+            </div>
+        </div>
+
+        <div class="page-content hidden" id="page-admin">
+            <div class="card">
+                <div class="card-title">⚙️ Painel de Administração</div>
+                <p>Gerenciamento de usuários, cache e sistema...</p>
+            </div>
+        </div>
+
+        <div class="page-content hidden" id="page-diagnostico">
+            <div class="card">
+                <div class="card-title">🔧 Diagnóstico do Banco de Dados</div>
+                <p>Status de conexões e performance do DB...</p>
+            </div>
+        </div>
+
+        <div class="page-content hidden" id="page-relatorio-transf">
+            <div class="card">
+                <div class="card-title">📊 Relatório de Transferências</div>
+                <p>Relatórios consolidados de transferências...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sistema de navegação entre páginas
+        const pages = {
+            'chat': { title: '💬 Chat BI - Assistente Inteligente', breadcrumb: 'Principal > Chat BI' },
+            'metricas': { title: '📊 Métricas de Performance', breadcrumb: 'Análises > Métricas' },
+            'graficos': { title: '📈 Gráficos Salvos', breadcrumb: 'Análises > Gráficos Salvos' },
+            'monitoramento': { title: '🔍 Monitoramento do Sistema', breadcrumb: 'Análises > Monitoramento' },
+            'transferencias': { title: '📦 Gestão de Transferências', breadcrumb: 'Operações > Transferências' },
+            'relatorio-transf': { title: '📊 Relatório de Transferências', breadcrumb: 'Operações > Relatório' },
+            'exemplos': { title: '📚 Exemplos de Perguntas', breadcrumb: 'Configuração > Exemplos' },
+            'ajuda': { title: '❓ Central de Ajuda', breadcrumb: 'Configuração > Ajuda' },
+            'senha': { title: '🔐 Alterar Senha', breadcrumb: 'Configuração > Alterar Senha' },
+            'gemini-playground': { title: '🤖 Gemini Playground', breadcrumb: 'Admin > Gemini Playground' },
+            'aprendizado': { title: '📊 Sistema de Aprendizado', breadcrumb: 'Admin > Sistema Aprendizado' },
+            'admin': { title: '⚙️ Painel de Administração', breadcrumb: 'Admin > Painel' },
+            'diagnostico': { title: '🔧 Diagnóstico DB', breadcrumb: 'Admin > Diagnóstico' }
+        };
+
+        function showPage(pageId) {
+            // Esconder todas as páginas
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.add('hidden');
+            });
+
+            // Remover active de todos os nav-items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Mostrar página selecionada
+            const pageElement = document.getElementById('page-' + pageId);
+            if (pageElement) {
+                pageElement.classList.remove('hidden');
+            }
+
+            // Atualizar nav-item ativo
+            event.currentTarget.classList.add('active');
+
+            // Atualizar header
+            const pageInfo = pages[pageId];
+            if (pageInfo) {
+                document.getElementById('pageTitle').textContent = pageInfo.title;
+                document.getElementById('breadcrumb').textContent = pageInfo.breadcrumb;
+            }
+
+            // Scroll to top
+            pageElement.scrollTop = 0;
+        }
+    </script>
+</body>
+</html>

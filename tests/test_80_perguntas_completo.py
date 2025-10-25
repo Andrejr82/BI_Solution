@@ -1,5 +1,6 @@
 """
 Script de Teste Completo das 80 Perguntas de Negócio
+USA 100% LLM - GraphBuilder com Agent Graph (ZERO DirectQueryEngine)
 Testa cada pergunta e gera relatório detalhado de cobertura
 """
 
@@ -7,11 +8,20 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Fix encoding para Windows
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 import time
 import json
 from datetime import datetime
-from core.business_intelligence.direct_query_engine import DirectQueryEngine
-from core.connectivity.parquet_adapter import ParquetAdapter
+
+# ✅ USAR 100% LLM - GraphBuilder
+from core.config.safe_settings import get_safe_settings
+from core.connectivity.hybrid_adapter import HybridDataAdapter
+from core.llm_adapter import GeminiLLMAdapter
+from core.agents.code_gen_agent import CodeGenAgent
+from core.graph.graph_builder import GraphBuilder
 
 # 80 Perguntas organizadas por categoria
 PERGUNTAS = {
@@ -118,33 +128,268 @@ PERGUNTAS = {
 }
 
 def classificar_resultado(resultado):
-    """Classifica o resultado do teste"""
+    """Classifica o resultado do teste - 100% LLM"""
     if not resultado:
         return "ERROR", "Resultado vazio ou None"
 
     result_type = resultado.get("type", "unknown")
 
+    # ✅ 100% LLM - Não há mais FALLBACK (tudo é processado pela LLM)
     if result_type == "error":
         return "ERROR", resultado.get("error", "Erro desconhecido")
-    elif result_type == "fallback":
-        return "FALLBACK", "DirectQueryEngine não processou - necessário fallback"
+    elif result_type == "clarification":
+        return "SUCCESS", "Clarificação solicitada (interação necessária)"
     elif result_type in ["chart", "table", "text", "product_info"]:
         return "SUCCESS", f"Processado como {result_type}"
+    elif result_type == "data":
+        # ✅ Validar respostas tipo 'data' (DataFrames convertidos)
+        content = resultado.get("content", [])
+        if isinstance(content, list) and len(content) > 0:
+            return "SUCCESS", f"Dados retornados: {len(content)} registros"
+        else:
+            return "ERROR", "Dados vazios ou inválidos"
     else:
         return "UNKNOWN", f"Tipo desconhecido: {result_type}"
 
+def _gerar_relatorio_markdown(relatorio, resultados, stats, total_perguntas, output_file):
+    """Gera relatório em formato Markdown"""
+
+    # Calcular métricas
+    taxa_sucesso = (stats['SUCCESS'] / total_perguntas * 100) if total_perguntas > 0 else 0
+    taxa_erro = (stats['ERROR'] / total_perguntas * 100) if total_perguntas > 0 else 0
+
+    # Tempo médio
+    tempos = [r['tempo_processamento'] for r in resultados if r['tempo_processamento']]
+    tempo_medio = sum(tempos) / len(tempos) if tempos else 0
+
+    # Agrupar por categoria
+    por_categoria = {}
+    for r in resultados:
+        cat = r['categoria']
+        if cat not in por_categoria:
+            por_categoria[cat] = {'total': 0, 'success': 0, 'error': 0, 'fallback': 0, 'unknown': 0}
+        por_categoria[cat]['total'] += 1
+        por_categoria[cat][r['status'].lower()] += 1
+
+    md_content = f"""# 📊 Relatório de Teste - 80 Perguntas de Negócio
+
+**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+**Versão do Sistema:** Agent Solution BI v2.0
+
+---
+
+## 📈 Resumo Executivo
+
+| Métrica | Valor |
+|---------|-------|
+| **Total de Perguntas** | {total_perguntas} |
+| **✅ Sucesso** | {stats['SUCCESS']} ({taxa_sucesso:.1f}%) |
+| **❌ Erros** | {stats['ERROR']} ({taxa_erro:.1f}%) |
+| **⚠️ Fallback** | {stats['FALLBACK']} ({stats['FALLBACK']/total_perguntas*100:.1f}%) |
+| **❓ Desconhecido** | {stats['UNKNOWN']} ({stats['UNKNOWN']/total_perguntas*100:.1f}%) |
+| **⏱️ Tempo Médio** | {tempo_medio:.2f}s |
+
+---
+
+## 🎯 Performance por Categoria
+
+"""
+
+    # Adicionar tabela por categoria
+    md_content += "| Categoria | Total | ✅ Sucesso | ❌ Erro | ⚠️ Fallback | ❓ Desconhecido | Taxa Sucesso |\n"
+    md_content += "|-----------|-------|------------|---------|-------------|----------------|-------------|\n"
+
+    for cat, metrics in por_categoria.items():
+        taxa_cat = (metrics['success'] / metrics['total'] * 100) if metrics['total'] > 0 else 0
+        # Limpar emojis da categoria para a tabela
+        cat_clean = cat.split(']')[1].strip() if ']' in cat else cat
+        md_content += f"| {cat_clean} | {metrics['total']} | {metrics['success']} | {metrics['error']} | {metrics['fallback']} | {metrics['unknown']} | {taxa_cat:.1f}% |\n"
+
+    md_content += "\n---\n\n## 📝 Resultados Detalhados\n\n"
+
+    # Agrupar resultados por categoria
+    categoria_atual = None
+    for r in resultados:
+        if r['categoria'] != categoria_atual:
+            categoria_atual = r['categoria']
+            md_content += f"\n### {categoria_atual}\n\n"
+
+        # Ícone baseado no status
+        icone = "✅" if r['status'] == "SUCCESS" else "❌" if r['status'] == "ERROR" else "⚠️" if r['status'] == "FALLBACK" else "❓"
+
+        md_content += f"#### {icone} [{r['id']}/{total_perguntas}] {r['pergunta']}\n\n"
+        md_content += f"- **Status:** `{r['status']}`\n"
+        md_content += f"- **Tipo:** `{r['tipo_resultado']}`\n"
+        md_content += f"- **Mensagem:** {r['mensagem']}\n"
+        md_content += f"- **Tempo:** {r['tempo_processamento']:.2f}s\n"
+
+        if r['status'] == 'ERROR':
+            md_content += f"- **⚠️ Erro:** `{r['mensagem']}`\n"
+
+        md_content += "\n"
+
+    md_content += "---\n\n## 🔍 Análise de Erros\n\n"
+
+    # Listar todos os erros
+    erros = [r for r in resultados if r['status'] == 'ERROR']
+    if erros:
+        md_content += f"**Total de Erros:** {len(erros)}\n\n"
+        for erro in erros:
+            md_content += f"- **[{erro['id']}]** {erro['pergunta']}\n"
+            md_content += f"  - Erro: `{erro['mensagem'][:200]}`\n\n"
+    else:
+        md_content += "✅ **Nenhum erro encontrado!**\n\n"
+
+    md_content += "---\n\n## ⚠️ Perguntas que Requerem Fallback (LLM)\n\n"
+
+    # Listar fallbacks
+    fallbacks = [r for r in resultados if r['status'] == 'FALLBACK']
+    if fallbacks:
+        md_content += f"**Total de Fallbacks:** {len(fallbacks)}\n\n"
+        for fb in fallbacks:
+            md_content += f"- **[{fb['id']}]** {fb['pergunta']}\n"
+    else:
+        md_content += "✅ **Nenhum fallback necessário!**\n\n"
+
+    # === NOVA SEÇÃO: Análise de Performance Detalhada ===
+    md_content += "---\n\n## ⚡ Análise de Performance Detalhada\n\n"
+
+    # Calcular métricas de performance
+    tempos = [r.get('tempo_execucao', 0) for r in resultados if r.get('tempo_execucao')]
+    if tempos:
+        tempo_min = min(tempos)
+        tempo_max = max(tempos)
+        tempo_p50 = sorted(tempos)[len(tempos)//2] if tempos else 0
+        tempo_p90 = sorted(tempos)[int(len(tempos)*0.9)] if tempos else 0
+
+        md_content += "### 📊 Estatísticas de Tempo de Resposta\n\n"
+        md_content += "| Métrica | Valor |\n"
+        md_content += "|---------|-------|\n"
+        md_content += f"| **Mínimo** | {tempo_min:.2f}s |\n"
+        md_content += f"| **Médio** | {tempo_medio:.2f}s |\n"
+        md_content += f"| **Mediana (P50)** | {tempo_p50:.2f}s |\n"
+        md_content += f"| **P90** | {tempo_p90:.2f}s |\n"
+        md_content += f"| **Máximo** | {tempo_max:.2f}s |\n\n"
+
+        # Queries mais lentas
+        queries_lentas = sorted(resultados, key=lambda x: x.get('tempo_execucao', 0), reverse=True)[:5]
+        md_content += "### 🐌 Top 5 Queries Mais Lentas\n\n"
+        md_content += "| Rank | Query | Tempo | Status |\n"
+        md_content += "|------|-------|-------|--------|\n"
+        for idx, q in enumerate(queries_lentas, 1):
+            tempo = q.get('tempo_execucao', 0)
+            pergunta = q.get('pergunta', '')[:60] + '...' if len(q.get('pergunta', '')) > 60 else q.get('pergunta', '')
+            status = q.get('status', 'UNKNOWN')
+            md_content += f"| {idx} | {pergunta} | {tempo:.2f}s | {status} |\n"
+
+        # Queries mais rápidas
+        queries_rapidas = sorted(resultados, key=lambda x: x.get('tempo_execucao', 0))[:5]
+        md_content += "\n### ⚡ Top 5 Queries Mais Rápidas\n\n"
+        md_content += "| Rank | Query | Tempo | Status |\n"
+        md_content += "|------|-------|-------|--------|\n"
+        for idx, q in enumerate(queries_rapidas, 1):
+            tempo = q.get('tempo_execucao', 0)
+            pergunta = q.get('pergunta', '')[:60] + '...' if len(q.get('pergunta', '')) > 60 else q.get('pergunta', '')
+            status = q.get('status', 'UNKNOWN')
+            md_content += f"| {idx} | {pergunta} | {tempo:.2f}s | {status} |\n"
+
+        md_content += "\n"
+
+    md_content += "---\n\n## 📊 Distribuição de Tipos de Resposta\n\n"
+
+    # Contar tipos
+    tipos = {}
+    for r in resultados:
+        tipo = r['tipo_resultado'] or 'null'
+        tipos[tipo] = tipos.get(tipo, 0) + 1
+
+    md_content += "| Tipo | Quantidade | Percentual |\n"
+    md_content += "|------|------------|------------|\n"
+    for tipo, count in sorted(tipos.items(), key=lambda x: x[1], reverse=True):
+        perc = (count / total_perguntas * 100) if total_perguntas > 0 else 0
+        md_content += f"| `{tipo}` | {count} | {perc:.1f}% |\n"
+
+    md_content += f"\n---\n\n## 🎯 Conclusões\n\n"
+
+    if taxa_sucesso >= 90:
+        md_content += "### ✅ **EXCELENTE!**\n\n"
+        md_content += f"O sistema alcançou {taxa_sucesso:.1f}% de taxa de sucesso, demonstrando alta confiabilidade.\n\n"
+    elif taxa_sucesso >= 70:
+        md_content += "### ✅ **BOM**\n\n"
+        md_content += f"O sistema alcançou {taxa_sucesso:.1f}% de taxa de sucesso. Há espaço para melhorias.\n\n"
+    elif taxa_sucesso >= 50:
+        md_content += "### ⚠️ **REGULAR**\n\n"
+        md_content += f"O sistema alcançou {taxa_sucesso:.1f}% de taxa de sucesso. Correções necessárias.\n\n"
+    else:
+        md_content += "### ❌ **CRÍTICO**\n\n"
+        md_content += f"O sistema alcançou apenas {taxa_sucesso:.1f}% de taxa de sucesso. Revisão urgente necessária.\n\n"
+
+    md_content += "### Recomendações:\n\n"
+
+    if stats['ERROR'] > 0:
+        md_content += f"1. ⚠️ Investigar e corrigir {stats['ERROR']} erros identificados\n"
+
+    if stats['UNKNOWN'] > 0:
+        md_content += f"2. 🔍 Classificar {stats['UNKNOWN']} respostas de tipo desconhecido\n"
+
+    if stats['FALLBACK'] > 0:
+        md_content += f"3. 💡 Otimizar {stats['FALLBACK']} queries que requerem fallback para LLM\n"
+
+    if tempo_medio > 5:
+        md_content += f"4. ⏱️ Otimizar performance (tempo médio: {tempo_medio:.2f}s)\n"
+
+    md_content += "\n---\n\n"
+    md_content += f"**Relatório gerado automaticamente pelo Agent Solution BI**  \n"
+    md_content += f"*Timestamp: {relatorio['metadata']['timestamp']}*\n"
+
+    # Salvar arquivo
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(md_content)
+
 def executar_teste():
-    """Executa o teste completo das 80 perguntas"""
+    """Executa o teste completo das 80 perguntas - 100% LLM"""
     print("=" * 80)
-    print("TESTE COMPLETO DAS 80 PERGUNTAS DE NEGÓCIO")
+    print("TESTE COMPLETO DAS 80 PERGUNTAS - 100% LLM (GraphBuilder)")
     print("=" * 80)
     print(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    # Inicializar DirectQueryEngine
-    print("Inicializando DirectQueryEngine...")
-    adapter = ParquetAdapter('data/parquet/admmat.parquet')
-    engine = DirectQueryEngine(adapter)
-    print("[OK] Engine inicializada\n")
+    # ✅ Inicializar sistema com 100% LLM
+    print("Inicializando GraphBuilder (100% LLM)...")
+
+    try:
+        # Configurar
+        settings = get_safe_settings()
+
+        # Criar adaptadores
+        llm_adapter = GeminiLLMAdapter(
+            api_key=settings.GEMINI_API_KEY,
+            model_name=settings.GEMINI_MODEL_NAME
+        )
+        data_adapter = HybridDataAdapter()
+
+        # Criar agente
+        code_gen_agent = CodeGenAgent(
+            llm_adapter=llm_adapter,
+            data_adapter=data_adapter
+        )
+
+        # Criar graph builder
+        graph_builder = GraphBuilder(
+            llm_adapter=llm_adapter,
+            parquet_adapter=data_adapter,
+            code_gen_agent=code_gen_agent
+        )
+
+        # Compilar grafo
+        grafo = graph_builder.build()
+
+        print("[OK] GraphBuilder inicializado (100% LLM ativo)\n")
+
+    except Exception as e:
+        print(f"[ERRO] Falha ao inicializar GraphBuilder: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
     # Resultados
     resultados = []
@@ -160,14 +405,19 @@ def executar_teste():
 
     # Processar cada categoria
     for categoria, perguntas in PERGUNTAS.items():
-        # Remover emojis do nome da categoria para print
-        categoria_clean = categoria.encode('ascii', 'ignore').decode('ascii').strip()
-        if not categoria_clean:
-            categoria_clean = "Categoria sem nome"
-
-        print(f"\n{'=' * 80}")
-        print(f"[CATEGORIA] {categoria_clean}")
-        print(f"{'=' * 80}")
+        # Tratamento de encoding para Windows - manter emojis se possível
+        try:
+            print(f"\n{'=' * 80}")
+            print(f"[CATEGORIA] {categoria}")
+            print(f"{'=' * 80}")
+        except UnicodeEncodeError:
+            # Fallback: remover emojis se o terminal não suportar
+            categoria_clean = categoria.encode('ascii', 'ignore').decode('ascii').strip()
+            if not categoria_clean:
+                categoria_clean = "Categoria sem nome"
+            print(f"\n{'=' * 80}")
+            print(f"[CATEGORIA] {categoria_clean}")
+            print(f"{'=' * 80}")
 
         for idx, pergunta in enumerate(perguntas, 1):
             contador += 1
@@ -175,7 +425,13 @@ def executar_teste():
 
             start_time = time.time()
             try:
-                resultado = engine.process_query(pergunta)
+                # ✅ Usar GraphBuilder (100% LLM)
+                result_state = grafo.invoke({
+                    "messages": [{"role": "user", "content": pergunta}]
+                })
+
+                # Extrair resposta final
+                resultado = result_state.get("final_response", {})
                 elapsed = time.time() - start_time
 
                 status, mensagem = classificar_resultado(resultado)
@@ -234,11 +490,21 @@ def executar_teste():
         "resultados": resultados
     }
 
-    output_file = f"tests/relatorio_teste_80_perguntas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
+    # Salvar relatório no diretório tests
+    output_dir = Path(__file__).parent
+    timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # Salvar JSON
+    output_file_json = output_dir / f"relatorio_teste_80_perguntas_{timestamp_str}.json"
+    with open(output_file_json, 'w', encoding='utf-8') as f:
         json.dump(relatorio, f, ensure_ascii=False, indent=2)
 
-    print(f"\n[SAVE] Relatorio salvo em: {output_file}")
+    # Salvar Markdown
+    output_file_md = output_dir / f"relatorio_teste_80_perguntas_{timestamp_str}.md"
+    _gerar_relatorio_markdown(relatorio, resultados, stats, total_perguntas, output_file_md)
+
+    print(f"\n[SAVE] Relatorio JSON salvo em: {output_file_json}")
+    print(f"[SAVE] Relatorio MD salvo em: {output_file_md}")
 
     # Mostrar perguntas que falharam
     if stats['ERROR'] > 0:

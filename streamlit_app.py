@@ -13,25 +13,336 @@ import uuid
 import pandas as pd
 import logging
 import sys
+import time
+import re
 from datetime import datetime
 
-# Configurar logging - APENAS para logs de erro críticos
-# Usuários finais não veem logs técnicos
-logging.basicConfig(
-    level=logging.ERROR,  # Apenas erros
-    format='%(message)s',
-    stream=sys.stdout
-)
+# ============================================================================
+# CONFIGURAÇÃO DE LOGGING ESTRUTURADO
+# Usa sistema centralizado de logs (logs/app_activity/, logs/errors/, etc.)
+# ============================================================================
+from core.config.logging_config import setup_logging
 
-# Configurar logger específico
+# Inicializar sistema de logs estruturado
+setup_logging()
+
+# Configurar logger específico do Streamlit
 logger = logging.getLogger("streamlit_app")
-logger.setLevel(logging.ERROR)  # Apenas erros
+logger.setLevel(logging.INFO)  # INFO para rastrear atividades
 
-# Silenciar logs de bibliotecas externas
+# Silenciar logs verbosos de bibliotecas externas
 logging.getLogger("faiss").setLevel(logging.ERROR)
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-logging.getLogger("core").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
+
+# Log de inicialização
+logger.info("=" * 80)
+logger.info("🚀 Streamlit App Iniciado")
+logger.info(f"📅 Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.info("=" * 80)
+
+# ============================================================================
+# CSS CUSTOMIZADO - TEMA CHATGPT
+# Baseado em: prototipo_multipaginas_completo.html
+# Data: 20/10/2025
+# ============================================================================
+
+st.markdown("""
+<style>
+/* ==================== GLOBAL ==================== */
+:root {
+    --bg-primary: #343541;
+    --bg-secondary: #444654;
+    --bg-sidebar: #202123;
+    --bg-card: #2a2b32;
+    --bg-input: #40414f;
+    --border-color: #444654;
+    --text-primary: #ececf1;
+    --text-secondary: #8e8ea0;
+    --color-primary: #10a37f;
+    --color-secondary: #5436DA;
+    --color-danger: #ef4444;
+}
+
+/* ==================== SIDEBAR ==================== */
+section[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar) !important;
+}
+
+section[data-testid="stSidebar"] > div {
+    background-color: var(--bg-sidebar) !important;
+    border-right: 1px solid var(--border-color) !important;
+}
+
+/* User Info no Sidebar */
+section[data-testid="stSidebar"] .element-container {
+    color: var(--text-primary) !important;
+}
+
+/* Botões no Sidebar */
+section[data-testid="stSidebar"] button {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+    transition: all 0.2s !important;
+}
+
+section[data-testid="stSidebar"] button:hover {
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--color-primary) !important;
+}
+
+/* ==================== CHAT MESSAGES ==================== */
+/* Mensagem do Usuário */
+.stChatMessage[data-testid="user-message"] {
+    background-color: transparent !important;
+}
+
+/* Mensagem do Assistente */
+.stChatMessage[data-testid="assistant-message"] {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* Avatares */
+.stChatMessage .stAvatar {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+}
+
+/* Avatar do Usuário */
+[data-testid="user-message"] .stAvatar {
+    background-color: var(--color-primary) !important;
+}
+
+/* Avatar do Assistente */
+[data-testid="assistant-message"] .stAvatar {
+    background-color: var(--color-secondary) !important;
+}
+
+/* ==================== INPUT AREA ==================== */
+.stChatInput textarea {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    color: var(--text-primary) !important;
+    padding: 16px !important;
+}
+
+.stChatInput textarea:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1) !important;
+}
+
+/* ==================== BOTÕES ==================== */
+.stButton button {
+    background-color: var(--color-primary) !important;
+    color: white !important;
+    border-radius: 8px !important;
+    border: none !important;
+    padding: 8px 16px !important;
+    transition: all 0.2s !important;
+}
+
+.stButton button:hover {
+    background-color: #0d8a6a !important;
+}
+
+/* Botão Secundário */
+.stButton[data-baseweb="button"][kind="secondary"] button {
+    background-color: transparent !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ==================== CARDS E CONTAINERS ==================== */
+div[data-testid="stVerticalBlock"] > div {
+    background-color: transparent !important;
+}
+
+.element-container {
+    color: var(--text-primary) !important;
+}
+
+/* Info boxes */
+div[data-testid="stNotification"] {
+    background-color: var(--bg-card) !important;
+    border-left: 3px solid var(--color-primary) !important;
+    border-radius: 6px !important;
+}
+
+/* ==================== GRÁFICOS PLOTLY ==================== */
+.js-plotly-plot {
+    background-color: var(--bg-card) !important;
+    border-radius: 12px !important;
+    padding: 20px !important;
+}
+
+/* ==================== TABELAS ==================== */
+.stDataFrame {
+    background-color: var(--bg-card) !important;
+    border-radius: 8px !important;
+}
+
+.stDataFrame table {
+    color: var(--text-primary) !important;
+}
+
+.stDataFrame thead tr {
+    background-color: var(--bg-sidebar) !important;
+    border-bottom: 2px solid var(--color-primary) !important;
+}
+
+.stDataFrame tbody tr {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.stDataFrame tbody tr:hover {
+    background-color: rgba(16, 163, 127, 0.05) !important;
+}
+
+/* ==================== INPUTS ==================== */
+input, textarea, select {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1) !important;
+}
+
+/* ==================== MÉTRICAS ==================== */
+div[data-testid="stMetricValue"] {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+}
+
+div[data-testid="stMetricLabel"] {
+    font-size: 13px !important;
+    color: var(--text-secondary) !important;
+}
+
+div[data-testid="stMetricDelta"] {
+    font-size: 14px !important;
+}
+
+/* ==================== SCROLLBAR ==================== */
+::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary) !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #565869 !important;
+    border-radius: 4px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6e6e80 !important;
+}
+
+/* ==================== TABS ==================== */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px 6px 0 0 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+}
+
+/* ==================== EXPANDER ==================== */
+.streamlit-expanderHeader {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+    color: var(--text-primary) !important;
+}
+
+.streamlit-expanderContent {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-top: none !important;
+    border-radius: 0 0 6px 6px !important;
+}
+
+/* ==================== HEADER ==================== */
+header[data-testid="stHeader"] {
+    background-color: var(--bg-primary) !important;
+}
+
+/* ==================== RESPONSIVO ==================== */
+@media (max-width: 768px) {
+    section[data-testid="stSidebar"] {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        transform: translateX(0);
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# FIM DO CSS CUSTOMIZADO
+# ============================================================================
+
+# ✅ FUNÇÃO DE NORMALIZAÇÃO DE QUERY PARA CACHE (20/10/2025)
+def normalize_query_for_cache(query: str) -> str:
+    """
+    Normaliza query para melhorar taxa de cache hit.
+    Remove palavras irrelevantes e padroniza formato.
+
+    Exemplos:
+        "gere um gráfico de vendas" -> "grafico vendas"
+        "mostre o ranking de vendas" -> "ranking vendas"
+        "me mostre os produtos" -> "produtos"
+    """
+    if not query:
+        return query
+
+    # Lowercase
+    query = query.lower().strip()
+
+    # Remover pontuação
+    query = re.sub(r'[^\w\s]', ' ', query)
+
+    # Remover artigos e palavras de comando comuns
+    stopwords = [
+        'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
+        'de', 'da', 'do', 'das', 'dos', 'no', 'na', 'nos', 'nas',
+        'gere', 'mostre', 'me', 'por', 'favor', 'por favor',
+        'qual', 'quais', 'liste', 'listar'
+    ]
+
+    words = query.split()
+    filtered_words = [w for w in words if w not in stopwords and len(w) > 1]
+
+    # Normalizar variações comuns
+    normalized = ' '.join(filtered_words)
+    normalized = normalized.replace('grafico', 'gráfico')  # Padronizar acentuação
+    normalized = normalized.replace('evolucao', 'evolução')
+    normalized = normalized.replace('analise', 'análise')
+
+    return normalized
 
 # Funções de autenticação com lazy loading
 AUTH_AVAILABLE = None
@@ -205,32 +516,35 @@ else:
             llm_adapter = ComponentFactory.get_llm_adapter("gemini")
             debug_info.append("✅ LLM OK")
 
-            # Debug 5: Inicializar HybridDataAdapter (SQL Server + Parquet fallback)
-            debug_info.append("Inicializando HybridDataAdapter...")
+            # Debug 5: Inicializar ParquetAdapter (Polars/Dask otimizado)
+            debug_info.append("Inicializando ParquetAdapter...")
             import os
-            from core.connectivity.hybrid_adapter import HybridDataAdapter
+            from core.connectivity.parquet_adapter import ParquetAdapter
 
-            # Inicializar adapter híbrido (tenta SQL Server, fallback para Parquet)
-            data_adapter = HybridDataAdapter()
-            adapter_status = data_adapter.get_status()
+            # Usar ParquetAdapter direto com Polars (predicate pushdown, sem Segmentation Fault)
+            parquet_path = os.path.join(os.getcwd(), "data", "parquet", "*.parquet")
+            data_adapter = ParquetAdapter(parquet_path)
 
-            debug_info.append(f"✅ HybridDataAdapter OK - Fonte: {adapter_status['current_source'].upper()}")
+            # ParquetAdapter não tem get_status(), criar manualmente
+            adapter_status = {
+                "current_source": "parquet",
+                "sql_enabled": False,
+                "sql_available": False,
+                "fallback_enabled": True
+            }
+
+            debug_info.append(f"✅ ParquetAdapter OK - Fonte: {adapter_status['current_source'].upper()}")
 
             # Validar que temos dados (via Parquet que sempre existe)
             import pandas as pd
-            parquet_path = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
+            parquet_check = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
 
-            if os.path.exists(parquet_path):
-                # Usar o adapter para obter informações de forma mais eficiente
-                adapter_info = data_adapter.get_status()
-                if adapter_info.get('current_source') == 'parquet':
-                    # ⚡ OTIMIZAÇÃO: NÃO chamar get_schema() pois carrega 1.1M linhas!
-                    # Apenas reportar que o Parquet está disponível
-                    debug_info.append(f"✅ Dataset: Parquet disponível em {parquet_path}")
-                else: # Se for SQL
-                    debug_info.append("✅ Dataset: Conectado ao SQL Server")
+            if os.path.exists(parquet_check):
+                # ⚡ OTIMIZAÇÃO: NÃO chamar get_schema() pois carrega dados!
+                # Apenas reportar que o Parquet está disponível
+                debug_info.append(f"✅ Dataset: Parquet disponível em {parquet_check}")
             else:
-                debug_info.append("⚠️ Parquet não encontrado, usando apenas SQL Server")
+                debug_info.append("⚠️ Parquet não encontrado")
 
             # Mostrar status da fonte de dados no sidebar APENAS para admins
             user_role = st.session_state.get('role', '')
@@ -246,20 +560,9 @@ else:
 
                     info_text += f"Parquet Fallback: {'✅ Ativo' if adapter_status['fallback_enabled'] else '❌ Desativado'}\n"
 
-                    # ⚡ OTIMIZAÇÃO: Apenas mostrar informações se DataFrame já estiver carregado
-                    # NÃO forçar carregamento aqui para evitar travamentos
-                    try:
-                        if hasattr(data_adapter, '_dataframe') and data_adapter._dataframe is not None:
-                            df = data_adapter._dataframe
-                            info_text += f"\n**Dataset:**\n"
-                            info_text += f"- {len(df):,} produtos\n"
-                            if 'une_nome' in df.columns:
-                                info_text += f"- {df['une_nome'].nunique()} UNEs\n\n"
-                                info_text += f"**UNEs:** {', '.join(sorted(df['une_nome'].unique())[:5])}..."
-                        else:
-                            info_text += f"\n**Dataset:** Não carregado ainda (lazy loading ativo)"
-                    except Exception as e:
-                        logger.debug(f"Não foi possível obter informações do dataset: {e}")
+                    # ParquetAdapter usa lazy loading - não exibir informações detalhadas
+                    info_text += f"\n**Dataset:** Parquet com lazy loading (Polars/Dask otimizado)"
+                    info_text += f"\n**Performance:** Predicate pushdown ativo - filtra antes de carregar"
 
                     st.info(info_text)
 
@@ -385,10 +688,20 @@ else:
     # --- Modo de Consulta: 100% IA ---
     with st.sidebar:
         st.divider()
-        st.subheader("🤖 Análise Inteligente com IA")
+
+        # 🎨 CUSTOMIZAÇÃO: Mostrar logo Caçula no sidebar
+        import os
+        logo_path = os.path.join(os.getcwd(), "assets", "images", "cacula_logo.png")
+        if os.path.exists(logo_path):
+            # Centralizar logo usando colunas
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(logo_path, width=120)
+
+        st.subheader("✨ Análise Inteligente com IA")
 
         st.info("""
-            ✨ **Sistema 100% IA Ativo**
+            **Sistema 100% IA Ativo**
             - Análise inteligente de dados
             - Qualquer tipo de pergunta
             - Respostas precisas e confiáveis
@@ -511,11 +824,26 @@ else:
 
                 # ✅ SEMPRE usar agent_graph (100% IA)
                 if True:  # Simplificado para sempre processar com IA
-                    # 💾 CACHE: Verificar cache antes de processar
+                    # 💾 CACHE: Verificar cache antes de processar (com normalização)
                     try:
                         from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
                         cache = get_agent_graph_cache()
-                        cached_result = cache.get(user_input)
+
+                        # ✅ OTIMIZAÇÃO: Normalizar query para melhorar cache hit rate
+                        normalized_query = normalize_query_for_cache(user_input)
+
+                        # Tentar com query normalizada primeiro
+                        cached_result = cache.get(normalized_query)
+
+                        # Fallback: tentar com query original se não encontrar
+                        if not cached_result:
+                            cached_result = cache.get(user_input)
+
+                        if cached_result:
+                            logger.info(f"✅ Cache HIT! Query normalizada: '{normalized_query}'")
+                        else:
+                            logger.info(f"❌ Cache MISS. Query normalizada: '{normalized_query}'")
+
                     except Exception as cache_error:
                         logger.warning(f"Erro ao acessar cache: {cache_error}")
                         cached_result = None
@@ -547,7 +875,35 @@ else:
                             import queue
 
                             result_queue = queue.Queue()
-                            timeout_seconds = 30  # 30 segundos de timeout
+                            # 🚀 OTIMIZAÇÃO: Timeout adaptativo baseado no tipo de query
+                            def calcular_timeout_dinamico(query: str) -> int:
+                                """Calcula timeout baseado na complexidade da query - AJUSTADO 20/10/2025"""
+                                query_lower = query.lower()
+
+                                # Queries muito complexas (análises multi-dimensionais)
+                                if any(kw in query_lower for kw in ['análise abc', 'distribuição', 'alertas', 'sazonalidade']):
+                                    return 60  # 60s para análises complexas
+                                # Queries gráficas/evolutivas
+                                elif any(kw in query_lower for kw in ['gráfico', 'chart', 'evolução', 'tendência', 'histórico']):
+                                    return 45  # 45s para gráficos (média 26s + margem 19s)
+                                # Análises médias (ranking, top, agregações)
+                                elif any(kw in query_lower for kw in [
+                                    'ranking', 'top', 'maior', 'menor', 'análise', 'compare', 'comparar',
+                                    'mais vendido', 'menos vendido', 'vendidos', 'produtos',
+                                    'liste', 'listar', 'mostre', 'mostrar'
+                                ]):
+                                    return 40  # 40s para análises médias
+                                # Queries simples (filtro direto)
+                                else:
+                                    return 40  # 40s para queries simples (média 27s + margem 13s)
+
+                            timeout_seconds = calcular_timeout_dinamico(user_input)
+                            logger.info(f"⏱️ Timeout adaptativo: {timeout_seconds}s para query: '{user_input[:50]}...'")
+
+                            # 🚀 OTIMIZAÇÃO: Progress feedback visual
+                            progress_placeholder = st.empty()
+                            elapsed_time = 0
+                            update_interval = 2  # Atualizar a cada 2s
 
                             def invoke_agent_graph():
                                 try:
@@ -559,7 +915,45 @@ else:
                             # Executar em thread separada
                             thread = threading.Thread(target=invoke_agent_graph, daemon=True)
                             thread.start()
-                            thread.join(timeout=timeout_seconds)
+
+                            # 🚀 Loop de progress feedback com mensagens contextuais
+                            # Mensagens de progresso baseadas em tempo decorrido
+                            progress_messages = [
+                                (0, "🔍 Analisando sua pergunta..."),
+                                (5, "🤖 Classificando intenção..."),
+                                (10, "📝 Gerando código Python..."),
+                                (15, "📊 Carregando dados do Parquet..."),
+                                (20, "⚙️ Executando análise de dados..."),
+                                (30, "📈 Processando visualização..."),
+                                (35, "✨ Finalizando resposta...")
+                            ]
+
+                            while thread.is_alive() and elapsed_time < timeout_seconds:
+                                time.sleep(update_interval)
+                                elapsed_time += update_interval
+
+                                # Determinar mensagem apropriada baseada no tempo
+                                current_message = "⏳ Processando..."
+                                for time_threshold, message in progress_messages:
+                                    if elapsed_time >= time_threshold:
+                                        current_message = message
+
+                                # Atualizar progress bar com mensagem contextual
+                                progress = min(elapsed_time / timeout_seconds, 0.95)  # Máximo 95% durante execução
+                                progress_placeholder.progress(
+                                    progress,
+                                    text=f"{current_message} ({elapsed_time}s)"
+                                )
+
+                                if elapsed_time >= timeout_seconds:
+                                    break
+
+                            # Limpar progress bar
+                            progress_placeholder.empty()
+
+                            # Verificar se thread ainda está viva (timeout)
+                            if thread.is_alive():
+                                thread.join(timeout=0.1)  # Dar mais 0.1s para finalizar
 
                             # Verificar resultado
                             if thread.is_alive():
@@ -587,9 +981,15 @@ else:
                                         agent_response["method"] = "agent_graph"
                                         agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
 
-                                        # 💾 Salvar no cache para futuras queries similares
+                                        # 💾 Salvar no cache para futuras queries similares (com normalização)
                                         try:
-                                            cache.set(user_input, agent_response, metadata={"timestamp": datetime.now().isoformat()})
+                                            # Salvar com query normalizada para melhor reuso
+                                            normalized_query = normalize_query_for_cache(user_input)
+                                            cache.set(normalized_query, agent_response, metadata={
+                                                "timestamp": datetime.now().isoformat(),
+                                                "original_query": user_input
+                                            })
+                                            logger.info(f"💾 Cache SAVE: '{normalized_query}'")
                                         except Exception as cache_save_error:
                                             logger.warning(f"Erro ao salvar no cache: {cache_save_error}")
 
@@ -732,15 +1132,25 @@ else:
     # 💬 RENDERIZAR histórico de conversas
     for i, msg in enumerate(st.session_state.messages):
         try:
-            with st.chat_message(msg["role"]):
-                response_data = msg.get("content", {})
+            # 🎨 CUSTOMIZAÇÃO: Usar logo Caçula para mensagens do assistente
+            import os
+            logo_path = os.path.join(os.getcwd(), "assets", "images", "cacula_logo.png")
 
-                # ✅ Garantir que response_data seja um dicionário
-                if not isinstance(response_data, dict):
-                    response_data = {"type": "text", "content": str(response_data)}
+            if msg["role"] == "assistant" and os.path.exists(logo_path):
+                # Usar logo Caçula para assistente
+                with st.chat_message(msg["role"], avatar=logo_path):
+                    response_data = msg.get("content", {})
+            else:
+                # Usar avatar padrão
+                with st.chat_message(msg["role"]):
+                    response_data = msg.get("content", {})
 
-                response_type = response_data.get("type", "text")
-                content = response_data.get("content", "Conteúdo não disponível")
+            # ✅ Garantir que response_data seja um dicionário
+            if not isinstance(response_data, dict):
+                response_data = {"type": "text", "content": str(response_data)}
+
+            response_type = response_data.get("type", "text")
+            content = response_data.get("content", "Conteúdo não disponível")
 
             # 🔍 DEBUG: Log de renderização (removido print para evitar problemas)
             # if msg["role"] == "user":
@@ -1037,8 +1447,42 @@ else:
                     st.caption(f"📝 Pergunta: {user_query}")
 
                 if content:
-                    st.dataframe(pd.DataFrame(content))
-                    st.info(f"📊 {len(content)} registros encontrados")
+                    # 💰 FORMATAÇÃO BRASILEIRA: Aplicar formatação R$ automaticamente
+                    try:
+                        from core.utils.dataframe_formatter import format_dataframe_for_display, create_download_csv
+
+                        df_original = pd.DataFrame(content)
+
+                        # Debug: Mostrar colunas ANTES da formatação (apenas para admin)
+                        user_role = st.session_state.get('role', '')
+                        if user_role == 'admin':
+                            st.caption(f"🔍 Debug: Colunas = {list(df_original.columns)}, Tipos = {df_original.dtypes.to_dict()}")
+
+                        df_formatado = format_dataframe_for_display(df_original, auto_detect=True)
+
+                        # Debug: Confirmar formatação aplicada
+                        if user_role == 'admin':
+                            st.caption(f"✅ Formatação brasileira aplicada (R$, separadores de milhar)")
+
+                        # Exibir DataFrame formatado
+                        st.dataframe(df_formatado, use_container_width=True)
+
+                        # Botão de download com formatação
+                        csv_data, csv_filename = create_download_csv(df_original, filename_prefix="export")
+                        st.download_button(
+                            label="📥 Baixar CSV (formatado)",
+                            data=csv_data,
+                            file_name=csv_filename,
+                            mime="text/csv",
+                            key=f"download_csv_{uuid.uuid4()}"
+                        )
+
+                        st.info(f"📊 {len(content)} registros encontrados")
+                    except Exception as e:
+                        logger.warning(f"Erro ao formatar DataFrame: {e}")
+                        # Fallback: exibir sem formatação
+                        st.dataframe(pd.DataFrame(content))
+                        st.info(f"📊 {len(content)} registros encontrados")
                 else:
                     st.warning("⚠️ Nenhum dado encontrado para a consulta.")
             elif response_type == "clarification":
