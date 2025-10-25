@@ -28,6 +28,8 @@ from core.llm_base import BaseLLMAdapter
 from core.learning.pattern_matcher import PatternMatcher
 from core.validation.code_validator import CodeValidator
 from core.learning.dynamic_prompt import DynamicPrompt
+from core.rag.query_retriever import QueryRetriever
+from core.rag.example_collector import ExampleCollector
 
 class CodeGenAgent:
     """
@@ -78,6 +80,18 @@ class CodeGenAgent:
             "mes_11": "Vendas de 11 meses atrás",
             "mes_12": "Vendas de 12 meses atrás (mês mais antigo)"
         }
+
+        # Inicializar pattern_matcher, code_validator e RAG
+        try:
+            self.query_retriever = QueryRetriever()
+            self.example_collector = ExampleCollector()
+            self.rag_enabled = True
+            self.logger.info("Sistema RAG inicializado com sucesso")
+        except Exception as e:
+            self.logger.warning(f"RAG não disponível: {e}. Continuando sem RAG.")
+            self.query_retriever = None
+            self.example_collector = None
+            self.rag_enabled = False
 
         # Inicializar pattern_matcher and code_validator
         from collections import defaultdict
@@ -460,6 +474,29 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
                 except Exception as e:
                     self.logger.warning(f"⚠️ Erro ao buscar padrões: {e}")
 
+            # 🎯 PILAR 2.5: RAG - Busca semântica de queries similares (expandir Few-Shot Learning)
+            rag_context = ""
+            if self.rag_enabled and self.query_retriever:
+                try:
+                    similar_queries = self.query_retriever.find_similar_queries(user_query, top_k=3)
+                    if similar_queries:
+                        rag_context = "\n\n**📚 EXEMPLOS DE QUERIES SIMILARES BEM-SUCEDIDAS (RAG):**\n"
+                        rag_context += "Use estes exemplos como referência para gerar código similar:\n\n"
+
+                        for i, example in enumerate(similar_queries, 1):
+                            similarity = example.get('similarity_score', 0)
+                            if similarity > 0.7:  # Apenas exemplos muito similares
+                                rag_context += f"**Exemplo {i} (similaridade: {similarity:.2%}):**\n"
+                                rag_context += f"Query: '{example['query_user']}'\n"
+                                rag_context += f"Código gerado:\n```python\n{example['code_generated']}\n```\n"
+                                rag_context += f"Resultado: {example.get('rows_returned', 0)} linhas\n\n"
+
+                        self.logger.info(f"🔍 RAG: {len(similar_queries)} queries similares encontradas (melhor match: {similar_queries[0].get('similarity_score', 0):.2%})")
+                    else:
+                        self.logger.debug("ℹ️ RAG: Nenhuma query similar encontrada no banco")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Erro ao buscar queries similares (RAG): {e}")
+
             # Construir prompt SEM f-string para evitar problemas de formatação
             system_prompt = """Você é um especialista em análise de dados Python com pandas e interpretação de linguagem natural.
 
@@ -470,6 +507,8 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
 """ + valid_unes + """
 
 """ + examples_context + """
+
+""" + rag_context + """
 
 **🚀 INSTRUÇÃO CRÍTICA #0 - FILTROS COM load_data():**
 ⚠️ **ATENÇÃO:** Para evitar TIMEOUT/MEMÓRIA, você DEVE passar filtros para load_data()!
@@ -1081,6 +1120,7 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
     def _log_successful_query(self, user_query: str, code: str, result_rows: int):
         """
         QUICK WIN 2: Registra queries bem-sucedidas para análise futura.
+        + RAG: Coleta automática para banco de exemplos.
         """
         from datetime import datetime
 
@@ -1102,6 +1142,29 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             self.logger.debug(f"✅ Query registrada em {log_file}")
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao registrar query: {e}")
+
+        # 🎯 RAG: Coletar query bem-sucedida para treinamento contínuo
+        if self.rag_enabled and self.example_collector:
+            try:
+                # Detectar intenção baseado no código gerado
+                intent = "python_analysis"
+                if 'plotly' in code or 'px.' in code:
+                    intent = "visualization"
+                elif '.groupby' in code:
+                    intent = "aggregation"
+                elif '.nlargest' in code or '.nsmallest' in code:
+                    intent = "ranking"
+
+                # Coletar exemplo
+                self.example_collector.collect_successful_query(
+                    user_query=user_query,
+                    code_generated=code,
+                    result_rows=result_rows,
+                    intent=intent
+                )
+                self.logger.debug(f"📚 RAG: Query coletada para banco de exemplos")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Erro ao coletar query no RAG: {e}")
 
     def _log_error(self, user_query: str, code: str, error_type: str, error_message: str):
         """
