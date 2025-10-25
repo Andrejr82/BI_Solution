@@ -74,89 +74,212 @@ def login():
     # Inicializar sistema de autenticação de forma lazy
     init_auth_system()
 
-    # Coloca o formulário de login em uma coluna centralizada para melhor apelo visual
-    _, col2, _ = st.columns([1, 2.5, 1])
-    with col2:
-        st.markdown(
-            """
-            <style>
-                /* Fundo branco global */
-                .stApp {
-                    background-color: white !important;
-                }
+    # Design corporativo profissional
+    st.markdown(
+        """
+        <style>
+            /* ==================== RESET E GLOBAL ==================== */
+            .stApp {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            }
 
-                .login-container {
-                    background: white;
-                    padding: 2.5rem 3rem;
-                    border-radius: 15px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                    text-align: center;
-                    margin-bottom: 1.5rem;
-                    border: 2px solid #00FF00;
-                }
-                .login-title {
-                    color: #2C3E50;
-                    font-size: 2rem;
-                    font-weight: bold;
-                    margin: 0.5rem 0;
-                    letter-spacing: -0.5px;
-                }
-                .login-subtitle {
-                    color: #7F8C8D;
-                    font-size: 1rem;
-                    margin-top: 0.5rem;
-                    font-weight: 400;
-                }
-                .login-logo {
-                    margin-bottom: 1rem;
-                }
-                /* Corrigir áreas sombreadas dos inputs */
-                .stTextInput > div > div > input {
-                    background-color: white !important;
-                    color: #2C3E50 !important;
-                    border: 1px solid #BDC3C7 !important;
-                    border-radius: 8px !important;
-                    padding: 12px !important;
-                }
-                .stTextInput > div > div > input:focus {
-                    border-color: #00FF00 !important;
-                    box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.1) !important;
-                }
-                /* Labels dos inputs */
-                .stTextInput > label {
-                    color: #2C3E50 !important;
-                    font-weight: 500 !important;
-                }
-            </style>
-            <div class='login-container'>
-                <div class='login-logo'>
-                    <img src="https://yt3.googleusercontent.com/ytc/AIdro_lqPBVMFmYx3S7Kk_V8YqB0Z0Gz5p8t3oQvVaQPvWNx4A=s900-c-k-c0x00ffffff-no-rj"
-                         alt="Caçula Logo"
-                         width="120"
-                         style="border-radius: 10px; margin-bottom: 1rem;">
+            /* ==================== LOGIN CONTAINER ==================== */
+            .login-wrapper {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 80vh;
+                padding: 2rem 1rem;
+            }
+
+            .login-card {
+                background: white;
+                border-radius: 24px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                overflow: hidden;
+                max-width: 480px;
+                width: 100%;
+            }
+
+            .login-header {
+                background: linear-gradient(135deg, #00C853 0%, #00AA00 100%);
+                padding: 3rem 2rem 2.5rem;
+                text-align: center;
+                position: relative;
+            }
+
+            .login-header::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #FFD700, #FFA500, #FF3333, #C0C0D0, #40B0E0);
+            }
+
+            .logo-container {
+                margin-bottom: 1.5rem;
+            }
+
+            .logo-img {
+                width: 100px;
+                height: 100px;
+                border-radius: 20px;
+                background: white;
+                padding: 12px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                margin: 0 auto;
+            }
+
+            .login-title {
+                color: white;
+                font-size: 1.75rem;
+                font-weight: 700;
+                margin: 0.75rem 0 0.5rem;
+                letter-spacing: -0.5px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .login-subtitle {
+                color: rgba(255, 255, 255, 0.95);
+                font-size: 0.95rem;
+                font-weight: 400;
+                margin: 0;
+            }
+
+            .login-body {
+                padding: 2.5rem 2rem;
+            }
+
+            .login-footer {
+                background: #f8f9fa;
+                padding: 1.25rem 2rem;
+                text-align: center;
+                border-top: 1px solid #e9ecef;
+            }
+
+            .login-footer-text {
+                color: #6c757d;
+                font-size: 0.85rem;
+                margin: 0;
+            }
+
+            /* ==================== FORM INPUTS ==================== */
+            .stTextInput > div > div > input {
+                background-color: #f8f9fa !important;
+                color: #2C3E50 !important;
+                border: 2px solid #e9ecef !important;
+                border-radius: 12px !important;
+                padding: 14px 16px !important;
+                font-size: 0.95rem !important;
+                transition: all 0.3s ease !important;
+            }
+
+            .stTextInput > div > div > input:focus {
+                background-color: white !important;
+                border-color: #00C853 !important;
+                box-shadow: 0 0 0 4px rgba(0, 200, 83, 0.1) !important;
+            }
+
+            .stTextInput > div > div > input::placeholder {
+                color: #adb5bd !important;
+            }
+
+            .stTextInput > label {
+                color: #495057 !important;
+                font-weight: 600 !important;
+                font-size: 0.9rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+
+            /* ==================== BUTTONS ==================== */
+            .stButton > button {
+                background: linear-gradient(135deg, #00C853 0%, #00AA00 100%) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 12px !important;
+                padding: 14px 24px !important;
+                font-weight: 600 !important;
+                font-size: 1rem !important;
+                transition: all 0.3s ease !important;
+                box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3) !important;
+            }
+
+            .stButton > button:hover {
+                transform: translateY(-2px) !important;
+                box-shadow: 0 6px 20px rgba(0, 200, 83, 0.4) !important;
+            }
+
+            .stButton > button:active {
+                transform: translateY(0) !important;
+            }
+
+            /* Botão secundário */
+            .stButton[data-baseweb="button"]:nth-child(2) > button {
+                background: white !important;
+                color: #6c757d !important;
+                border: 2px solid #e9ecef !important;
+                box-shadow: none !important;
+            }
+
+            .stButton[data-baseweb="button"]:nth-child(2) > button:hover {
+                background: #f8f9fa !important;
+                border-color: #dee2e6 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Layout centralizado
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # Cabeçalho com logo
+        st.markdown("""
+        <div class='login-card'>
+            <div class='login-header'>
+                <div class='logo-container'>
+                    <img src='data:image/png;base64,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'
+                         class='logo-img'
+                         alt='Caçula' />
                 </div>
-                <h2 class='login-title'>Agente de Business Intelligence</h2>
-                <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
+                <h1 class='login-title'>Agente de Business Intelligence</h1>
+                <p class='login-subtitle'>Sistema Corporativo Caçula</p>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div class='login-body'>
+        """, unsafe_allow_html=True)
 
         with st.form("login_form"):
-            username = st.text_input("Usuário", placeholder="Digite seu usuário", key="login_username")
-            password = st.text_input("Senha", type="password", placeholder="Digite sua senha", key="login_password")
+            username = st.text_input("👤 Usuário", placeholder="Digite seu usuário", key="login_username")
+            password = st.text_input("🔒 Senha", type="password", placeholder="Digite sua senha", key="login_password")
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             col1, col2 = st.columns([3, 1])
             with col1:
-                login_btn = st.form_submit_button("Entrar", use_container_width=True, type="primary")
+                login_btn = st.form_submit_button("🚀 Entrar", use_container_width=True, type="primary")
             with col2:
-                forgot_btn = st.form_submit_button("Esqueci", use_container_width=True)
+                forgot_btn = st.form_submit_button("❓ Ajuda", use_container_width=True)
 
-            if forgot_btn:
-                st.info("🔑 Entre em contato com o administrador para redefinir sua senha.")
-                st.stop()
+        # Fechar divs do card
+        st.markdown("""
+            </div>
+            <div class='login-footer'>
+                <p class='login-footer-text'>© 2025 Caçula - Sistema de Business Intelligence</p>
+                <p class='login-footer-text' style='margin-top: 0.5rem; font-size: 0.75rem;'>
+                    🔒 Acesso seguro e criptografado
+                </p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            if login_btn:
+        # Processar form
+        if forgot_btn:
+            st.info("🔑 Entre em contato com o administrador para redefinir sua senha.")
+            st.stop()
+
+        if login_btn:
                 # Sanitizar username
                 username = sanitize_username(username)
 

@@ -51,26 +51,17 @@ st.markdown("""
 <style>
 /* ==================== GLOBAL ==================== */
 :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f8f9fa;
-    --bg-sidebar: #f1f3f4;
-    --bg-card: #ffffff;
-    --bg-input: #ffffff;
-    --border-color: #dee2e6;
-    --text-primary: #2C3E50;
-    --text-secondary: #7F8C8D;
+    --bg-primary: #343541;
+    --bg-secondary: #444654;
+    --bg-sidebar: #202123;
+    --bg-card: #2a2b32;
+    --bg-input: #40414f;
+    --border-color: #444654;
+    --text-primary: #ececf1;
+    --text-secondary: #8e8ea0;
     --color-primary: #10a37f;
     --color-secondary: #5436DA;
     --color-danger: #ef4444;
-}
-
-/* Fundo branco global */
-.stApp {
-    background-color: white !important;
-}
-
-.main {
-    background-color: white !important;
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -148,7 +139,7 @@ section[data-testid="stSidebar"] button:hover {
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stNumberInput > div > div > input {
-    background-color: white !important;
+    background-color: var(--bg-input) !important;
     color: var(--text-primary) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
