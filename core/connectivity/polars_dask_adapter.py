@@ -27,10 +27,15 @@ import dask.dataframe as dd
 try:
     import polars as pl
     POLARS_AVAILABLE = True
-except ImportError:
+    logging.info(f"✅ Polars carregado com sucesso (versão {pl.__version__})")
+except ImportError as e:
     POLARS_AVAILABLE = False
     pl = None
-    logging.warning("Polars não disponível. Usando apenas Dask.")
+    logging.warning(f"⚠️ Polars não disponível: {e}. Usando apenas Dask.")
+except Exception as e:
+    POLARS_AVAILABLE = False
+    pl = None
+    logging.error(f"❌ Erro ao importar Polars: {e}. Usando apenas Dask.")
 
 from .base import DatabaseAdapter
 
