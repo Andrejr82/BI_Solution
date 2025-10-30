@@ -38,6 +38,11 @@ except Exception as e:
     logging.error(f"❌ Erro ao importar Polars: {e}. Usando apenas Dask.")
 
 from .base import DatabaseAdapter
+from core.utils.column_validator import (
+    validate_columns,
+    ColumnValidationError,
+    get_available_columns_cached
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,13 +139,14 @@ class PolarsDaskAdapter(DatabaseAdapter):
         logger.info("PolarsDaskAdapter.disconnect() is a no-op")
         pass
 
-    def execute_query(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def execute_query(self, query_filters: Dict[str, Any], query_text: str = None) -> List[Dict[str, Any]]:
         """
         Executa query usando engine selecionada (Polars ou Dask).
         Inclui fallback automático em caso de erro.
 
         Args:
             query_filters: Dicionário com filtros (coluna: valor)
+            query_text: Texto da pergunta do usuário (opcional, para otimização)
 
         Returns:
             Lista de dicts com resultados
@@ -157,10 +163,10 @@ class PolarsDaskAdapter(DatabaseAdapter):
         try:
             if self.engine == "polars":
                 logger.info("Executando com Polars...")
-                result = self._execute_polars(query_filters)
+                result = self._execute_polars(query_filters, query_text=query_text)
             else:
                 logger.info("Executando com Dask...")
-                result = self._execute_dask(query_filters)
+                result = self._execute_dask(query_filters, query_text=query_text)
 
             elapsed = time.time() - start_time
             logger.info(f"Query executada com sucesso: {len(result)} rows em {elapsed:.2f}s usando {self.engine.upper()}")
@@ -173,7 +179,7 @@ class PolarsDaskAdapter(DatabaseAdapter):
             if self.engine == "polars":
                 logger.warning("Fallback: Polars falhou, tentando Dask...")
                 try:
-                    result = self._execute_dask(query_filters)
+                    result = self._execute_dask(query_filters, query_text=query_text)
                     elapsed = time.time() - start_time
                     logger.info(f"Fallback bem-sucedido: {len(result)} rows em {elapsed:.2f}s usando DASK")
                     return result
@@ -184,7 +190,7 @@ class PolarsDaskAdapter(DatabaseAdapter):
                 # Dask falhou e não há fallback
                 return [{"error": f"Falha ao executar query com Dask: {str(e)}"}]
 
-    def _execute_polars(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _execute_polars(self, query_filters: Dict[str, Any], query_text: str = None) -> List[Dict[str, Any]]:
         """
         Executa query usando Polars (rápido, lazy evaluation).
 
@@ -195,12 +201,25 @@ class PolarsDaskAdapter(DatabaseAdapter):
         4. Aplicar filtros numéricos após conversão
         5. collect() para materializar resultado
         6. Converter para Pandas dict para compatibilidade
+
+        Args:
+            query_filters: Dicionário com filtros
+            query_text: Texto da pergunta (opcional, para otimização)
         """
         logger.info("Iniciando query Polars...")
 
         try:
-            # 1. Lazy scan
-            lf = pl.scan_parquet(self.file_path)
+            # 1. Lazy scan com tolerância a variações de schema
+            # ✅ CORREÇÃO CRÍTICA: extra_columns='ignore' para ignorar coluna 'mc' extra
+            # (fix para: SchemaError: extra column in file outside of expected schema: mc)
+            lf = pl.scan_parquet(
+                self.file_path,
+                allow_missing_columns=True,  # Tolerar colunas faltando
+                extra_columns='ignore',  # ✅ IGNORAR colunas extras (como 'mc')
+                glob=True,  # Permitir wildcard pattern
+                hive_partitioning=None,  # Desabilitar hive partitioning
+                retries=0  # Não tentar novamente em caso de erro
+            )
 
             # 2. Separar filtros por tipo (igual ParquetAdapter)
             NUMERIC_COLUMNS_IN_STRING_FORMAT = ['estoque_une', 'ESTOQUE_UNE', 'estoque_atual']
@@ -210,15 +229,55 @@ class PolarsDaskAdapter(DatabaseAdapter):
 
             # Obter schema para detectar tipos
             schema = lf.collect_schema()
+            available_columns = list(schema.names())
+
+            # ✅ VALIDAÇÃO ROBUSTA DE COLUNAS
+            # Validar todas as colunas dos filtros antes de executar
+            filter_columns = list(query_filters.keys())
+
+            try:
+                validation_result = validate_columns(
+                    filter_columns,
+                    available_columns,
+                    auto_correct=True  # Corrigir automaticamente
+                )
+
+                # Logar correções aplicadas
+                if validation_result["corrected"]:
+                    logger.info(f"✅ Colunas auto-corrigidas: {validation_result['corrected']}")
+
+                # Se houver colunas inválidas, levantar erro com sugestões
+                if not validation_result["all_valid"]:
+                    invalid_col = validation_result["invalid"][0]
+                    suggestions = validation_result["suggestions"].get(invalid_col, [])
+
+                    error_msg = f"Coluna '{invalid_col}' não encontrada no DataFrame."
+                    if suggestions:
+                        error_msg += f" Você quis dizer: {', '.join(suggestions[:3])}?"
+
+                    raise ColumnValidationError(invalid_col, suggestions, available_columns)
+
+                # Criar dicionário de mapeamento old -> new para filtros
+                column_mapping = {col: col for col in filter_columns}
+                column_mapping.update(validation_result["corrected"])
+
+            except ColumnValidationError as e:
+                logger.error(f"❌ Erro de validação de coluna: {e}")
+                raise
+            except Exception as e:
+                logger.warning(f"⚠️ Erro na validação de colunas (continuando): {e}")
+                column_mapping = {col: col for col in filter_columns}
 
             for column, condition in query_filters.items():
-                # Normalizar nome da coluna (case-insensitive)
+                # Usar coluna corrigida se disponível
+                actual_column = column_mapping.get(column, column)
+
+                # Fallback: case-insensitive match
                 try:
-                    # Tentar encontrar coluna no schema (case-insensitive)
                     schema_cols = {c.lower(): c for c in schema.names()}
-                    actual_column = schema_cols.get(column.lower(), column)
+                    actual_column = schema_cols.get(actual_column.lower(), actual_column)
                 except:
-                    actual_column = column
+                    pass
 
                 # Parse condição
                 op = '='
@@ -323,6 +382,20 @@ class PolarsDaskAdapter(DatabaseAdapter):
                 )
                 logger.info("Coluna vendas_total adicionada")
 
+            # 6.5. OTIMIZAÇÃO: Selecionar apenas colunas necessárias (reduz memória em 60-80%)
+            # Apenas se query_text foi fornecida E dataset é grande
+            schema_cols = lf.collect_schema().names()
+            if query_text and len(schema_cols) > 10:
+                try:
+                    from core.utils.query_optimizer import get_optimized_columns
+                    optimized_cols = get_optimized_columns(schema_cols, query=query_text)
+                    if optimized_cols and len(optimized_cols) < len(schema_cols):
+                        lf = lf.select(optimized_cols)
+                        logger.info(f"Otimização: {len(schema_cols)} → {len(optimized_cols)} colunas")
+                except Exception as opt_error:
+                    # Otimização falhou, continuar sem otimizar (não quebra funcionalidade)
+                    logger.warning(f"Otimização de colunas falhou (continuando sem otimizar): {opt_error}")
+
             # 7. Collect (materializar resultado)
             logger.info("Materializando resultado com collect()...")
             df_polars = lf.collect()
@@ -338,10 +411,14 @@ class PolarsDaskAdapter(DatabaseAdapter):
             logger.error(f"Erro na execução Polars: {e}", exc_info=True)
             raise
 
-    def _execute_dask(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _execute_dask(self, query_filters: Dict[str, Any], query_text: str = None) -> List[Dict[str, Any]]:
         """
         Executa query usando Dask (código atual do ParquetAdapter).
         Mantém 100% da lógica existente para compatibilidade.
+
+        Args:
+            query_filters: Dicionário com filtros
+            query_text: Texto da pergunta (opcional, para otimização)
         """
         logger.info("Executando query com Dask (código original ParquetAdapter)...")
 
@@ -457,6 +534,18 @@ class PolarsDaskAdapter(DatabaseAdapter):
                         ddf = ddf[ddf[column] == value]
                     elif op == '!=':
                         ddf = ddf[ddf[column] != value]
+
+            # OTIMIZAÇÃO: Selecionar apenas colunas necessárias ANTES de compute() (reduz memória)
+            if query_text and len(ddf.columns) > 10:
+                try:
+                    from core.utils.query_optimizer import get_optimized_columns
+                    optimized_cols = get_optimized_columns(list(ddf.columns), query=query_text)
+                    if optimized_cols and len(optimized_cols) < len(ddf.columns):
+                        ddf = ddf[optimized_cols]
+                        logger.info(f"Otimização: {len(ddf.columns)} → {len(optimized_cols)} colunas")
+                except Exception as opt_error:
+                    # Otimização falhou, continuar sem otimizar (não quebra funcionalidade)
+                    logger.warning(f"Otimização de colunas falhou (continuando sem otimizar): {opt_error}")
 
             # Compute
             logger.info("Computing Dask DataFrame...")

@@ -8,7 +8,10 @@ from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Bcrypt tem limite de 72 bytes - truncar senha antes de verificar
+    password_bytes = plain_password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.verify(password_truncated, hashed_password)
 
 def get_password_hash(password: str) -> str:
     # Bcrypt tem limite de 72 bytes - truncar se necessário

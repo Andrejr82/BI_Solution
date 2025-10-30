@@ -26,11 +26,13 @@ except Exception as e:
     LLM_AVAILABLE = False
 
 try:
-    from core.mcp.context7_adapter import Context7MCPAdapter
+    # CORRIGIDO: context7_adapter não existe, removido import
+    # from core.mcp.context7_adapter import Context7MCPAdapter
     from core.mcp.sqlserver_adapter import SQLServerMCPAdapter
 
     MCP_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"MCP Import Error: {e}")
     MCP_AVAILABLE = False
 
 try:
@@ -137,12 +139,11 @@ class WebServer:
 
         # Registra as rotas da API
         try:
-            from core.api import register_routes
-
-            register_routes(self.app)
+            # CORRIGIDO: core.api não existe, comentado
+            # from core.api import register_routes
+            # register_routes(self.app)
             import logging
-
-            logging.getLogger("WebServer").info("Rotas da API registradas com sucesso")
+            logging.getLogger("WebServer").warning("core.api module não existe - rotas não registradas")
         except Exception as e:
             import logging
 
@@ -352,11 +353,13 @@ class ComponentFactory:
             )
             return None
         if "web_server" not in cls._components:
-            from core.config.config_central import ConfiguracaoCentral
-
-            config = ConfiguracaoCentral()
-            host = config.web_config.get("host", "127.0.0.1")
-            port = config.web_config.get("port", 5000)
+            # CORRIGIDO: config_central não existe, usar defaults
+            # from core.config.config_central import ConfiguracaoCentral
+            # config = ConfiguracaoCentral()
+            # host = config.web_config.get("host", "127.0.0.1")
+            # port = config.web_config.get("port", 5000)
+            host = "127.0.0.1"
+            port = 5000
             cls.logger.info(f"Criando nova instância do WebServer na porta {port}")
             cls._components["web_server"] = WebServer(host=host, port=port)
         return cls._components["web_server"]

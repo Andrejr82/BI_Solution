@@ -203,9 +203,8 @@ class DirectQueryEngine:
 
         return []
 
-
-
-'''    def _get_cached_base_data(self, full_dataset: bool = False) -> pd.DataFrame:
+    '''
+    def _get_cached_base_data(self, full_dataset: bool = False) -> pd.DataFrame:
         """Obtém dados base do cache ou carrega se necessário."""
         cache_key = "full_data" if full_dataset else "base_data"
         current_time = datetime.now()
@@ -226,7 +225,7 @@ class DirectQueryEngine:
                 return pd.DataFrame()
 
         return self._cached_data[cache_key]
-'''
+    '''
 
     def classify_intent_direct(self, user_query: str) -> Tuple[str, Dict[str, Any]]:
         """Classifica intenção SEM usar LLM - apenas keywords."""

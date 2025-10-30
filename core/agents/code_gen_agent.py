@@ -10,8 +10,16 @@ import re
 import pandas as pd
 import dask.dataframe as dd  # Dask para lazy loading
 import time
+
+# ✅ NOVO: Import Polars (condicional)
+try:
+    import polars as pl
+    POLARS_AVAILABLE = True
+except ImportError:
+    pl = None
+    POLARS_AVAILABLE = False
 import plotly.express as px
-from typing import List, Dict, Any # Import necessary types
+from typing import List, Dict, Any, Tuple # Import necessary types
 import threading
 from queue import Queue
 import pickle
@@ -28,8 +36,16 @@ from core.llm_base import BaseLLMAdapter
 from core.learning.pattern_matcher import PatternMatcher
 from core.validation.code_validator import CodeValidator
 from core.learning.dynamic_prompt import DynamicPrompt
+from core.learning.self_healing_system import SelfHealingSystem
+from core.config.column_mapping import normalize_column_name, validate_columns, get_essential_columns
+from core.utils.column_validator import (
+    validate_query_code,
+    extract_columns_from_query,
+    ColumnValidationError
+)
 from core.rag.query_retriever import QueryRetriever
 from core.rag.example_collector import ExampleCollector
+from core.agents.polars_load_data import create_optimized_load_data
 
 class CodeGenAgent:
     """
@@ -49,23 +65,27 @@ class CodeGenAgent:
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
 
-        # Inicializar dicionário de descrições de colunas ANTES de verificar cache
+        # ✅ CORREÇÃO: Usar nomes REAIS do Parquet (confirmados via read_parquet_schema em 2025-10-27)
         self.column_descriptions = {
-            "PRODUTO": "Código único do produto",
-            "NOME": "Nome/descrição do produto",
-            "NOMESEGMENTO": "Segmento do produto (TECIDOS, PAPELARIA, etc.)",
-            "NOMECATEGORIA": "Categoria do produto",
-            "NOMEGRUPO": "Grupo do produto",
-            "NOMESUBGRUPO": "Subgrupo do produto",
-            "NOMEFABRICANTE": "Fabricante do produto",
-            "VENDA_30DD": "Total de vendas nos últimos 30 dias",
-            "ESTOQUE_UNE": "Quantidade em estoque",
-            "LIQUIDO_38": "Preço de venda",
-            "UNE": "Nome da loja/unidade (ex: SCR, MAD, 261, ALC, NIL, etc.)",
-            "UNE_ID": "ID numérico da loja (ex: 1=SCR, 2720=MAD, 1685=261)",
-            "TIPO": "Tipo de produto",
-            "EMBALAGEM": "Embalagem do produto",
-            "EAN": "Código de barras",
+            "codigo": "Código único do produto (COLUNA PARQUET: codigo)",
+            "nome_produto": "Nome/descrição do produto (COLUNA PARQUET: nome_produto)",
+            "nomesegmento": "Segmento do produto (COLUNA PARQUET: nomesegmento) - Ex: TECIDOS, PAPELARIA, etc.",
+            "NOMECATEGORIA": "Categoria do produto (COLUNA PARQUET: NOMECATEGORIA)",
+            "nomegrupo": "Grupo do produto (COLUNA PARQUET: nomegrupo)",
+            "NOMESUBGRUPO": "Subgrupo do produto (COLUNA PARQUET: NOMESUBGRUPO)",
+            "NOMEFABRICANTE": "Fabricante do produto (COLUNA PARQUET: NOMEFABRICANTE)",
+            "venda_30_d": "Total de vendas nos últimos 30 dias (COLUNA PARQUET: venda_30_d)",
+            "estoque_atual": "Quantidade em estoque total da UNE (COLUNA PARQUET: estoque_atual)",
+            "estoque_lv": "Estoque na Linha Verde/área de venda (COLUNA PARQUET: estoque_lv)",
+            "estoque_cd": "Estoque no Centro de Distribuição (COLUNA PARQUET: estoque_cd)",
+            "preco_38_percent": "Preço de venda com 38% de margem (COLUNA PARQUET: preco_38_percent)",
+            "une": "ID numérico da loja/unidade (COLUNA PARQUET: une) - Ex: 1, 2586, 2720",
+            "une_nome": "Nome da loja/unidade (COLUNA PARQUET: une_nome) - Ex: SCR, MAD, 261, ALC, NIL",
+            "tipo": "Tipo de produto (COLUNA PARQUET: tipo)",
+            "embalagem": "Embalagem do produto (COLUNA PARQUET: embalagem)",
+            "ean": "Código de barras (COLUNA PARQUET: ean)",
+            "media_considerada_lv": "Média de vendas considerada para reposição (COLUNA PARQUET: media_considerada_lv)",
+            "abc_une_30_dd": "Classificação ABC da UNE nos últimos 30 dias (COLUNA PARQUET: abc_une_30_dd)",
             # 📊 COLUNAS TEMPORAIS - Vendas mensais (mes_01 = mês mais recente)
             "mes_01": "Vendas do mês mais recente (mês 1)",
             "mes_02": "Vendas de 2 meses atrás",
@@ -115,10 +135,24 @@ class CodeGenAgent:
             self.logger.warning(f"⚠️ DynamicPrompt não disponível: {e}")
             self.dynamic_prompt = None
 
-        # Limpar cache antigo automaticamente (> 2h - reduzido para evitar código obsoleto)
-        self._clean_old_cache(max_age_hours=2)
+        # Inicializar Self-Healing System (Auto-correção)
+        try:
+            self.self_healing = SelfHealingSystem(
+                llm_adapter=llm_adapter,
+                schema_validator=True
+            )
+            self.logger.info("✅ SelfHealingSystem inicializado (Auto-correção ativa)")
+        except Exception as e:
+            self.logger.warning(f"⚠️ SelfHealingSystem não disponível: {e}")
+            self.self_healing = None
 
-        # 🔄 VERSIONING DE CACHE: Invalidar cache quando prompt muda
+        # ⚡ SOLUÇÃO ZERO-CLICK: Cache é gerenciado 100% automaticamente
+        # Usuário NÃO precisa clicar em nada, deslogar ou recarregar página
+
+        # 1. Limpar cache antigo (5 minutos - MUITO curto para forçar regeneração rápida)
+        self._clean_old_cache(max_age_hours=0.08)  # ~5 minutos
+
+        # 2. Invalidar cache quando prompt/código muda (detecta correções automaticamente)
         self._check_and_invalidate_cache_if_prompt_changed()
 
         self.logger.info("CodeGenAgent inicializado.")
@@ -253,13 +287,22 @@ class CodeGenAgent:
 
                     # Estratégia de fallback melhorada
                     try:
-                        if parquet_path and os.path.exists(parquet_path.replace('*.parquet', '')):
+                        if parquet_path:
                             # Estratégia 1: Usar pandas com limite de linhas e colunas essenciais
                             self.logger.info("   Tentando carregar com pandas (apenas colunas essenciais)...")
 
-                            # Colunas essenciais para análises básicas
-                            essential_cols = ['PRODUTO', 'NOME', 'UNE', 'NOMESEGMENTO', 'VENDA_30DD',
-                                            'ESTOQUE_UNE', 'LIQUIDO_38', 'NOMEGRUPO']
+                            # Resolver wildcard pattern
+                            import glob
+                            if '*' in parquet_path:
+                                parquet_files = glob.glob(parquet_path)
+                                if not parquet_files:
+                                    raise FileNotFoundError(f"Nenhum arquivo encontrado em: {parquet_path}")
+                                parquet_path = parquet_files[0]  # Usar primeiro arquivo
+                                self.logger.info(f"📁 Usando arquivo: {os.path.basename(parquet_path)}")
+
+                            # Colunas essenciais para análises básicas (NOMES CORRETOS DO PARQUET)
+                            essential_cols = get_essential_columns()
+                            self.logger.info(f"   Carregando colunas essenciais: {essential_cols}")
 
                             df_pandas = pd.read_parquet(
                                 parquet_path,
@@ -281,16 +324,39 @@ class CodeGenAgent:
                             self.logger.info(f"⚠️  Carregado dataset MUITO reduzido: {len(df_pandas)} linhas")
                         except:
                             self.logger.error(f"❌ Todas as estratégias de fallback falharam")
-                            raise RuntimeError(f"Falha ao carregar dados (MemoryError): Sistema sem memória disponível. Tente reiniciar a aplicação.")
+                            # Mensagem amigável ao usuário (sem stacktrace técnico)
+                            error_msg = (
+                                "❌ **Erro ao Processar Consulta**\n\n"
+                                "O sistema está com recursos limitados no momento.\n\n"
+                                "**💡 Sugestões:**\n"
+                                "- Tente uma consulta mais específica (ex: filtre por UNE ou segmento)\n"
+                                "- Divida sua análise em partes menores\n"
+                                "- Aguarde alguns segundos e tente novamente\n\n"
+                                "**Exemplo de consulta específica:**\n"
+                                "`Top 10 produtos da UNE SCR do segmento TECIDOS`"
+                            )
+                            raise RuntimeError(error_msg)
 
                 end_compute = time_module.time()
                 self.logger.info(f"✅ load_data(): {len(df_pandas)} registros carregados (LIMITADO) em {end_compute - start_compute:.2f}s")
 
                 return df_pandas
 
-        local_scope['load_data'] = load_data
+        # ✅ NOVO: Usar load_data otimizada com Polars
+        try:
+            # Usar pattern correto: admmat*.parquet (não admmat_une*.parquet)
+            parquet_path = os.path.join("data", "parquet", "admmat*.parquet")
+            optimized_load_data = create_optimized_load_data(parquet_path, self.data_adapter)
+            local_scope['load_data'] = optimized_load_data
+            self.logger.info("✅ Using optimized Polars load_data()")
+        except Exception as e:
+            self.logger.warning(f"⚠️ Erro ao criar load_data otimizada: {e}. Usando versão antiga.")
+            local_scope['load_data'] = load_data  # Fallback para versão antiga
+
         local_scope['dd'] = dd  # Adicionar Dask ao escopo para código gerado (se necessário)
         local_scope['time'] = __import__('time')  # Adicionar módulo time ao escopo para evitar UnboundLocalError
+        local_scope['pl'] = pl  # ✅ NOVO: Adicionar Polars ao escopo
+        local_scope['pd'] = pd  # Adicionar Pandas para compatibilidade
 
         def worker():
             sys.stdout = output_capture
@@ -298,7 +364,39 @@ class CodeGenAgent:
             try:
                 exec(code, local_scope)
                 q.put(local_scope.get('result'))
+            except KeyError as e:
+                # ✅ TRATAMENTO ESPECÍFICO: Erro de coluna não encontrada
+                error_msg = str(e)
+
+                # Detectar se é erro de coluna
+                if "nome_produto" in error_msg or "KeyError" in str(type(e).__name__):
+                    self.logger.error(f"❌ Erro de coluna não encontrada: {e}")
+
+                    # Tentar extrair nome da coluna do erro
+                    import re
+                    col_match = re.search(r"['\"]([^'\"]+)['\"]", error_msg)
+                    if col_match:
+                        missing_col = col_match.group(1)
+                        self.logger.error(f"   Coluna faltante: '{missing_col}'")
+
+                    # Criar erro mais informativo
+                    enhanced_error = ColumnValidationError(
+                        missing_col if col_match else "desconhecida",
+                        suggestions=[],
+                        available_columns=[]
+                    )
+                    q.put(enhanced_error)
+                else:
+                    q.put(e)
+
             except Exception as e:
+                # ✅ TRATAMENTO GENÉRICO: Capturar outros erros do Polars
+                error_type = type(e).__name__
+
+                # Detectar erros comuns do Polars
+                if any(err in error_type for err in ["ColumnNotFoundError", "SchemaError", "ComputeError"]):
+                    self.logger.error(f"❌ Erro do Polars: {error_type} - {e}")
+
                 q.put(e)
             finally:
                 sys.stdout = original_stdout
@@ -364,6 +462,196 @@ class CodeGenAgent:
 
         return query
 
+    def _detect_complex_query(self, query: str) -> bool:
+        """
+        Detecta se query requer raciocínio multi-step (chain-of-thought).
+
+        Baseado em: Context7 - OpenAI Prompt Engineering Best Practices
+        """
+        complex_keywords = [
+            'análise abc', 'distribuição', 'sazonalidade', 'tendência',
+            'comparar', 'comparação', 'correlação', 'previsão',
+            'alertas', 'insights', 'padrões', 'anomalias'
+        ]
+        query_lower = query.lower()
+        return any(kw in query_lower for kw in complex_keywords)
+
+    def _build_structured_prompt(self, user_query: str, rag_examples: list = None) -> str:
+        """
+        Constrói prompt estruturado seguindo OpenAI best practices.
+
+        Baseado em: Context7 - Developer Message Pattern + Few-Shot Learning
+
+        Hierarquia:
+        1. Developer message - Identidade e comportamento do agente
+        2. Few-shot examples - Exemplos rotulados (do RAG)
+        3. User message - Query atual com instruções específicas
+
+        Args:
+            user_query: Query do usuário
+            rag_examples: Lista de exemplos similares do RAG (opcional)
+
+        Returns:
+            Prompt estruturado em formato string
+        """
+
+        # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento
+        developer_context = f"""# 🤖 IDENTIDADE E COMPORTAMENTO
+
+Você é um especialista em análise de dados Python com foco em:
+- **Pandas/Polars**: Manipulação eficiente de DataFrames
+- **Plotly**: Visualizações interativas de alta qualidade
+- **Análise de Negócios**: Varejo, vendas, estoque, categorização
+
+## 🎯 Seu Objetivo
+
+Gerar código Python **limpo, eficiente e seguro** que responda à pergunta do usuário usando o dataset de vendas fornecido.
+
+## 📊 CONTEXTO DO DOMÍNIO
+
+**Dataset**: Vendas de varejo (produtos, UNEs/lojas, categorias, estoques)
+**Período**: 12 meses de histórico (mes_01 = mais recente, mes_12 = mais antigo)
+**Métricas Principais**:
+- `venda_30_d`: Vendas dos últimos 30 dias (MÉTRICA PRIMÁRIA)
+- `estoque_atual`: Estoque total disponível
+- `preco_38_percent`: Preço de venda com margem de 38%
+- `mes_01` a `mes_12`: Vendas mensais (série temporal)
+
+## 🗂️ SCHEMA DE COLUNAS DISPONÍVEIS
+
+{json.dumps(self.column_descriptions, indent=2, ensure_ascii=False)}
+
+## ⚠️ REGRAS CRÍTICAS
+
+1. **Nomes de Colunas**: SEMPRE use nomes EXATOS do schema (case-sensitive)
+2. **Validação**: SEMPRE valide colunas antes de usar (ex: `if 'une_nome' in df.columns`)
+3. **Performance**: SEMPRE use Polars para grandes datasets (scan_parquet com lazy evaluation)
+4. **Segurança**: NUNCA use `eval()` ou `exec()` com input do usuário
+5. **Output**: SEMPRE retorne resultados em formato estruturado (dict, DataFrame ou Plotly Figure)
+6. **Comentários**: SEMPRE adicione comentários explicativos no código
+
+## 🎯 REGRAS DE RANKING (TOP N vs TODOS)
+
+**DETECÇÃO DE INTENÇÃO:**
+- **"top 10", "top 5", "maiores", "menores" + NÚMERO** → Use `.head(N)` para limitar
+- **"ranking de TODAS", "ranking COMPLETO", "TODAS as unes/produtos"** → NÃO use `.head()`, mostre TODOS
+- **"ranking" genérico SEM "todas/todos" E SEM número** → Use `.head(10)` como padrão (melhor visualização)
+
+**EXEMPLOS:**
+
+```python
+# ✅ CASO 1: "gere gráfico ranking de vendas das unes" (SEM "top N", SEM "todas")
+df = load_data()
+ranking = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
+df_top10 = ranking.head(10)  # Padrão: top 10 para visualização limpa
+result = px.bar(df_top10, x='une_nome', y='venda_30_d')
+
+# ✅ CASO 2: "gere gráfico ranking de TODAS as unes" (EXPLICITAMENTE "todas")
+df = load_data()
+ranking_completo = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
+# NÃO usar .head() quando usuário pede "todas"
+result = px.bar(ranking_completo, x='une_nome', y='venda_30_d')
+
+# ✅ CASO 3: "top 5 unes por vendas" (Número EXPLÍCITO)
+df = load_data()
+ranking = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
+df_top5 = ranking.head(5)
+result = px.bar(df_top5, x='une_nome', y='venda_30_d')
+```
+
+**PALAVRAS-CHAVE DE DETECÇÃO:**
+- **Limitar**: "top", "maiores", "principais", "primeiros" + NÚMERO
+- **Não limitar**: "todas", "todos", "completo", "completa", "integral"
+"""
+
+        # 2️⃣ FEW-SHOT EXAMPLES - Exemplos Rotulados do RAG
+        few_shot_section = ""
+        if rag_examples and len(rag_examples) > 0:
+            few_shot_section = "\n\n# 📚 EXEMPLOS DE QUERIES BEM-SUCEDIDAS (Few-Shot Learning)\n\n"
+            few_shot_section += "Use os exemplos abaixo como referência para gerar código similar:\n\n"
+
+            for i, ex in enumerate(rag_examples[:3], 1):  # Máximo 3 exemplos
+                similarity = ex.get('similarity_score', 0)
+                few_shot_section += f"""## Exemplo {i} (Similaridade: {similarity:.1%})
+
+**Query do Usuário:** "{ex.get('query_user', 'N/A')}"
+
+**Código Python Gerado:**
+```python
+{ex.get('code_generated', 'N/A')}
+```
+
+**Resultado:** {ex.get('result_type', 'success')} | {ex.get('rows_returned', 0)} registros retornados
+
+---
+
+"""
+
+        # 3️⃣ CHAIN-OF-THOUGHT (para queries complexas)
+        cot_section = ""
+        if self._detect_complex_query(user_query):
+            cot_section = """
+
+## 🧠 RACIOCÍNIO PASSO-A-PASSO (Chain of Thought)
+
+Esta é uma query complexa. Divida o problema em etapas:
+
+**Etapa 1: Análise da Query**
+- Qual a métrica principal? (vendas, estoque, preço)
+- Qual a dimensão de análise? (produto, UNE, categoria, tempo)
+- Há filtros específicos? (segmento, categoria, período, UNE)
+
+**Etapa 2: Planejamento do Código**
+- Quais colunas do schema serão necessárias?
+- Quais transformações? (group by, pivot, melt, cálculos)
+- Qual visualização? (gráfico de barras, linha, pizza, tabela)
+
+**Etapa 3: Implementação**
+- Código Python otimizado com validação
+- Tratamento de valores NA/null
+- Comentários explicativos
+
+Execute cada etapa mentalmente antes de gerar o código final.
+
+"""
+
+        # 4️⃣ USER MESSAGE - Query Atual
+        user_message = f"""
+
+## 🎯 QUERY ATUAL DO USUÁRIO
+
+**Pergunta:** {user_query}
+
+## 📝 INSTRUÇÕES DE GERAÇÃO
+
+1. **Analise** a query e identifique:
+   - Tipo de análise (ranking, filtro, agregação, visualização)
+   - Colunas necessárias do schema
+   - Filtros aplicáveis
+
+2. **Gere código Python** que:
+   - Use a função `load_data()` para carregar dados
+   - Valide colunas antes de usar
+   - Implemente a lógica de análise solicitada
+   - Retorne resultado em variável `result`
+
+3. **Formato de Saída**:
+   - Para tabelas: `result` = DataFrame
+   - Para gráficos: `result` = Plotly Figure (px.bar, px.pie, px.line)
+   - Para métricas: `result` = dict com valores
+
+## 💻 CÓDIGO PYTHON A SER GERADO:
+
+```python
+# Seu código aqui
+```
+"""
+
+        # CONCATENAR TODAS AS SEÇÕES
+        full_prompt = developer_context + few_shot_section + cot_section + user_message
+
+        return full_prompt
+
     def generate_and_execute_code(self, input_data: Dict[str, Any]) -> dict:
         """
         Gera, executa e retorna o resultado do código Python para uma dada consulta.
@@ -401,14 +689,16 @@ class CodeGenAgent:
             code_to_execute = self.code_cache[cache_key]
             self.logger.info(f"Código recuperado do cache.")
         else:
-            # Construir contexto com descrições das colunas mais importantes
+            # ✅ CORREÇÃO: Usar nomes REAIS do Parquet (confirmados via read_parquet_schema)
             important_columns = [
-                "PRODUTO", "NOME", "NOMESEGMENTO", "NOMECATEGORIA", "NOMEGRUPO", "NOMESUBGRUPO",
-                "NOMEFABRICANTE", "VENDA_30DD", "ESTOQUE_UNE", "LIQUIDO_38",
-                "UNE", "UNE_ID", "TIPO", "EMBALAGEM", "EAN",
+                "codigo", "nome_produto", "nomesegmento", "NOMECATEGORIA", "nomegrupo", "NOMESUBGRUPO",
+                "NOMEFABRICANTE", "venda_30_d", "estoque_atual", "preco_38_percent",
+                "une", "une_nome", "tipo", "embalagem", "ean",
                 # Colunas temporais para gráficos de evolução
                 "mes_01", "mes_02", "mes_03", "mes_04", "mes_05", "mes_06",
-                "mes_07", "mes_08", "mes_09", "mes_10", "mes_11", "mes_12"
+                "mes_07", "mes_08", "mes_09", "mes_10", "mes_11", "mes_12",
+                # Colunas de análise adicional
+                "media_considerada_lv", "estoque_lv", "estoque_cd", "abc_une_30_dd"
             ]
 
             column_context = "📊 COLUNAS DISPONÍVEIS:\n"
@@ -439,24 +729,36 @@ Use EXATAMENTE estes valores no código Python (incluindo acentos e plural/singu
 **REGRA DE OURO:** Interprete a intenção do usuário e mapeie para o valor EXATO da lista acima!
 """
 
-            # Lista de UNEs válidas
+            # ✅ CORREÇÃO CRÍTICA: Atualizar instruções para usar 'une_nome' (não 'UNE')
             valid_unes = """
-**VALORES VÁLIDOS DE LOJAS/UNIDADES (coluna UNE - nomes):**
-Quando o usuário mencionar uma loja, use EXATAMENTE estes nomes:
+**🚨 VALORES VÁLIDOS DE LOJAS/UNIDADES (SCHEMA CORRETO DO PARQUET):**
 
+O Parquet possui DUAS colunas relacionadas a UNE:
+1. **une** (int) - ID numérico da loja (ex: 1, 2586, 2720)
+2. **une_nome** (str) - Nome da loja (ex: 'SCR', 'MAD', '261')
+
+**NOMES VÁLIDOS (coluna une_nome):**
 'SCR', 'ALC', 'DC', 'CFR', 'PET', 'VVL', 'VIL', 'REP', 'JFA', 'NIT',
 'CGR', 'OBE', 'CXA', '261', 'BGU', 'ALP', 'BAR', 'CP2', 'JRD', 'NIG',
 'ITA', 'MAD', 'JFJ', 'CAM', 'VRD', 'SGO', 'NFR', 'TIJ', 'ANG', 'BON',
 'IPA', 'BOT', 'NIL', 'TAQ', 'RDO', '3RS', 'STS', 'NAM'
 
-**EXEMPLOS DE MAPEAMENTO:**
-- Usuário diz "une mad" ou "une MAD" → Filtrar: df[df['UNE'] == 'MAD']
-- Usuário diz "une 261" → Filtrar: df[df['UNE'] == '261']
-- Usuário diz "une scr" → Filtrar: df[df['UNE'] == 'SCR']
-- Usuário diz "une nil" → Filtrar: df[df['UNE'] == 'NIL']
+**✅ EXEMPLOS CORRETOS (usar une_nome, NÃO 'UNE'):**
+```python
+# Filtrar por nome de loja (use une_nome!)
+df_mad = df[df['une_nome'] == 'MAD']
+df_scr = df[df['une_nome'] == 'SCR']
+df_261 = df[df['une_nome'] == '261']
+df_nil = df[df['une_nome'] == 'NIL']
+```
 
-**IMPORTANTE:** A coluna 'UNE' contém o NOME da loja (texto), não o ID numérico!
-Se precisar do ID numérico, use a coluna 'UNE_ID'.
+**❌ ERRADO (NÃO use 'UNE', essa coluna NÃO EXISTE no Parquet!):**
+```python
+df_mad = df[df['UNE'] == 'MAD']  # ❌ KeyError: 'UNE'
+```
+
+**REGRA DE OURO:** SEMPRE use 'une_nome' para filtrar por loja!
+Se precisar do ID numérico, use a coluna 'une' (minúsculo).
 """
 
             # 🎯 PILAR 2: Injetar exemplos contextuais baseados em padrões (Few-Shot Learning)
@@ -475,401 +777,32 @@ Se precisar do ID numérico, use a coluna 'UNE_ID'.
                     self.logger.warning(f"⚠️ Erro ao buscar padrões: {e}")
 
             # 🎯 PILAR 2.5: RAG - Busca semântica de queries similares (expandir Few-Shot Learning)
-            rag_context = ""
+            rag_examples = []
             if self.rag_enabled and self.query_retriever:
                 try:
                     similar_queries = self.query_retriever.find_similar_queries(user_query, top_k=3)
                     if similar_queries:
-                        rag_context = "\n\n**📚 EXEMPLOS DE QUERIES SIMILARES BEM-SUCEDIDAS (RAG):**\n"
-                        rag_context += "Use estes exemplos como referência para gerar código similar:\n\n"
+                        # Filtrar apenas exemplos com alta similaridade (> 0.7)
+                        rag_examples = [ex for ex in similar_queries if ex.get('similarity_score', 0) > 0.7]
 
-                        for i, example in enumerate(similar_queries, 1):
-                            similarity = example.get('similarity_score', 0)
-                            if similarity > 0.7:  # Apenas exemplos muito similares
-                                rag_context += f"**Exemplo {i} (similaridade: {similarity:.2%}):**\n"
-                                rag_context += f"Query: '{example['query_user']}'\n"
-                                rag_context += f"Código gerado:\n```python\n{example['code_generated']}\n```\n"
-                                rag_context += f"Resultado: {example.get('rows_returned', 0)} linhas\n\n"
-
-                        self.logger.info(f"🔍 RAG: {len(similar_queries)} queries similares encontradas (melhor match: {similar_queries[0].get('similarity_score', 0):.2%})")
+                        if rag_examples:
+                            self.logger.info(f"🔍 RAG: {len(rag_examples)} queries similares de alta qualidade encontradas (melhor match: {similar_queries[0].get('similarity_score', 0):.2%})")
+                        else:
+                            self.logger.debug("ℹ️ RAG: Nenhuma query com similaridade > 0.7 encontrada")
                     else:
                         self.logger.debug("ℹ️ RAG: Nenhuma query similar encontrada no banco")
                 except Exception as e:
                     self.logger.warning(f"⚠️ Erro ao buscar queries similares (RAG): {e}")
 
-            # Construir prompt SEM f-string para evitar problemas de formatação
-            system_prompt = """Você é um especialista em análise de dados Python com pandas e interpretação de linguagem natural.
-
-""" + column_context + """
-
-""" + valid_segments + """
-
-""" + valid_unes + """
-
-""" + examples_context + """
-
-""" + rag_context + """
-
-**🚀 INSTRUÇÃO CRÍTICA #0 - FILTROS COM load_data():**
-⚠️ **ATENÇÃO:** Para evitar TIMEOUT/MEMÓRIA, você DEVE passar filtros para load_data()!
-
-**NOVA FUNCIONALIDADE:** load_data() agora aceita filtros opcionais!
-
-✅ **CORRETO - Passar filtros ao carregar (RECOMENDADO):**
-```python
-# Filtrar UNE no carregamento (5-10x mais rápido!)
-df = load_data(filters={'UNE': 'MAD'})  # Carrega apenas UNE MAD (~100k linhas)
-kpis = df.groupby('NOMESEGMENTO').agg({'VENDA_30DD': 'sum', 'ESTOQUE_UNE': 'sum'})
-result = kpis.reset_index()
-```
-
-✅ **CORRETO - Múltiplos filtros:**
-```python
-# Combinar filtros (AND lógico)
-df = load_data(filters={'NOMESEGMENTO': 'TECIDOS', 'UNE': 'SCR'})
-top_10 = df.nlargest(10, 'VENDA_30DD')
-result = top_10[['NOME', 'VENDA_30DD']]
-```
-
-✅ **CORRETO - Filtro por código de produto:**
-```python
-# Análise de produto específico
-df = load_data(filters={'PRODUTO': 59294})  # Apenas 1 produto
-vendas_mensais = df[['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06']].sum()
-result = pd.DataFrame({'Mês': range(1, 7), 'Vendas': vendas_mensais.values})
-```
-
-⚠️ **ACEITÁVEL - Sem filtros (LIMITADO a 10k linhas):**
-```python
-# SEM filtros - sistema limita automaticamente a 10.000 linhas
-df = load_data()  # ⚠️ APENAS 10k linhas (proteção contra OOM)
-# Use apenas para análises gerais/exploratórias
-```
-
-❌ **ERRADO - Carregar tudo e filtrar depois (LENTO):**
-```python
-df = load_data()  # ❌ Carrega apenas 10k linhas (limitado)
-df_mad = df[df['UNE'] == 'MAD']  # Pode não ter todos os dados de MAD
-```
-
-**REGRAS OBRIGATÓRIAS:**
-1. Se a query mencionar UNE específica → passe {'UNE': 'valor'}
-2. Se mencionar SEGMENTO → passe {'NOMESEGMENTO': 'valor'}
-3. Se mencionar código de PRODUTO → passe {'PRODUTO': código}
-4. Combine múltiplos filtros quando possível
-5. SEM filtros = apenas 10k linhas (use só para exploração geral)
-
-**BENEFÍCIOS DOS FILTROS:**
-- ⚡ 5-10x mais rápido (predicate pushdown)
-- 💾 90-95% menos memória
-- ✅ Carrega dados COMPLETOS (sem limite de 10k)
-- 🚀 Usa PolarsDaskAdapter (arquitetura híbrida)
-
----
-
-**🚨 INSTRUÇÃO CRÍTICA #1 - TRATAMENTO DE VALORES NA/NULL:**
-⚠️ **ATENÇÃO:** Colunas do Parquet podem conter valores NA (null/NaN) que causam erros!
-
-**VOCÊ DEVE:**
-1. SEMPRE preencher ou remover NA ANTES de comparações
-2. NUNCA usar `.apply()` com lambdas que comparam valores (use operações vetorizadas!)
-3. Se precisar de `.apply()`, forneça `meta=` e trate NA na função
-
-❌ **ERRADO - Causa erro 'boolean value of NA is ambiguous':**
-```python
-ddf = load_data()
-# Comparação direta com NA causa erro
-ddf['flag'] = ddf.apply(lambda row: row['exposicao_minima'] < row['VENDA_30DD'], axis=1)
-```
-
-✅ **CORRETO - Opção 1 (PREFERIDA - mais rápida):**
-```python
-ddf = load_data()
-# Preencher NA com 0 ANTES de comparar
-ddf['exposicao_minima'] = ddf['exposicao_minima'].fillna(0)
-ddf['VENDA_30DD'] = ddf['VENDA_30DD'].fillna(0)
-# Operação vetorizada (SEM apply!)
-ddf['flag'] = ddf['exposicao_minima'] < ddf['VENDA_30DD']
-df = ddf.compute()
-result = df
-```
-
-✅ **CORRETO - Opção 2 (remover NA):**
-```python
-ddf = load_data()
-# Remover linhas com NA nas colunas relevantes
-ddf = ddf.dropna(subset=['exposicao_minima', 'VENDA_30DD'])
-ddf['flag'] = ddf['exposicao_minima'] < ddf['VENDA_30DD']
-df = ddf.compute()
-result = df
-```
-
-✅ **CORRETO - Opção 3 (apenas se apply for REALMENTE necessário):**
-```python
-ddf = load_data()
-# Usar apply com meta= e tratamento de NA
-ddf['flag'] = ddf.apply(
-    lambda row: (
-        row['exposicao_minima'] < row['VENDA_30DD']
-        if pd.notna(row['exposicao_minima']) and pd.notna(row['VENDA_30DD'])
-        else False
-    ),
-    axis=1,
-    meta=('flag', 'bool')  # OBRIGATÓRIO!
-)
-df = ddf.compute()
-result = df
-```
-
-**REGRA DE OURO:** Sempre use operações vetorizadas (opção 1). Evite `.apply()` sempre que possível!
-
-**COLUNAS COMUNS COM NA:**
-- `exposicao_minima` - pode ter NA
-- `ESTOQUE_UNE` - pode ter NA
-- Colunas de vendas mensais (`mes_01` a `mes_12`) - podem ter NA
-
-**ANTES DE QUALQUER COMPARAÇÃO:**
-```python
-# Sempre preencher NA nas colunas que vai usar
-ddf['coluna1'] = ddf['coluna1'].fillna(0)
-ddf['coluna2'] = ddf['coluna2'].fillna(0)
-# Agora pode comparar com segurança
-ddf['resultado'] = ddf['coluna1'] > ddf['coluna2']
-```
-
----
-
-**🚨 INSTRUÇÃO CRÍTICA #2 - COLUNAS CALCULADAS E FILTROS:**
-⚠️ **ERRO COMUM:** Criar coluna calculada, filtrar, e tentar usar a coluna no filtro!
-
-❌ **ERRADO - Coluna 'vendas_recentes' não existe após filtro:**
-```python
-df = load_data()
-# Criar coluna calculada no DataFrame original
-df_filtrado = df[df['ESTOQUE_UNE'] <= 0]
-df_filtrado['vendas_recentes'] = df_filtrado['mes_01'] + df_filtrado['mes_02']
-# ❌ ERRO: produtos_com_tendencia não tem 'vendas_recentes'!
-produtos_com_tendencia = df_filtrado[df_filtrado['vendas_recentes'] > 0]
-# ❌ ERRO: sort_values não encontra 'vendas_recentes'
-result = produtos_com_tendencia[['NOME']].sort_values(by='vendas_recentes')
-```
-
-✅ **CORRETO - Criar coluna, DEPOIS filtrar usando a coluna:**
-```python
-df = load_data()
-# Filtro inicial
-df_filtrado = df[df['ESTOQUE_UNE'] <= 0].copy()
-# Criar coluna calculada
-df_filtrado['vendas_recentes'] = df_filtrado['mes_01'] + df_filtrado['mes_02']
-# Filtrar usando a coluna calculada
-produtos_com_tendencia = df_filtrado[df_filtrado['vendas_recentes'] > 0]
-# Agora sort_values funciona porque 'vendas_recentes' existe
-result = produtos_com_tendencia[['NOME', 'vendas_recentes']].sort_values(by='vendas_recentes', ascending=False)
-```
-
-✅ **CORRETO ALTERNATIVO - Não filtrar intermediariamente:**
-```python
-df = load_data()
-# Criar todas as colunas calculadas primeiro
-df['vendas_recentes'] = df['mes_01'].fillna(0) + df['mes_02'].fillna(0)
-# Aplicar TODOS os filtros de uma vez
-result = df[(df['ESTOQUE_UNE'] <= 0) & (df['vendas_recentes'] > 0)].sort_values(by='vendas_recentes', ascending=False)
-```
-
-**REGRA:** Se criar coluna calculada e depois usar em sort_values/filtro, ela deve estar NO MESMO DataFrame!
-
----
-
-**INSTRUÇÕES CRÍTICAS:**
-1. **INTERPRETAÇÃO INTELIGENTE**: Se o usuário mencionar "tecido" (singular), você DEVE usar 'TECIDOS' (plural) no código!
-2. **MAPEAMENTO AUTOMÁTICO**: Use a lista de valores válidos acima para mapear termos do usuário → valores exatos do banco
-3. **NOMES DE COLUNAS**: Use sempre MAIÚSCULAS conforme listado
-4. **ACENTOS**: Mantenha acentuação exata (CONFECÇÃO, DECORAÇÃO, INFORMÁTICA, etc.)
-5. **VENDAS**: Sempre use VENDA_30DD para métricas de vendas
-6. **ESTOQUE**: Use ESTOQUE_UNE para estoque
-7. **USE OS EXEMPLOS ACIMA** como referência se foram fornecidos!
-
-**⚠️ DETECÇÃO DE RUPTURA:**
-Se o usuário perguntar sobre "ruptura", "produtos em falta", "estoque zero":
-- Ruptura significa ESTOQUE_UNE == 0 OU ESTOQUE_UNE < exposicao_minima
-- Para identificar segmentos com ruptura: agrupe por NOMESEGMENTO onde ESTOQUE_UNE <= 0
-- Exemplo: `df[df['ESTOQUE_UNE'] <= 0].groupby('NOMESEGMENTO')['PRODUTO'].count()`
-
-**REGRAS PARA RANKINGS/TOP N:**
-- Se a pergunta mencionar "ranking", "top", "maior", "mais vendido" → você DEVE fazer groupby + sum + sort_values
-- Se mencionar "top 10", "top 5" → adicione .head(N) ou .nlargest(N) ANTES de criar gráfico
-- SEMPRE agrupe por NOME (nome do produto) para rankings de produtos
-- SEMPRE ordene por VENDA_30DD (vendas em 30 dias) de forma DECRESCENTE (ascending=False)
-- **🚨 CRÍTICO:** SEMPRE use `.reset_index()` após `.groupby().sum()` ou `.groupby().agg()` ANTES de chamar `.sort_values()`
-- **IMPORTANTE:** NÃO retorne apenas o filtro! Sempre faça o groupby quando houver ranking/top!
-
-**⚠️ REGRA ANTI-ERRO SERIES:**
-Ao fazer agregações (groupby + sum/mean/count), SEMPRE use `.reset_index()` ANTES de `.sort_values()`:
-```python
-# ❌ ERRADO: Series não tem .sort_values() confiável
-result = df.groupby('NOME')['VENDA_30DD'].sum().sort_values()
-
-# ✅ CORRETO: Converter para DataFrame primeiro
-result = df.groupby('NOME')['VENDA_30DD'].sum().reset_index().sort_values(by='VENDA_30DD', ascending=False)
-```
-
-**🎯 DETECÇÃO DE GRÁFICOS - REGRA ABSOLUTA:**
-Se o usuário mencionar qualquer uma destas palavras-chave, você DEVE gerar um gráfico Plotly:
-- Palavras-chave visuais: "gráfico", "chart", "visualização", "plotar", "plot", "barras", "pizza", "linhas", "scatter"
-- Palavras-chave analíticas: "ranking", "top N", "top 10", "maiores", "menores", "comparação"
-
-**⚠️ REGRA CRÍTICA - GRÁFICOS PLOTLY:**
-Quando gerar gráficos Plotly (px.bar, px.pie, px.line):
-1. Filtre e limite os dados (.nlargest, .head, filtros) ANTES de criar o gráfico
-2. NUNCA use .head() ou .nlargest() DEPOIS de px.bar/px.pie/px.line
-3. A variável result deve conter o objeto Figure diretamente
-
-❌ ERRADO (causa erro 'Figure' object has no attribute 'head'):
-```python
-df_top = df.nlargest(10, 'VENDA_30DD')
-result = px.bar(df_top, x='NOME', y='VENDA_30DD')
-result = result.head(10)  # ❌ Figure não tem .head()!
-```
-
-✅ CORRETO:
-```python
-df_top = df.nlargest(10, 'VENDA_30DD')  # Limite ANTES
-result = px.bar(df_top, x='NOME', y='VENDA_30DD')  # result é Figure
-```
-
-**TIPOS DE GRÁFICOS DISPONÍVEIS:**
-- px.bar() - Gráfico de barras (use para rankings, comparações)
-- px.pie() - Gráfico de pizza (use para proporções)
-- px.line() - Gráfico de linhas (use para tendências temporais)
-- px.scatter() - Gráfico de dispersão (use para correlações)
-
-**EXEMPLOS COMPLETOS DE GRÁFICOS:**
-
-1. **Gráfico de Barras - Top 10:**
-```python
-df = load_data()
-df_filtered = df[df['NOMESEGMENTO'] == 'TECIDOS']
-df_top10 = df_filtered.nlargest(10, 'VENDA_30DD')
-result = px.bar(df_top10, x='NOME', y='VENDA_30DD', title='Top 10 Produtos - Tecidos')
-```
-
-2. **Gráfico de Pizza - Distribuição por Segmento:**
-```python
-df = load_data()
-vendas_por_segmento = df.groupby('NOMESEGMENTO')['VENDA_30DD'].sum().reset_index()
-result = px.pie(vendas_por_segmento, names='NOMESEGMENTO', values='VENDA_30DD', title='Vendas por Segmento')
-```
-
-3. **Gráfico de Barras - Comparação de Grupos:**
-```python
-df = load_data()
-papelaria = df[df['NOMESEGMENTO'] == 'PAPELARIA']
-vendas_por_grupo = papelaria.groupby('NOMEGRUPO')['VENDA_30DD'].sum().sort_values(ascending=False).head(5).reset_index()
-result = px.bar(vendas_por_grupo, x='NOMEGRUPO', y='VENDA_30DD', title='Top 5 Grupos - Papelaria')
-```
-
-**📊 GRÁFICOS DE EVOLUÇÃO TEMPORAL (MUITO IMPORTANTE!):**
-
-Quando o usuário pedir "evolução", "tendência", "ao longo do tempo", "nos últimos N meses", "mensais":
-
-✅ **USE AS COLUNAS mes_01 a mes_12** para criar gráficos de linha mostrando evolução temporal!
-
-**IMPORTANTE:**
-- mes_01 = mês mais recente
-- mes_12 = mês mais antigo (12 meses atrás)
-- Os valores são NUMÉRICOS (vendas do mês)
-
-**EXEMPLO - Evolução Temporal Simples:**
-```python
-df = load_data()
-# Filtrar dados específicos
-df_filtrado = df[df['PRODUTO'].astype(str) == '59294']
-
-# Criar lista de vendas mensais
-vendas_mes1 = df_filtrado['mes_01'].sum()
-vendas_mes2 = df_filtrado['mes_02'].sum()
-vendas_mes3 = df_filtrado['mes_03'].sum()
-
-# Criar DataFrame para gráfico
-dados = pd.DataFrame({
-    'Mês': ['Mês 1', 'Mês 2', 'Mês 3'],
-    'Vendas': [vendas_mes1, vendas_mes2, vendas_mes3]
-})
-
-result = px.line(dados, x='Mês', y='Vendas', markers=True)
-```
-
-
-**REGRA:** Se usuário pedir "últimos N meses", use mes_01 até mes_N (do mais recente ao mais antigo).
-
-**🚨 IMPORTANTE: Para queries de EVOLUÇÃO de UM produto ou UMA UNE específica:**
-
-Use as colunas mes_01 a mes_12 diretamente. NÃO complique!
-
-✅ **EXEMPLO CORRETO - Evolução de 1 produto:**
-```python
-df = load_data()
-# Filtrar produto específico
-df_produto = df[df['PRODUTO'].astype(str) == '59294']
-
-# Somar vendas mensais de todas as UNEs
-meses = ['Mês 1', 'Mês 2', 'Mês 3', 'Mês 4', 'Mês 5', 'Mês 6']
-vendas = [
-    df_produto['mes_01'].sum(),
-    df_produto['mes_02'].sum(),
-    df_produto['mes_03'].sum(),
-    df_produto['mes_04'].sum(),
-    df_produto['mes_05'].sum(),
-    df_produto['mes_06'].sum()
-]
-
-import pandas as pd
-temporal_df = pd.DataFrame({'Mês': meses, 'Vendas': vendas})
-result = px.bar(temporal_df, x='Mês', y='Vendas',
-                title='Evolução de Vendas - Produto 59294')
-```
-
-**MAPEAMENTO OBRIGATÓRIO DE SEGMENTOS:**
-IMPORTANTE: O usuário pode usar termos no singular ou simplificados. Você DEVE usar os valores EXATOS da base de dados:
-
-- Usuário diz: "tecido" ou "tecidos" → Você usa: df[df['NOMESEGMENTO'] == 'TECIDOS']
-- Usuário diz: "papelaria" → Você usa: df[df['NOMESEGMENTO'] == 'PAPELARIA']
-- Usuário diz: "armarinho" ou "confecção" → Você usa: df[df['NOMESEGMENTO'] == 'ARMARINHO E CONFECÇÃO']
-- Usuário diz: "limpeza" → Você usa: df[df['NOMESEGMENTO'] == 'MATERIAL DE LIMPEZA']
-- Usuário diz: "casa" ou "decoração" → Você usa: df[df['NOMESEGMENTO'] == 'CASA E DECORAÇÃO']
-- Usuário diz: "festas" → Você usa: df[df['NOMESEGMENTO'] == 'FESTAS']
-- Usuário diz: "higiene" ou "beleza" → Você usa: df[df['NOMESEGMENTO'] == 'HIGIENE E BELEZA']
-- Usuário diz: "brinquedo" ou "brinquedos" → Você usa: df[df['NOMESEGMENTO'] == 'BRINQUEDOS']
-- Usuário diz: "alimento" ou "alimentos" → Você usa: df[df['NOMESEGMENTO'] == 'ALIMENTOS']
-- Usuário diz: "doce" ou "doces" → Você usa: df[df['NOMESEGMENTO'] == 'DOCES E SALGADOS']
-
-⚠️ NUNCA use .str.upper() ou .str.contains() em comparações de segmento - use apenas == com o valor EXATO!
-
-**🚀 OTIMIZAÇÃO DE PERFORMANCE - PREDICATE PUSHDOWN:**
-Quando houver filtros específicos (segmento, UNE, produto), aplique os filtros O MAIS CEDO POSSÍVEL no código:
-
-✅ **EFICIENTE (Predicate Pushdown):**
-```python
-df = load_data()
-# Filtra IMEDIATAMENTE após carregar (menos memória, mais rápido)
-df = df[df['NOMESEGMENTO'] == 'TECIDOS']
-# Agora trabalha com dataset reduzido
-df_top10 = df.nlargest(10, 'VENDA_30DD')
-result = px.bar(df_top10, x='NOME', y='VENDA_30DD')
-```
-
-❌ **INEFICIENTE (Sem pushdown):**
-```python
-df = load_data()  # Carrega tudo (lento)
-# Processa dataset inteiro
-df_sorted = df.sort_values('VENDA_30DD', ascending=False)
-# Filtra tarde demais
-df_filtered = df_sorted[df_sorted['NOMESEGMENTO'] == 'TECIDOS'].head(10)
-```
-
-**REGRA:** Se a query mencionar filtros específicos (segmento, UNE, categoria), aplique-os na PRIMEIRA LINHA após load_data()!
-
-Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
+            # ✅ NOVO: Construir prompt estruturado usando Context7 best practices
+            # Developer message + Few-shot learning + Chain-of-thought
+            system_prompt = self._build_structured_prompt(user_query, rag_examples=rag_examples)
+
+            # Adicionar contexto de exemplos do PatternMatcher (se houver)
+            if examples_context:
+                system_prompt += f"\n\n{examples_context}"
+
+            self.logger.info(f"✅ Prompt estruturado gerado: {len(system_prompt)} caracteres, {len(rag_examples)} exemplos RAG")
 
             # 🚀 PILAR 4: Adicionar avisos dinâmicos baseados em erros recentes
             if self.dynamic_prompt:
@@ -905,6 +838,37 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             # 🚀 QUICK WIN 1: Validar e corrigir Top N automaticamente
             # user_query já foi definido no início da função
             code_to_execute = self._validate_top_n(code_to_execute, user_query)
+
+            # 🔧 SELF-HEALING: Validação e auto-correção PRÉ-execução
+            if self.self_healing:
+                try:
+                    # Obter schema de colunas disponíveis
+                    schema_columns = list(self.column_descriptions.keys())
+
+                    healing_context = {
+                        'query': user_query,
+                        'schema_columns': schema_columns
+                    }
+
+                    # Validar e tentar curar
+                    is_valid, healed_code, feedback = self.self_healing.validate_and_heal(
+                        code_to_execute,
+                        healing_context
+                    )
+
+                    if feedback:
+                        for msg in feedback:
+                            self.logger.info(f"🔧 Self-Healing: {msg}")
+
+                    if healed_code != code_to_execute:
+                        self.logger.info("✅ Código auto-corrigido pelo SelfHealingSystem")
+                        code_to_execute = healed_code
+
+                    if not is_valid:
+                        self.logger.warning("⚠️ Self-Healing detectou problemas que podem causar erro")
+
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Erro no Self-Healing pré-execução: {e}")
 
             # ✅ FASE 1: Validar código antes de executar
             validation_result = self.code_validator.validate(code_to_execute, user_query)
@@ -973,6 +937,48 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
                 result_df = result.reset_index()
                 self._log_successful_query(user_query, code_to_execute, len(result_df))
                 return {"type": "dataframe", "output": result_df}
+            elif isinstance(result, list) and len(result) > 0 and 'plotly' in str(type(result[0])):
+                # ✅ CORREÇÃO: Lista de Figures Plotly (múltiplos gráficos)
+                self.logger.info(f"Resultado: {len(result)} gráficos Plotly.")
+
+                # Aplicar tema escuro a cada Figure
+                figures_json = []
+                for i, fig in enumerate(result):
+                    if 'plotly' in str(type(fig)):
+                        # ✨ APLICAR TEMA ESCURO CHATGPT
+                        fig.update_layout(
+                            plot_bgcolor='#2a2b32',
+                            paper_bgcolor='#2a2b32',
+                            font=dict(color='#ececf1', family='sans-serif'),
+                            title=dict(font=dict(color='#ececf1', size=18)),
+                            xaxis=dict(
+                                gridcolor='#444654',
+                                tickfont=dict(color='#ececf1'),
+                                title=dict(font=dict(color='#ececf1'))
+                            ),
+                            yaxis=dict(
+                                gridcolor='#444654',
+                                tickfont=dict(color='#ececf1'),
+                                title=dict(font=dict(color='#ececf1'))
+                            ),
+                            margin=dict(l=60, r=40, t=40, b=80),
+                            hoverlabel=dict(
+                                bgcolor='#2a2b32',
+                                bordercolor='#10a37f',
+                                font=dict(color='#ececf1')
+                            ),
+                            legend=dict(
+                                font=dict(color='#ececf1'),
+                                bgcolor='rgba(42, 43, 50, 0.8)'
+                            )
+                        )
+                        figures_json.append(pio.to_json(fig))
+                    else:
+                        self.logger.warning(f"⚠️ Item {i} na lista não é uma Figure Plotly: {type(fig)}")
+
+                # 🚀 Registrar query bem-sucedida (múltiplos gráficos)
+                self._log_successful_query(user_query, code_to_execute, len(figures_json))
+                return {"type": "multiple_charts", "output": figures_json}
             elif 'plotly' in str(type(result)):
                 self.logger.info(f"Resultado: Gráfico Plotly.")
 
@@ -1020,7 +1026,84 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
             error_msg = str(e)
             error_type = type(e).__name__
 
-            # 🔄 AUTO-RECOVERY: Detectar erros comuns e limpar cache
+            # 🔧 SELF-HEALING: Tentar corrigir erro automaticamente
+            if self.self_healing and not hasattr(self, '_healing_retry_count'):
+                try:
+                    self._healing_retry_count = 0
+
+                    self.logger.info(f"🔧 Self-Healing: Tentando corrigir {error_type}...")
+
+                    # Obter schema de colunas
+                    schema_columns = list(self.column_descriptions.keys())
+                    healing_context = {
+                        'query': user_query,
+                        'schema_columns': schema_columns
+                    }
+
+                    # Tentar curar (máximo 2 retries)
+                    success, corrected_code, explanation = self.self_healing.heal_after_error(
+                        code_to_execute,
+                        e,
+                        healing_context,
+                        max_retries=2
+                    )
+
+                    if success and corrected_code != code_to_execute:
+                        self.logger.info(f"✅ Self-Healing: {explanation}")
+                        self.logger.info(f"🔄 Tentando novamente com código corrigido...")
+
+                        # Limpar cache e atualizar com código corrigido
+                        if cache_key in self.code_cache:
+                            del self.code_cache[cache_key]
+
+                        self.code_cache[cache_key] = corrected_code
+
+                        # Retry com código corrigido (máximo 1 vez)
+                        if self._healing_retry_count < 1:
+                            self._healing_retry_count += 1
+                            try:
+                                # Re-executar com código corrigido
+                                local_scope = {
+                                    "pd": pd,
+                                    "px": px,
+                                    "result": None,
+                                    "df_raw_data": pd.DataFrame(raw_data) if raw_data else None,
+                                }
+                                result = self._execute_generated_code(corrected_code, local_scope)
+
+                                # Sucesso! Retornar resultado
+                                self.logger.info("✅ Self-Healing: Código corrigido executado com sucesso!")
+                                delattr(self, '_healing_retry_count')
+
+                                # Processar resultado normalmente
+                                if isinstance(result, pd.DataFrame):
+                                    self._log_successful_query(user_query, corrected_code, len(result))
+                                    return {"type": "dataframe", "output": result}
+                                elif isinstance(result, pd.Series):
+                                    result_df = result.reset_index()
+                                    self._log_successful_query(user_query, corrected_code, len(result_df))
+                                    return {"type": "dataframe", "output": result_df}
+                                elif 'plotly' in str(type(result)):
+                                    self._log_successful_query(user_query, corrected_code, 1)
+                                    return {"type": "chart", "output": pio.to_json(result)}
+                                else:
+                                    return {"type": "text", "output": str(result)}
+
+                            except Exception as retry_error:
+                                self.logger.warning(f"⚠️ Self-Healing retry falhou: {retry_error}")
+                                delattr(self, '_healing_retry_count')
+                        else:
+                            delattr(self, '_healing_retry_count')
+
+                    else:
+                        self.logger.warning(f"⚠️ Self-Healing não conseguiu corrigir automaticamente")
+
+                except Exception as healing_error:
+                    self.logger.warning(f"⚠️ Erro no Self-Healing pós-erro: {healing_error}")
+                    if hasattr(self, '_healing_retry_count'):
+                        delattr(self, '_healing_retry_count')
+
+            # 🔄 AUTO-RECOVERY: Detectar erros comuns e limpar cache (fallback)
             should_retry = False
 
             if "'DataFrame' object has no attribute 'compute'" in error_msg or \
@@ -1246,12 +1329,12 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
         import json
 
         try:
-            # Calcular hash do prompt atual (baseado em column_descriptions + segmentos válidos)
+            # ✅ INCREMENTAR VERSÃO para forçar regeneração após correção de schema
             prompt_components = {
                 'columns': list(self.column_descriptions.keys()),
                 'descriptions': list(self.column_descriptions.values()),
                 # Adicionar outros componentes que afetam o prompt
-                'version': '2.6_fixed_fstring_issue_FINAL_20251020'  # Incrementar quando houver mudanças significativas
+                'version': '5.0_context7_prompt_engineering_few_shot_learning_20251027'  # ✅ NOVA VERSÃO
             }
 
             prompt_str = json.dumps(prompt_components, sort_keys=True)
@@ -1298,3 +1381,59 @@ Siga as instruções do usuário E faça o mapeamento inteligente de termos!"""
 
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao verificar versão do cache: {e}")
+
+    def detect_broad_query(self, query: str) -> Tuple[bool, str]:
+        """
+        Detecta se uma query é muito ampla e pode causar timeout.
+        """
+        query_lower = query.lower()
+
+        # Critérios de queries amplas
+        broad_keywords = ["todos", "todas", "geral", "completo", "tudo", "vendas", "estoque"]
+        specific_keywords = ["top", "limite", "une", "segmento", "categoria", "grupo", "fabricante", "preço", "<", ">", "="]
+
+        has_broad = any(kw in query_lower for kw in broad_keywords)
+        has_specific = any(kw in query_lower for kw in specific_keywords)
+        has_number = any(char.isdigit() for char in query_lower)
+
+        if has_broad and not has_specific and not has_number:
+            return True, "Keyword ampla detectada sem filtros específicos ou limites numéricos"
+
+        if "ranking" in query_lower and not has_specific and not has_number:
+            return True, "Ranking sem limite ou filtro específico"
+
+        # Check for queries that are implicitly broad
+        if not has_specific and not has_number:
+            return True, "Query sem filtros específicos ou limites numéricos"
+
+        return False, "Query específica OK"
+
+    def get_educational_message(self, query: str, reason: str) -> str:
+        """
+        Gera uma mensagem educativa para queries amplas.
+        """
+        return f"""
+🔍 Query Muito Ampla Detectada
+
+**Sua Pergunta:** "{query}"
+
+**Motivo:** {reason}
+
+**Por que isso acontece?**
+- Processar milhões de registros pode levar muito tempo e causar erros.
+
+**✅ Como fazer queries eficientes:**
+
+**Exemplos de queries válidas:**
+   1. Top 10 produtos mais vendidos da UNE NIG
+   2. Produtos do segmento ARMARINHO com estoque < 10
+   3. Vendas da UNE BEL nos últimos 30 dias
+
+**💡 Dicas:**
+1. Especifique uma UNE (loja)
+2. Use limites (Top 10, Top 20)
+3. Aplique filtros (segmento, preço, etc.)
+4. Defina um período de tempo
+
+**💡 Sugestão:** Tente 'Top 10 produtos mais vendidos da UNE [código]'
+"""

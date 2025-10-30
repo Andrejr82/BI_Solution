@@ -1,0 +1,11 @@
+[
+  {
+    "query": "quais produtos estão sem vendas na une mad",
+    "session_id": "253afda9-eab5-4176-8600-ebefadbead0f",
+    "timestamp": "2025-10-29T20:44:23.336668",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.076489
+  }
+]

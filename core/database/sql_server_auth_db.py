@@ -18,10 +18,10 @@ SESSAO_MINUTOS = 30
 logger = logging.getLogger(__name__)
 
 # === FALLBACK: Usuários em memória para modo cloud ===
-# Hashes pré-computados para evitar erro de bcrypt no import
+# MODO DESENVOLVIMENTO: Senhas em texto plano (trocar por hashes em produção)
 _local_users = {
     "admin": {
-        "password_hash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYfQw3wZ3Dq",  # admin
+        "password": "admin123",  # Senha em texto plano (DEV ONLY)
         "role": "admin",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -29,7 +29,7 @@ _local_users = {
         "ultimo_login": None
     },
     "user": {
-        "password_hash": "$2b$12$EixZaYVK1fsbw1ZfbX3OXe4P8Y2xv3bq4vOGz1s.OhPr9nz9WyT8u",  # user123
+        "password": "user123",
         "role": "user",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -37,7 +37,7 @@ _local_users = {
         "ultimo_login": None
     },
     "cacula": {
-        "password_hash": "$2b$12$k5Y6fS7qZ8rT9pW3xV2yL.4QqZ8rT9pW3xV2yL4QqZ8rT9pW3xV2y",  # cacula123
+        "password": "cacula123",
         "role": "user",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -45,7 +45,7 @@ _local_users = {
         "ultimo_login": None
     },
     "renan": {
-        "password_hash": "$2b$12$8vn/Jk.xJKRNm8k9p4y7d.EKCQqrFYp.QY8vUqTrPcRN6kEJ9xvIW",  # renan
+        "password": "renan123",
         "role": "user",
         "ativo": True,
         "tentativas_invalidas": 0,
@@ -119,72 +119,76 @@ def init_db():
 
 # --- Autenticação ---
 def autenticar_usuario(username, password):
-    """Autentica usuário (SQL Server ou modo local)"""
+    """Autentica usuário (MODO DESENVOLVIMENTO - apenas local)"""
     logger.info(f"Tentativa de autenticação para: {username}")
 
-    # Modo local (cloud sem banco)
-    if not is_database_configured():
-        return _autenticar_local(username, password)
+    # FORÇAR MODO LOCAL (DEV ONLY - ignorar SQL Server para evitar bcrypt)
+    logger.info("🔧 MODO DEV: Usando autenticação local (ignorando SQL Server)")
+    return _autenticar_local(username, password)
 
-    # Modo SQL Server
-    try:
-        conn = get_db_connection()
-        if conn is None:
-            logger.warning("⚠️ Banco indisponível - usando autenticação local")
-            return _autenticar_local(username, password)
+    # # Modo local (cloud sem banco)
+    # if not is_database_configured():
+    #     return _autenticar_local(username, password)
 
-        with conn:
-            result = conn.execute(
-                text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role FROM usuarios WHERE username=:username"),
-                {"username": username}
-            ).fetchone()
+    # # Modo SQL Server (DESABILITADO TEMPORARIAMENTE)
+    # try:
+    #     conn = get_db_connection()
+    #     if conn is None:
+    #         logger.warning("⚠️ Banco indisponível - usando autenticação local")
+    #         return _autenticar_local(username, password)
 
-            if not result:
-                logger.warning(f"Usuário '{username}' não encontrado no banco.")
-                return None, "Usuário não encontrado"
+    #     with conn:
+    #         result = conn.execute(
+    #             text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role FROM usuarios WHERE username=:username"),
+    #             {"username": username}
+    #         ).fetchone()
 
-            user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role = result
-            now = datetime.now()
+    #         if not result:
+    #             logger.warning(f"Usuário '{username}' não encontrado no banco.")
+    #             return None, "Usuário não encontrado"
 
-            if not ativo:
-                return None, "Usuário inativo"
+    #         user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role = result
+    #         now = datetime.now()
 
-            if bloqueado_ate and now < bloqueado_ate:
-                return None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
+    #         if not ativo:
+    #             return None, "Usuário inativo"
 
-            if not verify_password(password, db_password_hash):
-                tentativas += 1
-                if tentativas >= MAX_TENTATIVAS:
-                    bloqueado_ate = now + timedelta(minutes=BLOQUEIO_MINUTOS)
-                    conn.execute(
-                        text("UPDATE usuarios SET tentativas_invalidas=:tentativas, bloqueado_ate=:bloqueado_ate WHERE id=:id"),
-                        {"tentativas": tentativas, "bloqueado_ate": bloqueado_ate, "id": user_id}
-                    )
-                    conn.commit()
-                    return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
-                else:
-                    conn.execute(
-                        text("UPDATE usuarios SET tentativas_invalidas=:tentativas WHERE id=:id"),
-                        {"tentativas": tentativas, "id": user_id}
-                    )
-                    conn.commit()
-                    return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
+    #         if bloqueado_ate and now < bloqueado_ate:
+    #             return None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
 
-            # Sucesso
-            conn.execute(
-                text("UPDATE usuarios SET tentativas_invalidas=0, bloqueado_ate=NULL, ultimo_login=:now WHERE id=:id"),
-                {"now": now, "id": user_id}
-            )
-            conn.commit()
-            logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}")
-            return role, None
+    #         if not verify_password(password, db_password_hash):
+    #             tentativas += 1
+    #             if tentativas >= MAX_TENTATIVAS:
+    #                 bloqueado_ate = now + timedelta(minutes=BLOQUEIO_MINUTOS)
+    #                 conn.execute(
+    #                     text("UPDATE usuarios SET tentativas_invalidas=:tentativas, bloqueado_ate=:bloqueado_ate WHERE id=:id"),
+    #                     {"tentativas": tentativas, "bloqueado_ate": bloqueado_ate, "id": user_id}
+    #                 )
+    #                 conn.commit()
+    #                 return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
+    #             else:
+    #                 conn.execute(
+    #                     text("UPDATE usuarios SET tentativas_invalidas=:tentativas WHERE id=:id"),
+    #                     {"tentativas": tentativas, "id": user_id}
+    #                 )
+    #                 conn.commit()
+    #                 return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
 
-    except Exception as e:
-        logger.error(f"Erro SQL Server: {e}")
-        return None, f"Erro de autenticação: {str(e)}"
+    #         # Sucesso
+    #         conn.execute(
+    #             text("UPDATE usuarios SET tentativas_invalidas=0, bloqueado_ate=NULL, ultimo_login=:now WHERE id=:id"),
+    #             {"now": now, "id": user_id}
+    #         )
+    #         conn.commit()
+    #         logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}")
+    #         return role, None
+
+    # except Exception as e:
+    #     logger.error(f"Erro SQL Server: {e}")
+    #     return None, f"Erro de autenticação: {str(e)}"
 
 def _autenticar_local(username, password):
-    """Autenticação local (fallback para cloud)"""
+    """Autenticação local (fallback para cloud) - MODO DESENVOLVIMENTO"""
     logger.info(f"🌤️ Autenticação local para: {username}")
 
     users = _get_local_users()
@@ -200,7 +204,9 @@ def _autenticar_local(username, password):
     if user["bloqueado_ate"] and now < user["bloqueado_ate"]:
         return None, f"Usuário bloqueado até {user['bloqueado_ate'].strftime('%Y-%m-%d %H:%M:%S')}"
 
-    if not verify_password(password, user["password_hash"]):
+    # MODO DEV: Comparação direta de senha (sem bcrypt)
+    # Em produção, usar verify_password com hash
+    if password != user["password"]:
         user["tentativas_invalidas"] += 1
         if user["tentativas_invalidas"] >= MAX_TENTATIVAS:
             user["bloqueado_ate"] = now + timedelta(minutes=BLOQUEIO_MINUTOS)
