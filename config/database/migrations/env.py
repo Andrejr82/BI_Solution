@@ -9,7 +9,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from core.config.config import Config # Import Config
+# Corrigido: config.py não existe, usar safe_settings
+from core.config.safe_settings import SafeSettings as Config # Import Config
 from core.database.models import Base # Import Base
 
 # this is the Alembic Config object, which provides

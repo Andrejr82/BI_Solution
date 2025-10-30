@@ -31,7 +31,67 @@ class AgentGraphCache:
         # Cache em memória para acesso ultra-rápido
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
 
+        # Verificar versão do código e invalidar cache se mudou
+        self._check_code_version()
+
         logger.info(f"✅ AgentGraphCache inicializado - TTL: {ttl_hours}h")
+
+    def _check_code_version(self):
+        """
+        Verifica se a versão do código mudou e invalida cache se necessário.
+
+        Isso resolve o problema de cache desatualizado após mudanças no código.
+        """
+        version_file = Path("data/cache/.code_version")
+        version_cache_file = self.cache_dir / ".code_version"
+
+        try:
+            # Ler versão atual do código
+            if version_file.exists():
+                with open(version_file, 'r') as f:
+                    current_version = f.read().strip()
+            else:
+                # Criar versão inicial
+                current_version = datetime.now().strftime("%Y%m%d_%H%M%S")
+                version_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(version_file, 'w') as f:
+                    f.write(current_version)
+
+            # Ler versão do cache
+            if version_cache_file.exists():
+                with open(version_cache_file, 'r') as f:
+                    cached_version = f.read().strip()
+            else:
+                cached_version = None
+
+            # Se versões diferentes, limpar cache
+            if cached_version != current_version:
+                logger.warning(f"🔄 Versão do código mudou ({cached_version} → {current_version})")
+                logger.warning(f"🧹 Invalidando cache antigo...")
+
+                # Limpar cache em memória
+                self._memory_cache.clear()
+
+                # Limpar cache em disco
+                import shutil
+                if self.cache_dir.exists():
+                    for cache_file in self.cache_dir.glob("*.pkl"):
+                        try:
+                            cache_file.unlink()
+                        except Exception as e:
+                            logger.error(f"Erro ao remover {cache_file}: {e}")
+
+                # Salvar nova versão
+                with open(version_cache_file, 'w') as f:
+                    f.write(current_version)
+
+                logger.info(f"✅ Cache invalidado - Nova versão: {current_version}")
+            else:
+                logger.debug(f"✅ Versão do código inalterada: {current_version}")
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao verificar versão do código: {e}")
+            # Continuar mesmo com erro (não quebrar inicialização)
 
     def _normalize_query(self, query: str) -> str:
         """Normaliza query para melhor matching"""

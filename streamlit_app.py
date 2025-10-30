@@ -122,11 +122,11 @@ section[data-testid="stSidebar"] button:hover {
 }
 
 /* ==================== INPUT AREA ==================== */
-.stChatInput textarea {
+textarea[data-testid="stChatInputTextArea"] {
     background-color: white !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 12px !important;
-    color: var(--text-primary) !important;
+    color: #333 !important;
     padding: 16px !important;
 }
 
@@ -137,7 +137,6 @@ section[data-testid="stSidebar"] button:hover {
 
 /* Text Inputs gerais */
 .stTextInput > div > div > input,
-.stTextArea > div > div > textarea,
 .stNumberInput > div > div > input {
     background-color: var(--bg-input) !important;
     color: var(--text-primary) !important;
@@ -714,14 +713,8 @@ else:
     with st.sidebar:
         st.divider()
 
-        # 🎨 CUSTOMIZAÇÃO: Mostrar logo Caçula no sidebar
-        import os
-        logo_path = os.path.join(os.getcwd(), "assets", "images", "cacula_logo.png")
-        if os.path.exists(logo_path):
-            # Centralizar logo usando colunas
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                st.image(logo_path, width=120)
+        # Logo removida do sidebar conforme solicitado (2025-10-26)
+        # Logo aparece apenas no chat como avatar do assistente
 
         st.subheader("✨ Análise Inteligente com IA")
 
@@ -805,7 +798,6 @@ else:
                             if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
                                 # Adicionar pergunta ao session state
                                 st.session_state['pergunta_selecionada'] = pergunta
-                                st.rerun()
 
                 st.caption("💡 Clique para executar")
 
@@ -1157,13 +1149,13 @@ else:
     # 💬 RENDERIZAR histórico de conversas
     for i, msg in enumerate(st.session_state.messages):
         try:
-            # 🎨 CUSTOMIZAÇÃO: Usar logo Caçula para mensagens do assistente
+            # 🎨 CUSTOMIZAÇÃO: Usar logo Caçula otimizada para chat (53x80px)
             import os
-            logo_path = os.path.join(os.getcwd(), "assets", "images", "cacula_logo.png")
+            logo_chat_path = os.path.join(os.getcwd(), "assets", "images", "cacula_logo_chat.png")
 
-            if msg["role"] == "assistant" and os.path.exists(logo_path):
-                # Usar logo Caçula para assistente
-                with st.chat_message(msg["role"], avatar=logo_path):
+            if msg["role"] == "assistant" and os.path.exists(logo_chat_path):
+                # Usar logo Caçula otimizada para assistente (não cortada)
+                with st.chat_message(msg["role"], avatar=logo_chat_path):
                     response_data = msg.get("content", {})
             else:
                 # Usar avatar padrão

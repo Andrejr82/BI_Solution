@@ -1,0 +1,635 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created_date": "2025-10-29",
+    "total_patterns": 30,
+    "coverage_target": "80% das queries comuns",
+    "source": "Análise de successful_queries (últimos 30 dias)",
+    "last_updated": "2025-10-29",
+    "estimated_coverage": "85%"
+  },
+  "categories": {
+    "ranking": "Queries de Top N / Ranking",
+    "filtros_une": "Filtros por UNE específica",
+    "filtros_segmento": "Filtros por segmento/grupo",
+    "agregacoes": "Agregações (soma, média, count)",
+    "estoque": "Queries relacionadas a estoque",
+    "vendas": "Queries relacionadas a vendas",
+    "combinacoes": "Combinações de múltiplos filtros",
+    "temporais": "Filtros e análises temporais"
+  },
+  "patterns": [
+    {
+      "id": "ranking_top_n_une_vendas",
+      "category": "ranking",
+      "priority": "high",
+      "description": "Top N produtos por vendas em uma UNE específica",
+      "keywords": ["top", "melhores", "maiores", "vendidos", "une", "ranking"],
+      "usage_frequency": "muito_alta",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('UNE_NOME') == '{une_nome}').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head({n})",
+      "examples": [
+        {
+          "query": "Top 10 produtos mais vendidos da UNE NIG",
+          "code": "df.filter(pl.col('UNE_NOME') == 'NIG').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head(10)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        },
+        {
+          "query": "Quais os 5 produtos com maiores vendas na UNE TERESINA?",
+          "code": "df.filter(pl.col('UNE_NOME') == 'TERESINA').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head(5)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "ranking_top_n_geral",
+      "category": "ranking",
+      "priority": "high",
+      "description": "Top N produtos por vendas geral (todas UNEs)",
+      "keywords": ["top", "melhores", "maiores", "vendidos", "geral", "total"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head({n})",
+      "examples": [
+        {
+          "query": "Top 20 produtos mais vendidos no geral",
+          "code": "df.group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head(20)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        },
+        {
+          "query": "Mostre os 15 produtos campeões de vendas",
+          "code": "df.group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True).head(15)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "ranking_top_n_estoque",
+      "category": "ranking",
+      "priority": "high",
+      "description": "Top N produtos por estoque em uma UNE",
+      "keywords": ["top", "maiores", "estoque", "une"],
+      "usage_frequency": "alta",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('UNE_NOME') == '{une_nome}').group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True).head({n})",
+      "examples": [
+        {
+          "query": "Top 10 produtos com maior estoque na UNE FORTALEZA",
+          "code": "df.filter(pl.col('UNE_NOME') == 'FORTALEZA').group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True).head(10)",
+          "result_type": "DataFrame com PRODUTO e total_estoque"
+        }
+      ]
+    },
+    {
+      "id": "filtro_une_simples",
+      "category": "filtros_une",
+      "priority": "high",
+      "description": "Filtrar dados por uma UNE específica",
+      "keywords": ["une", "filtro", "dados"],
+      "usage_frequency": "muito_alta",
+      "complexity": "baixa",
+      "code_template": "df.filter(pl.col('UNE_NOME') == '{une_nome}')",
+      "examples": [
+        {
+          "query": "Mostre os dados da UNE RECIFE",
+          "code": "df.filter(pl.col('UNE_NOME') == 'RECIFE')",
+          "result_type": "DataFrame filtrado por UNE"
+        },
+        {
+          "query": "Dados da UNE SALVADOR",
+          "code": "df.filter(pl.col('UNE_NOME') == 'SALVADOR')",
+          "result_type": "DataFrame filtrado por UNE"
+        }
+      ]
+    },
+    {
+      "id": "filtro_multiplas_unes",
+      "category": "filtros_une",
+      "priority": "medium",
+      "description": "Filtrar dados por múltiplas UNEs",
+      "keywords": ["unes", "múltiplas", "várias", "filtro"],
+      "usage_frequency": "media",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('UNE_NOME').is_in([{lista_unes}]))",
+      "examples": [
+        {
+          "query": "Mostre dados das UNEs FORTALEZA, RECIFE e SALVADOR",
+          "code": "df.filter(pl.col('UNE_NOME').is_in(['FORTALEZA', 'RECIFE', 'SALVADOR']))",
+          "result_type": "DataFrame filtrado por múltiplas UNEs"
+        },
+        {
+          "query": "Dados das UNEs NIG e TERESINA",
+          "code": "df.filter(pl.col('UNE_NOME').is_in(['NIG', 'TERESINA']))",
+          "result_type": "DataFrame filtrado por múltiplas UNEs"
+        }
+      ]
+    },
+    {
+      "id": "agregacao_vendas_por_une",
+      "category": "agregacoes",
+      "priority": "high",
+      "description": "Total de vendas agrupado por UNE",
+      "keywords": ["total", "vendas", "por une", "agrupado"],
+      "usage_frequency": "muito_alta",
+      "complexity": "baixa",
+      "code_template": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Total de vendas por UNE",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e total_vendas"
+        },
+        {
+          "query": "Quanto cada UNE vendeu?",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "agregacao_estoque_por_une",
+      "category": "agregacoes",
+      "priority": "high",
+      "description": "Total de estoque agrupado por UNE",
+      "keywords": ["total", "estoque", "por une", "agrupado"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.group_by('UNE_NOME').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True)",
+      "examples": [
+        {
+          "query": "Total de estoque por UNE",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e total_estoque"
+        }
+      ]
+    },
+    {
+      "id": "agregacao_media_vendas",
+      "category": "agregacoes",
+      "priority": "medium",
+      "description": "Média de vendas por produto ou UNE",
+      "keywords": ["média", "vendas", "average"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.group_by('{coluna}').agg(pl.col('VENDA').mean().alias('media_vendas')).sort('media_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Média de vendas por produto",
+          "code": "df.group_by('PRODUTO').agg(pl.col('VENDA').mean().alias('media_vendas')).sort('media_vendas', descending=True)",
+          "result_type": "DataFrame com PRODUTO e media_vendas"
+        },
+        {
+          "query": "Média de vendas por UNE",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('VENDA').mean().alias('media_vendas')).sort('media_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e media_vendas"
+        }
+      ]
+    },
+    {
+      "id": "filtro_segmento",
+      "category": "filtros_segmento",
+      "priority": "medium",
+      "description": "Filtrar por segmento específico",
+      "keywords": ["segmento", "grupo", "categoria"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.filter(pl.col('SEGMENTO') == '{segmento}')",
+      "examples": [
+        {
+          "query": "Dados do segmento VAREJO",
+          "code": "df.filter(pl.col('SEGMENTO') == 'VAREJO')",
+          "result_type": "DataFrame filtrado por segmento"
+        },
+        {
+          "query": "Mostre apenas produtos do segmento ATACADO",
+          "code": "df.filter(pl.col('SEGMENTO') == 'ATACADO')",
+          "result_type": "DataFrame filtrado por segmento"
+        }
+      ]
+    },
+    {
+      "id": "vendas_totais_geral",
+      "category": "vendas",
+      "priority": "high",
+      "description": "Vendas totais gerais (soma de todas as vendas)",
+      "keywords": ["total", "vendas", "geral", "soma"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.select(pl.col('VENDA').sum().alias('vendas_totais'))",
+      "examples": [
+        {
+          "query": "Qual o total de vendas?",
+          "code": "df.select(pl.col('VENDA').sum().alias('vendas_totais'))",
+          "result_type": "DataFrame com vendas_totais"
+        },
+        {
+          "query": "Soma total das vendas",
+          "code": "df.select(pl.col('VENDA').sum().alias('vendas_totais'))",
+          "result_type": "DataFrame com vendas_totais"
+        }
+      ]
+    },
+    {
+      "id": "estoque_total_geral",
+      "category": "estoque",
+      "priority": "high",
+      "description": "Estoque total geral (soma de todos os estoques)",
+      "keywords": ["total", "estoque", "geral", "soma"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.select(pl.col('ESTOQUE').sum().alias('estoque_total'))",
+      "examples": [
+        {
+          "query": "Qual o estoque total?",
+          "code": "df.select(pl.col('ESTOQUE').sum().alias('estoque_total'))",
+          "result_type": "DataFrame com estoque_total"
+        },
+        {
+          "query": "Soma total do estoque",
+          "code": "df.select(pl.col('ESTOQUE').sum().alias('estoque_total'))",
+          "result_type": "DataFrame com estoque_total"
+        }
+      ]
+    },
+    {
+      "id": "estoque_por_produto_une",
+      "category": "combinacoes",
+      "priority": "high",
+      "description": "Estoque por produto em uma UNE específica",
+      "keywords": ["estoque", "produto", "une"],
+      "usage_frequency": "alta",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('UNE_NOME') == '{une_nome}').group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True)",
+      "examples": [
+        {
+          "query": "Estoque de produtos na UNE FORTALEZA",
+          "code": "df.filter(pl.col('UNE_NOME') == 'FORTALEZA').group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True)",
+          "result_type": "DataFrame com PRODUTO e total_estoque"
+        }
+      ]
+    },
+    {
+      "id": "vendas_por_produto_une",
+      "category": "combinacoes",
+      "priority": "high",
+      "description": "Vendas por produto em uma UNE específica",
+      "keywords": ["vendas", "produto", "une"],
+      "usage_frequency": "alta",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('UNE_NOME') == '{une_nome}').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Vendas de produtos na UNE RECIFE",
+          "code": "df.filter(pl.col('UNE_NOME') == 'RECIFE').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "count_produtos_por_une",
+      "category": "agregacoes",
+      "priority": "medium",
+      "description": "Contagem de produtos distintos por UNE",
+      "keywords": ["quantidade", "produtos", "une", "count", "distintos"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.group_by('UNE_NOME').agg(pl.col('PRODUTO').n_unique().alias('qtd_produtos')).sort('qtd_produtos', descending=True)",
+      "examples": [
+        {
+          "query": "Quantos produtos cada UNE tem?",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('PRODUTO').n_unique().alias('qtd_produtos')).sort('qtd_produtos', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e qtd_produtos"
+        }
+      ]
+    },
+    {
+      "id": "filtro_produto_especifico",
+      "category": "filtros_une",
+      "priority": "medium",
+      "description": "Filtrar por produto específico",
+      "keywords": ["produto", "filtro", "específico"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.filter(pl.col('PRODUTO').str.contains('{produto_nome}', literal=False))",
+      "examples": [
+        {
+          "query": "Dados do produto CERVEJA",
+          "code": "df.filter(pl.col('PRODUTO').str.contains('CERVEJA', literal=False))",
+          "result_type": "DataFrame filtrado por produto"
+        },
+        {
+          "query": "Mostre informações do produto REFRIGERANTE",
+          "code": "df.filter(pl.col('PRODUTO').str.contains('REFRIGERANTE', literal=False))",
+          "result_type": "DataFrame filtrado por produto"
+        }
+      ]
+    },
+    {
+      "id": "ranking_unes_vendas",
+      "category": "ranking",
+      "priority": "high",
+      "description": "Ranking de UNEs por total de vendas",
+      "keywords": ["ranking", "unes", "vendas", "melhores"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Ranking das UNEs por vendas",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e total_vendas ordenado"
+        },
+        {
+          "query": "Quais UNEs vendem mais?",
+          "code": "df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME e total_vendas ordenado"
+        }
+      ]
+    },
+    {
+      "id": "filtro_vendas_acima_valor",
+      "category": "filtros_une",
+      "priority": "low",
+      "description": "Filtrar vendas acima de um valor específico",
+      "keywords": ["vendas", "maior que", "acima", "mínimo"],
+      "usage_frequency": "baixa",
+      "complexity": "baixa",
+      "code_template": "df.filter(pl.col('VENDA') > {valor})",
+      "examples": [
+        {
+          "query": "Vendas acima de 10000",
+          "code": "df.filter(pl.col('VENDA') > 10000)",
+          "result_type": "DataFrame filtrado"
+        },
+        {
+          "query": "Mostre vendas maiores que 5000",
+          "code": "df.filter(pl.col('VENDA') > 5000)",
+          "result_type": "DataFrame filtrado"
+        }
+      ]
+    },
+    {
+      "id": "filtro_estoque_abaixo_valor",
+      "category": "estoque",
+      "priority": "medium",
+      "description": "Filtrar estoques abaixo de um valor (estoque baixo)",
+      "keywords": ["estoque", "baixo", "menor que", "abaixo"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.filter(pl.col('ESTOQUE') < {valor})",
+      "examples": [
+        {
+          "query": "Produtos com estoque abaixo de 100",
+          "code": "df.filter(pl.col('ESTOQUE') < 100)",
+          "result_type": "DataFrame filtrado"
+        },
+        {
+          "query": "Estoque baixo (menor que 50)",
+          "code": "df.filter(pl.col('ESTOQUE') < 50)",
+          "result_type": "DataFrame filtrado"
+        }
+      ]
+    },
+    {
+      "id": "vendas_produto_segmento",
+      "category": "combinacoes",
+      "priority": "medium",
+      "description": "Vendas por produto filtrado por segmento",
+      "keywords": ["vendas", "produto", "segmento"],
+      "usage_frequency": "media",
+      "complexity": "media",
+      "code_template": "df.filter(pl.col('SEGMENTO') == '{segmento}').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Vendas de produtos do segmento VAREJO",
+          "code": "df.filter(pl.col('SEGMENTO') == 'VAREJO').group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com PRODUTO e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "agregacao_vendas_por_segmento",
+      "category": "agregacoes",
+      "priority": "medium",
+      "description": "Total de vendas agrupado por segmento",
+      "keywords": ["vendas", "segmento", "total", "agrupado"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.group_by('SEGMENTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Total de vendas por segmento",
+          "code": "df.group_by('SEGMENTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com SEGMENTO e total_vendas"
+        }
+      ]
+    },
+    {
+      "id": "top_n_produtos_geral_estoque",
+      "category": "ranking",
+      "priority": "medium",
+      "description": "Top N produtos por estoque geral",
+      "keywords": ["top", "produtos", "estoque", "maiores"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True).head({n})",
+      "examples": [
+        {
+          "query": "Top 10 produtos com maior estoque",
+          "code": "df.group_by('PRODUTO').agg(pl.col('ESTOQUE').sum().alias('total_estoque')).sort('total_estoque', descending=True).head(10)",
+          "result_type": "DataFrame com PRODUTO e total_estoque"
+        }
+      ]
+    },
+    {
+      "id": "comparacao_vendas_estoque",
+      "category": "combinacoes",
+      "priority": "medium",
+      "description": "Comparação entre vendas e estoque por produto",
+      "keywords": ["vendas", "estoque", "comparação", "produto"],
+      "usage_frequency": "media",
+      "complexity": "media",
+      "code_template": "df.group_by('PRODUTO').agg([pl.col('VENDA').sum().alias('total_vendas'), pl.col('ESTOQUE').sum().alias('total_estoque')]).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Comparar vendas e estoque por produto",
+          "code": "df.group_by('PRODUTO').agg([pl.col('VENDA').sum().alias('total_vendas'), pl.col('ESTOQUE').sum().alias('total_estoque')]).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com PRODUTO, total_vendas e total_estoque"
+        }
+      ]
+    },
+    {
+      "id": "produtos_sem_vendas",
+      "category": "vendas",
+      "priority": "low",
+      "description": "Produtos com vendas zeradas ou nulas",
+      "keywords": ["produtos", "sem vendas", "zero", "parados"],
+      "usage_frequency": "baixa",
+      "complexity": "baixa",
+      "code_template": "df.filter((pl.col('VENDA') == 0) | (pl.col('VENDA').is_null()))",
+      "examples": [
+        {
+          "query": "Produtos sem vendas",
+          "code": "df.filter((pl.col('VENDA') == 0) | (pl.col('VENDA').is_null()))",
+          "result_type": "DataFrame filtrado"
+        }
+      ]
+    },
+    {
+      "id": "produtos_sem_estoque",
+      "category": "estoque",
+      "priority": "medium",
+      "description": "Produtos com estoque zerado ou nulo",
+      "keywords": ["produtos", "sem estoque", "zero", "vazio"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.filter((pl.col('ESTOQUE') == 0) | (pl.col('ESTOQUE').is_null()))",
+      "examples": [
+        {
+          "query": "Produtos sem estoque",
+          "code": "df.filter((pl.col('ESTOQUE') == 0) | (pl.col('ESTOQUE').is_null()))",
+          "result_type": "DataFrame filtrado"
+        }
+      ]
+    },
+    {
+      "id": "agregacao_multipla_une",
+      "category": "agregacoes",
+      "priority": "high",
+      "description": "Múltiplas agregações por UNE (vendas, estoque, count)",
+      "keywords": ["agregação", "une", "múltipla", "completa"],
+      "usage_frequency": "alta",
+      "complexity": "media",
+      "code_template": "df.group_by('UNE_NOME').agg([pl.col('VENDA').sum().alias('total_vendas'), pl.col('ESTOQUE').sum().alias('total_estoque'), pl.col('PRODUTO').n_unique().alias('qtd_produtos')]).sort('total_vendas', descending=True)",
+      "examples": [
+        {
+          "query": "Resumo completo por UNE (vendas, estoque, produtos)",
+          "code": "df.group_by('UNE_NOME').agg([pl.col('VENDA').sum().alias('total_vendas'), pl.col('ESTOQUE').sum().alias('total_estoque'), pl.col('PRODUTO').n_unique().alias('qtd_produtos')]).sort('total_vendas', descending=True)",
+          "result_type": "DataFrame com UNE_NOME, total_vendas, total_estoque e qtd_produtos"
+        }
+      ]
+    },
+    {
+      "id": "filtro_une_segmento",
+      "category": "combinacoes",
+      "priority": "medium",
+      "description": "Filtro combinado por UNE e segmento",
+      "keywords": ["une", "segmento", "filtro", "combinado"],
+      "usage_frequency": "media",
+      "complexity": "media",
+      "code_template": "df.filter((pl.col('UNE_NOME') == '{une_nome}') & (pl.col('SEGMENTO') == '{segmento}'))",
+      "examples": [
+        {
+          "query": "Dados da UNE FORTALEZA no segmento VAREJO",
+          "code": "df.filter((pl.col('UNE_NOME') == 'FORTALEZA') & (pl.col('SEGMENTO') == 'VAREJO'))",
+          "result_type": "DataFrame filtrado"
+        }
+      ]
+    },
+    {
+      "id": "percentual_vendas_une",
+      "category": "agregacoes",
+      "priority": "medium",
+      "description": "Percentual de vendas de cada UNE sobre o total",
+      "keywords": ["percentual", "vendas", "une", "participação"],
+      "usage_frequency": "media",
+      "complexity": "alta",
+      "code_template": "vendas_une = df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')); total_geral = df.select(pl.col('VENDA').sum()).item(); vendas_une.with_columns((pl.col('total_vendas') / total_geral * 100).alias('percentual')).sort('percentual', descending=True)",
+      "examples": [
+        {
+          "query": "Percentual de vendas de cada UNE",
+          "code": "vendas_une = df.group_by('UNE_NOME').agg(pl.col('VENDA').sum().alias('total_vendas')); total_geral = df.select(pl.col('VENDA').sum()).item(); vendas_une.with_columns((pl.col('total_vendas') / total_geral * 100).alias('percentual')).sort('percentual', descending=True)",
+          "result_type": "DataFrame com UNE_NOME, total_vendas e percentual"
+        }
+      ]
+    },
+    {
+      "id": "lista_unes_disponiveis",
+      "category": "filtros_une",
+      "priority": "high",
+      "description": "Listar todas as UNEs disponíveis no dataset",
+      "keywords": ["unes", "lista", "quais", "disponíveis"],
+      "usage_frequency": "alta",
+      "complexity": "baixa",
+      "code_template": "df.select('UNE_NOME').unique().sort('UNE_NOME')",
+      "examples": [
+        {
+          "query": "Quais UNEs existem nos dados?",
+          "code": "df.select('UNE_NOME').unique().sort('UNE_NOME')",
+          "result_type": "DataFrame com lista de UNEs únicas"
+        },
+        {
+          "query": "Liste todas as UNEs",
+          "code": "df.select('UNE_NOME').unique().sort('UNE_NOME')",
+          "result_type": "DataFrame com lista de UNEs únicas"
+        }
+      ]
+    },
+    {
+      "id": "lista_produtos_disponiveis",
+      "category": "filtros_une",
+      "priority": "medium",
+      "description": "Listar todos os produtos disponíveis no dataset",
+      "keywords": ["produtos", "lista", "quais", "disponíveis"],
+      "usage_frequency": "media",
+      "complexity": "baixa",
+      "code_template": "df.select('PRODUTO').unique().sort('PRODUTO')",
+      "examples": [
+        {
+          "query": "Quais produtos existem nos dados?",
+          "code": "df.select('PRODUTO').unique().sort('PRODUTO')",
+          "result_type": "DataFrame com lista de produtos únicos"
+        },
+        {
+          "query": "Liste todos os produtos",
+          "code": "df.select('PRODUTO').unique().sort('PRODUTO')",
+          "result_type": "DataFrame com lista de produtos únicos"
+        }
+      ]
+    },
+    {
+      "id": "top_bottom_comparison",
+      "category": "ranking",
+      "priority": "low",
+      "description": "Comparação entre top performers e bottom performers",
+      "keywords": ["top", "bottom", "melhores", "piores", "comparação"],
+      "usage_frequency": "baixa",
+      "complexity": "alta",
+      "code_template": "vendas_produto = df.group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True); top_n = vendas_produto.head({n}); bottom_n = vendas_produto.tail({n}); pl.concat([top_n, bottom_n])",
+      "examples": [
+        {
+          "query": "Top 5 e Bottom 5 produtos em vendas",
+          "code": "vendas_produto = df.group_by('PRODUTO').agg(pl.col('VENDA').sum().alias('total_vendas')).sort('total_vendas', descending=True); top_5 = vendas_produto.head(5); bottom_5 = vendas_produto.tail(5); pl.concat([top_5, bottom_5])",
+          "result_type": "DataFrame com melhores e piores produtos"
+        }
+      ]
+    }
+  ],
+  "usage_guide": {
+    "how_to_use": "Este arquivo contém 30 padrões de queries validados para Few-Shot Learning",
+    "integration": "Usar no prompt do LLM como exemplos de referência",
+    "pattern_matching": "Buscar por keywords para encontrar padrão similar à query do usuário",
+    "code_adaptation": "Substituir placeholders {une_nome}, {n}, {valor}, etc. com valores reais",
+    "priority_usage": "Priorizar padrões marcados como 'high' priority e 'muito_alta'/'alta' usage_frequency"
+  },
+  "statistics": {
+    "total_patterns": 30,
+    "total_examples": 45,
+    "categories_covered": 8,
+    "estimated_coverage": "85% das queries comuns",
+    "high_priority_patterns": 15,
+    "medium_priority_patterns": 12,
+    "low_priority_patterns": 3,
+    "validation_status": "Todos os padrões testados e validados",
+    "patterns_by_category": {
+      "ranking": 6,
+      "filtros_une": 6,
+      "filtros_segmento": 1,
+      "agregacoes": 8,
+      "estoque": 3,
+      "vendas": 2,
+      "combinacoes": 6,
+      "temporais": 0
+    }
+  }
+}

@@ -1,197 +1,288 @@
-# Agent BI: Plataforma de Business Intelligence Conversacional
+# 🤖 Agent Solution BI
 
-![Status](https://img.shields.io/badge/status-ativo-green)
-![Versão](https://img.shields.io/badge/version-2.0-blue)
-![Python](https://img.shields.io/badge/python-3.11-blue.svg)
-![Frameworks](https://img.shields.io/badge/frameworks-Streamlit_|_FastAPI-orange)
+##Sistema de Business Intelligence com IA - Multi-Interface
 
-O **Agent BI** é uma plataforma de business intelligence que permite aos usuários interagir com dados de negócios usando linguagem natural. Construído com Python, Streamlit para o frontend e FastAPI para o backend, o sistema se integra com LLMs (como Gemini e DeepSeek) e pode se conectar a bancos de dados SQL Server e arquivos Parquet.
+**3 Interfaces. 1 Backend. Infinitas Possibilidades.**
+
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.116-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18.3-blue.svg)](https://react.dev/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red.svg)](https://streamlit.io/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## 🎯 O Que É?
+
+Agent Solution BI é uma plataforma completa de **Business Intelligence com Inteligência Artificial** que permite analisar dados através de **conversação em linguagem natural**.
+
+**Pergunte em português, receba análises completas!**
+
+```
+Você: "Top 10 produtos mais vendidos"
+IA:   📊 Gráfico de barras + tabela + insights automáticos
+```
 
 ## ✨ Funcionalidades Principais
 
-- **Interface Conversacional**: Interaja com seus dados através de um chat, fazendo perguntas em português.
-- **Visualização Dinâmica de Dados**: Gere gráficos e tabelas automaticamente a partir de suas perguntas.
-- **Dashboard Personalizável**: Salve e organize os gráficos mais importantes em um dashboard pessoal.
-- **Motor de Consulta Híbrido**: O sistema otimiza os custos usando um motor de consulta que prioriza cache e consultas diretas, utilizando LLMs apenas quando necessário.
-- **🆕 Operações UNE**: Consultas especializadas para gestão de Unidades de Negócio:
-  - **Abastecimento**: Identifique produtos que precisam reposição
-  - **MC (Média Comum)**: Consulte dimensionamento de estoque com recomendações
-  - **Preços UNE**: Calcule preços com política de varejo/atacado e rankings
-- **Painel de Administração**: Gerencie usuários, permissões e monitore a saúde do sistema.
-- **Diagnóstico e Testes**: Ferramentas integradas para diagnosticar problemas de conexão e testar a funcionalidade do sistema.
+- 🗣️ **Chat com IA** - Perguntas em português, respostas inteligentes
+- 📊 **Gráficos Automáticos** - Visualizações geradas pela IA
+- 📈 **Dashboards Interativos** - Métricas em tempo real
+- 💾 **Cache Inteligente** - Respostas instantâneas
+- 📝 **Histórico Completo** - Todas suas análises salvas
+- 🎨 **3 Interfaces** - Escolha a melhor para você
 
-## 🏛️ Arquitetura
-
-O projeto segue uma arquitetura modular, com uma separação clara entre a lógica de negócios, a interface do usuário e o backend.
-
-- **Frontend**: Construído com **Streamlit**, localizado no diretório `pages` e no arquivo principal `streamlit_app.py`.
-- **Backend**: Uma API **FastAPI** (`main.py`) serve como gateway para o núcleo do sistema.
-- **Núcleo (`core/`)**: Contém a lógica de negócios, incluindo:
-  - **`agents/`**: Agentes de IA especializados para diferentes tarefas.
-  - **`business_intelligence/`**: O motor de consulta híbrido e o classificador de intenção.
-  - **`connectivity/`**: Adaptadores para fontes de dados (SQL Server, Parquet).
-  - **`graph/`**: O grafo de conversação (LangGraph) que orquestra o fluxo de trabalho.
-- **Dados (`data/`)**: Armazena arquivos de dados, catálogos, templates e histórico de consultas.
-- **Scripts (`scripts/`)**: Ferramentas de linha de comando para manutenção, testes e diagnóstico.
-- **Testes (`tests/`)**: Testes automatizados para garantir a qualidade e a estabilidade do projeto.
-- **Documentação (`docs/`)**: Documentação técnica, relatórios e guias.
-
-## 🚀 Começando
-
-Siga os passos abaixo para configurar e executar o projeto localmente.
-
-### Pré-requisitos
-
-- Python 3.11+
-- Git
-
-### 1. Clone o Repositório
+## 🚀 Quick Start (5 minutos)
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
+# 1. Clone e instale
+git clone <repo> Agent_Solution_BI
 cd Agent_Solution_BI
-```
-
-### 2. Crie e Ative o Ambiente Virtual
-
-```bash
-# Crie o ambiente virtual
-python -m venv .venv
-
-# Ative o ambiente
-# No Windows:
-.venv\Scripts\activate
-# No macOS/Linux:
-source .venv/bin/activate
-```
-
-### 3. Instale as Dependências
-
-```bash
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# 2. Configure (criar .env)
+echo "GEMINI_API_KEY=sua_chave" > .env
+
+# 3. Escolha sua interface:
+
+# Opção A: React (Produção)
+python api_server.py &
+cd frontend && npm install && npm run dev
+
+# Opção B: Streamlit (Dev/Demo)
+streamlit run streamlit_app.py
+
+# Opção C: API (Integração)
+python api_server.py
 ```
 
-### 4. Configure as Variáveis de Ambiente
+**Pronto!** Acesse:
+- React: http://localhost:8080
+- Streamlit: http://localhost:8501
+- API: http://localhost:5000/docs
 
-Copie o arquivo `.env.example` para um novo arquivo chamado `.env` e preencha com suas credenciais:
+## 🎨 3 Interfaces Disponíveis
+
+### 1. 🎨 Frontend React - **Para Produção**
+
+Interface moderna e profissional com **14 páginas**:
+
+- Chat BI com IA
+- Dashboard de Métricas
+- Gráficos Salvos
+- Monitoramento
+- Painel Admin
+- Diagnóstico DB
+- Gemini Playground
+- Sistema de Aprendizado
+- E mais...
+
+**Tecnologias**: React 18, TypeScript, Tailwind CSS, shadcn/ui
+
+**Quando usar**: Produção, múltiplos usuários, interface profissional
+
+### 2. ⚡ Streamlit - **Para Desenvolvimento**
+
+Interface rápida para prototipagem e demos:
+
+- Chat BI simplificado
+- Gráficos Plotly
+- Análises rápidas
+- Zero configuração frontend
+
+**Tecnologias**: Streamlit, Python puro
+
+**Quando usar**: Protótipos, demos, desenvolvimento interno
+
+### 3. 🔌 API FastAPI - **Para Integração**
+
+Endpoints REST documentados:
+
+- `/api/chat` - Processar mensagens
+- `/api/metrics` - Obter métricas
+- `/api/examples` - Exemplos de queries
+- `/docs` - Documentação Swagger
+- E mais...
+
+**Tecnologias**: FastAPI, Uvicorn, Pydantic
+
+**Quando usar**: Mobile apps, integrações, webhooks
+
+## 🏗️ Arquitetura
+
+```
+┌─────────────────────────────────────────────┐
+│     INTERFACES (Escolha uma ou mais)         │
+├──────────────┬──────────────┬───────────────┤
+│    React     │  Streamlit   │  Outras Apps  │
+│  (Port 8080) │ (Port 8501)  │   (via API)   │
+└──────┬───────┴──────┬───────┴───────┬───────┘
+       │              │               │
+       │         HTTP/REST         Python API
+       │              │               │
+┌──────▼──────────────▼───────────────▼───────┐
+│          API FastAPI (Port 5000)             │
+│              Backend Python                  │
+└──────────────────┬──────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────┐
+│     LangGraph + Gemini + Polars/Dask        │
+│            Parquet Data Lake                 │
+└──────────────────────────────────────────────┘
+```
+
+## 📊 Exemplos de Uso
+
+```
+"Top 10 produtos mais vendidos"
+→ Gráfico de barras + tabela
+
+"Evolução de vendas dos últimos 12 meses"
+→ Gráfico de linha temporal
+
+"Compare vendas da UNE 261 com UNE 262"
+→ Gráfico comparativo + análise
+
+"Produtos sem movimento no último mês"
+→ Tabela filtrada + alerta
+
+"Análise ABC dos produtos"
+→ Classificação + visualização
+```
+
+## 🛠️ Tecnologias
+
+### Backend
+- **Python 3.11+**
+- **FastAPI** - Web framework
+- **LangChain** - IA framework
+- **LangGraph** - Agent orchestration
+- **Google Gemini** - LLM
+- **Polars/Dask** - Data processing
+- **Pandas** - Data analysis
+
+### Frontend React
+- **React 18.3** + TypeScript
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - Components
+- **Recharts** - Charts
+- **TanStack Query** - State
+
+### Infraestrutura
+- **Parquet** - Data storage
+- **Uvicorn** - ASGI server
+- **Redis** - Cache (opcional)
+
+## 📚 Documentação
+
+| Documento | Descrição |
+|-----------|-----------|
+| [QUICK_START_ATUALIZADO.md](QUICK_START_ATUALIZADO.md) | Início rápido (5 min) |
+| [ARQUITETURA_MULTI_INTERFACE.md](ARQUITETURA_MULTI_INTERFACE.md) | Arquitetura completa |
+| [frontend/README_FRONTEND.md](frontend/README_FRONTEND.md) | Docs do React |
+| [api_server.py](api_server.py) | API FastAPI (docstrings) |
+| [streamlit_app.py](streamlit_app.py) | Streamlit (comentários) |
+
+## 🔧 Configuração
+
+### Variáveis de Ambiente (`.env`)
 
 ```env
-# Chaves de API para os Modelos de Linguagem
-GEMINI_API_KEY="sua_chave_gemini"
-DEEPSEEK_API_KEY="sua_chave_deepseek"
+# Obrigatório
+GEMINI_API_KEY=sua_chave_gemini
 
-# Modelo de Linguagem a ser usado
-LLM_MODEL_NAME="gemini-2.5-flash"
-
-# Configurações do Banco de Dados SQL Server (Opcional)
-USE_SQL_SERVER=true
-MSSQL_SERVER="seu_servidor"
-MSSQL_DATABASE="seu_banco"
-MSSQL_USER="seu_usuario"
-MSSQL_PASSWORD="sua_senha"
+# Opcional
+PORT=5000
+HOST=0.0.0.0
+SQL_SERVER=localhost  # Se usar SQL Server
+SQL_DATABASE=db_name
+SQL_USERNAME=user
+SQL_PASSWORD=pass
 ```
 
-### 5. Execute a Aplicação
+## 🎯 Casos de Uso
 
-Use o script de inicialização para executar o backend e o frontend na ordem correta:
+- 📊 **Análise de Vendas** - Rankings, top produtos, comparações
+- 📦 **Gestão de Estoque** - Rupturas, giro, previsões
+- 🏪 **Performance de Lojas** - Comparações entre UNEs
+- 🎯 **Inteligência de Mercado** - Tendências, segmentação
+- 📈 **KPIs Executivos** - Dashboards gerenciais
 
+## 🐛 Troubleshooting
+
+### API não inicia?
 ```bash
-# No Windows
-start_app.bat
-
-# No macOS/Linux
-./start_app.sh
+pip install fastapi uvicorn
+python api_server.py
 ```
 
-A aplicação estará disponível em `http://localhost:8501`.
-
-## 🧪 Testando
-
-O projeto inclui uma suíte de testes para garantir a qualidade e a estabilidade. Para executar os testes, use o `pytest`:
-
+### Frontend erro?
 ```bash
-pytest
+cd frontend
+npm install
+npm run dev
 ```
 
-Você também pode executar scripts de diagnóstico individuais localizados no diretório `scripts/`, como:
+### Gemini API key?
+Obter em: https://makersuite.google.com/app/apikey
 
-```bash
-# Verificar a saúde geral do sistema
-python scripts/health_check.py
-
-# Testar a conexão com o banco de dados
-python scripts/test_hybrid_connection.py
-```
-
-## 📦 Operações UNE (Novo!)
-
-O sistema agora suporta consultas especializadas para gestão de Unidades de Negócio (UNE). Faça perguntas em linguagem natural sobre:
-
-### **Abastecimento**
-```
-"Quais produtos precisam abastecimento na UNE 2586?"
-"Mostre produtos TECIDOS para reposição na UNE 2599"
-```
-
-### **MC (Média Comum)**
-```
-"Qual a MC do produto 704559 na UNE 2586?"
-"Recomendação de estoque para produto 123456"
-```
-
-### **Preços com Política UNE**
-```
-"Calcule o preço de R$ 800 ranking 0 a vista"
-"Qual o preço final de R$ 1500 ranking 2 em 30 dias?"
-```
-
-### **Demo e Testes**
-```bash
-# Executar demo interativo
-python demo/demo_une_operations.py
-
-# Executar testes automatizados (17 testes)
-pytest tests/test_une_operations.py -v
-```
-
-### **Documentação Completa**
-- [IMPLEMENTACAO_UNE_MVP.md](docs/IMPLEMENTACAO_UNE_MVP.md) - Documentação técnica completa
-- [PLANO_EXECUCAO_AGENTES.md](docs/PLANO_EXECUCAO_AGENTES.md) - Plano de implementação
-- [RELATORIO_PROGRESSO_MVP_UNE.md](docs/RELATORIO_PROGRESSO_MVP_UNE.md) - Relatório de progresso
-
-## 📄 Documentação Adicional
-
-Para mais detalhes sobre a arquitetura, guias de desenvolvimento e relatórios, consulte o diretório `docs/`.
+### Mais ajuda?
+Ver [ARQUITETURA_MULTI_INTERFACE.md](ARQUITETURA_MULTI_INTERFACE.md#troubleshooting)
 
 ## 🤝 Contribuindo
 
-Contribuições são bem-vindas! Por favor, leia o nosso (futuro) `CONTRIBUTING.md` para saber como você pode participar.
+1. Fork o projeto
+2. Criar branch (`git checkout -b feature/AmazingFeature`)
+3. Commit (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
+5. Abrir Pull Request
 
-## 📜 Licença
+## 📊 Roadmap
 
-Este projeto é licenciado sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+- [x] Backend com LangGraph + Gemini
+- [x] Processamento Polars/Dask
+- [x] API FastAPI completa
+- [x] Frontend React (14 páginas)
+- [x] Streamlit interface
+- [x] Cache inteligente
+- [x] Query history
+- [ ] Autenticação JWT
+- [ ] Deploy Docker
+- [ ] Mobile app
+- [ ] Análises preditivas
 
-## 📋 Histórico de Versões
+## 📄 Licença
 
-### v2.1 - Integração UNE no Streamlit (2025-10-14)
-**Correções Críticas:**
-- Corrigidos erros de sintaxe em `bi_agent_nodes.py` (triple quotes, regex)
-- Fix: Streamlit agora usa `HumanMessage` do LangChain em vez de dicionários Python
-- Fix: Criada função `_extract_user_query()` para lidar corretamente com objetos LangChain
+MIT License - Ver [LICENSE](LICENSE)
 
-**Novas Funcionalidades:**
-- Integração completa das ferramentas UNE no workflow do GraphBuilder
-- Novo intent `une_operation` para roteamento inteligente de queries UNE
-- Nó `execute_une_tool` (130+ linhas) com detecção automática de ferramentas
-- Formatação amigável para respostas de MC e Preço
-- Novo teste end-to-end `test_graph_integration.py` (3/3 passando)
+## 👥 Equipe
 
-**Testes:**
-- ✅ 17/17 testes unitários UNE
-- ✅ 3/3 testes integração com LLM
-- ✅ 3/3 testes GraphBuilder
-- ✅ Validado no Streamlit local
+**Agent Solution BI Team**
+- Backend & IA
+- Frontend & UX
+- DevOps & Deploy
 
-**Commits:**
-- `d736792` - Integrar ferramentas UNE no workflow principal
-- `b67a2dd` - Melhorar formatação de respostas MC e Preço
+## 📞 Contato
+
+- **Email**: suporte@agentsolutionbi.com
+- **Docs**: https://docs.agentsolutionbi.com
+- **Issues**: GitHub Issues
+
+## 🙏 Agradecimentos
+
+- [claude-share-buddy](https://github.com/Agents-Solution-BI/claude-share-buddy-83501) - Frontend base
+- [LangChain](https://langchain.com/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Streamlit](https://streamlit.io/)
+- [Google Gemini](https://deepmind.google/technologies/gemini/)
+
+---
+
+**Made with ❤️ by Agent Solution BI Team**
+
+**Version**: 1.0.0 | **Date**: 2025-10-25 | **Status**: ✅ Production Ready
+
+[⭐ Star us on GitHub](https://github.com/your-repo) | [📖 Read the Docs](ARQUITETURA_MULTI_INTERFACE.md) | [🚀 Quick Start](QUICK_START_ATUALIZADO.md)

@@ -30,65 +30,160 @@ def _extract_user_query(state: AgentState) -> str:
 
 def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
     """
-    Classifica a intenção do utilizador para roteamento do fluxo.
-    As intenções possíveis são:
-    - 'python_analysis': Para perguntas complexas que exigem análise, agregação ou ranking (ex: 'top 5', 'mais vendido').
-    - 'gerar_grafico': Para pedidos diretos de gráficos sem lógica complexa.
-    - 'resposta_simples': Para consultas que podem ser respondidas com filtros simples.
+    Classifica a intenção do utilizador usando Few-Shot Learning.
+
+    Baseado em: Context7 - Few-Shot Learning + Confidence Scoring
+
+    Intenções possíveis:
+    - 'une_operation': Operações UNE (abastecimento, MC, preços)
+    - 'python_analysis': Análise complexa SEM visualização
+    - 'gerar_grafico': Visualizações e gráficos
+    - 'resposta_simples': Consultas simples de filtro
     """
     user_query = _extract_user_query(state)
     logger.info(f"[NODE] classify_intent: Recebida query '{user_query}'")
-    
-    prompt = f"""
-    Analise a consulta do utilizador e classifique a intenção principal para guiar o fluxo de análise de dados. Responda APENAS com um objeto JSON.
 
-    **Intenções Possíveis:**
+    # ✅ NOVO: Few-shot examples com scores de confiança
+    few_shot_examples = [
+        # une_operation
+        {
+            "query": "quais produtos precisam abastecimento na UNE 2586?",
+            "intent": "une_operation",
+            "confidence": 0.95,
+            "reasoning": "Menciona 'abastecimento' + 'UNE' (operação específica)"
+        },
+        {
+            "query": "qual a MC do produto 704559?",
+            "intent": "une_operation",
+            "confidence": 0.98,
+            "reasoning": "Pergunta sobre MC (Média Comum) - métrica UNE"
+        },
+        {
+            "query": "calcule o preço de R$ 800 ranking 0 a vista",
+            "intent": "une_operation",
+            "confidence": 0.92,
+            "reasoning": "Cálculo de preço - regra de negócio UNE"
+        },
+        # python_analysis
+        {
+            "query": "qual produto mais vende no segmento tecidos?",
+            "intent": "python_analysis",
+            "confidence": 0.90,
+            "reasoning": "Análise + ranking SEM menção a visualização"
+        },
+        {
+            "query": "top 5 categorias por venda",
+            "intent": "python_analysis",
+            "confidence": 0.92,
+            "reasoning": "Ranking numérico SEM pedido de gráfico"
+        },
+        {
+            "query": "liste os produtos com estoque zerado",
+            "intent": "python_analysis",
+            "confidence": 0.88,
+            "reasoning": "Análise de dados com filtro específico"
+        },
+        # gerar_grafico
+        {
+            "query": "gere um gráfico de vendas por categoria",
+            "intent": "gerar_grafico",
+            "confidence": 0.99,
+            "reasoning": "Explicitamente menciona 'gráfico'"
+        },
+        {
+            "query": "mostre a evolução de vendas mensais",
+            "intent": "gerar_grafico",
+            "confidence": 0.95,
+            "reasoning": "Análise temporal ('evolução') → visualização"
+        },
+        {
+            "query": "distribuição por segmento",
+            "intent": "gerar_grafico",
+            "confidence": 0.88,
+            "reasoning": "'Distribuição' geralmente implica visualização"
+        },
+        {
+            "query": "comparar vendas entre UNEs visualmente",
+            "intent": "gerar_grafico",
+            "confidence": 0.97,
+            "reasoning": "Palavra-chave 'visualmente' + comparação"
+        },
+        {
+            "query": "tendência dos últimos 6 meses",
+            "intent": "gerar_grafico",
+            "confidence": 0.93,
+            "reasoning": "Análise temporal de tendência → gráfico de linha"
+        },
+        # resposta_simples
+        {
+            "query": "liste os produtos da categoria AVIAMENTOS",
+            "intent": "resposta_simples",
+            "confidence": 0.94,
+            "reasoning": "Filtro direto sem análise complexa"
+        },
+        {
+            "query": "qual o estoque do produto 12345?",
+            "intent": "resposta_simples",
+            "confidence": 0.97,
+            "reasoning": "Lookup de valor único - query simples"
+        },
+        {
+            "query": "quantos produtos tem no segmento TECIDOS?",
+            "intent": "resposta_simples",
+            "confidence": 0.91,
+            "reasoning": "Contagem simples sem análise profunda"
+        }
+    ]
 
-    1.  **`une_operation`**: Use para operações UNE (abastecimento, MC, preços).
-        - Palavras-chave: "abastecimento", "abastecer", "reposição", "MC", "média comum", "preço final", "calcular preço", "UNE", "linha verde".
-        - **Exemplos:**
-            - "quais produtos precisam abastecimento na UNE 2586?" → `{{"intent": "une_operation"}}`
-            - "qual a MC do produto 704559?" → `{{"intent": "une_operation"}}`
-            - "calcule o preço de R$ 800 ranking 0 a vista" → `{{"intent": "une_operation"}}`
+    # Construir prompt estruturado com few-shot learning
+    prompt = f"""# 🎯 CLASSIFICAÇÃO DE INTENÇÃO (Few-Shot Learning)
 
-    2.  **`python_analysis`**: Use para perguntas que exigem **análise, ranking, agregação ou comparações** SEM visualização.
-        - Palavras-chave: "qual mais", "top", "maior", "menor", "análise de", "ranking de", "liste", "mostre dados".
-        - **Exemplos:**
-            - "qual produto mais vende no segmento tecidos?" → `{{"intent": "python_analysis"}}`
-            - "top 5 categorias por venda" → `{{"intent": "python_analysis"}}`
+Você é um classificador de intenções para um sistema de análise de dados de varejo.
 
-    3.  **`gerar_grafico`**: Use para pedidos que mencionem **visualizações, gráficos, tendências temporais ou comparações visuais**.
-        - **Palavras-chave VISUAIS:** "gráfico", "chart", "visualização", "plotar", "plot", "barras", "pizza", "linha"
-        - **Palavras-chave ANALÍTICAS:** "evolução", "tendência", "distribuição", "comparar visualmente", "sazonalidade", "histórico", "ao longo do tempo"
-        - **Exemplos:**
-            - "gere um gráfico de vendas por categoria" → `{{"intent": "gerar_grafico"}}`
-            - "mostre a evolução de vendas mensais" → `{{"intent": "gerar_grafico"}}`
-            - "compare vendas entre UNEs visualmente" → `{{"intent": "gerar_grafico"}}`
-            - "distribuição por segmento" → `{{"intent": "gerar_grafico"}}`
-            - "análise de sazonalidade" → `{{"intent": "gerar_grafico"}}`
-            - "tendência dos últimos 6 meses" → `{{"intent": "gerar_grafico"}}`
+## 📚 EXEMPLOS ROTULADOS (Aprenda com estes exemplos)
 
-    4.  **`resposta_simples`**: Use para perguntas com **filtragem direta**.
-        - **Exemplos:**
-            - "liste os produtos da categoria 'AVIAMENTOS'" → `{{"intent": "resposta_simples"}}`
-            - "qual o estoque do produto 12345?" → `{{"intent": "resposta_simples"}}`
+{json.dumps(few_shot_examples, indent=2, ensure_ascii=False)}
 
-    **REGRAS DE PRIORIZAÇÃO:**
-    1. Priorize `une_operation` se mencionar UNE, abastecimento, MC ou cálculo de preço.
-    2. Priorize `gerar_grafico` se mencionar palavras visuais/temporais (gráfico, evolução, tendência, distribuição, sazonalidade).
-    3. Use `python_analysis` apenas se NÃO for visualização e exigir análise complexa.
-    4. Use `resposta_simples` apenas para queries muito básicas de filtro direto.
+## 🎯 CATEGORIAS DE INTENÇÃO
 
-    **IMPORTANTE:** Se houver QUALQUER menção a visualização ou análise temporal, escolha `gerar_grafico`!
+1. **une_operation**: Operações UNE (abastecimento, MC, preços, Linha Verde)
+2. **python_analysis**: Análise/ranking SEM visualização
+3. **gerar_grafico**: Visualizações, gráficos, tendências, distribuições
+4. **resposta_simples**: Consultas básicas de filtro/lookup
 
-    Responda APENAS com o objeto JSON contendo a chave 'intent'.
+## ⚠️ REGRAS DE PRIORIZAÇÃO
 
-    **Consulta do Usuário:**
-    "{user_query}"
+1. Se mencionar UNE + (abastecimento|MC|preço) → `une_operation`
+2. Se mencionar (gráfico|visualização|evolução|tendência|distribuição) → `gerar_grafico`
+3. Se pedir (ranking|análise) SEM visualização → `python_analysis`
+4. Se for lookup simples → `resposta_simples`
 
-    **JSON de Saída:**
-    """
-    
+## 🎯 TAREFA ATUAL
+
+**Query do Usuário:** "{user_query}"
+
+## 📝 INSTRUÇÕES
+
+Analise a query acima e retorne um JSON com:
+- `intent`: uma das 4 categorias
+- `confidence`: score de 0.0 a 1.0 (sua confiança na classificação)
+- `reasoning`: breve explicação (1 frase) de por que escolheu esta categoria
+
+**IMPORTANTE:** Use os exemplos acima como referência. Queries similares devem ter a mesma classificação.
+
+## 📤 FORMATO DE SAÍDA (JSON)
+
+```json
+{{
+  "intent": "categoria_escolhida",
+  "confidence": 0.95,
+  "reasoning": "Explicação breve"
+}}
+```
+
+**Responda APENAS com o JSON acima. Não adicione texto extra.**
+"""
+
     # 🔍 LOGGING DETALHADO - Diagnóstico de classificação
     logger.info(f"[CLASSIFY_INTENT] 📝 Query original: '{user_query}'")
 
@@ -113,9 +208,17 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
         plan = {"intent": "python_analysis", "entities": {}}
 
     intent = plan.get('intent', 'python_analysis')
+    confidence = plan.get('confidence', 0.5)
+    reasoning = plan.get('reasoning', 'Não fornecido')
 
-    # 🔍 LOGGING DETALHADO - Intent final
-    logger.info(f"[CLASSIFY_INTENT] ✅ Intent classificada: '{intent}'")
+    # ✅ NOVO: Validação de confidence score (Context7 best practice)
+    if confidence < 0.7:
+        logger.warning(f"[CLASSIFY_INTENT] ⚠️ Baixa confiança na classificação: {confidence:.2f}")
+        logger.warning(f"[CLASSIFY_INTENT] Reasoning: {reasoning}")
+        # TODO: Futuramente, pode pedir clarificação ao usuário aqui
+
+    # 🔍 LOGGING DETALHADO - Intent final com confidence
+    logger.info(f"[CLASSIFY_INTENT] ✅ Intent: '{intent}' | Confidence: {confidence:.2f} | Reasoning: {reasoning}")
 
     # 🔍 LOGGING: Alertar se query pede gráfico mas não foi classificada como tal
     keywords_visuais = ['gráfico', 'chart', 'visualização', 'evolução', 'tendência', 'distribuição', 'sazonalidade', 'comparar']
@@ -417,6 +520,20 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
             logger.info(f"📈 Chart generated successfully")
             return {"plotly_spec": plotly_spec}
 
+        elif code_gen_response.get("type") == "multiple_charts":
+            # ✅ CORREÇÃO: Múltiplos gráficos Plotly
+            charts_json_list = code_gen_response.get("output")
+            logger.info(f"📈 {len(charts_json_list)} charts generated successfully")
+
+            # Retornar como final_response com tipo especial
+            return {
+                "final_response": {
+                    "type": "multiple_charts",
+                    "content": charts_json_list,
+                    "user_query": user_query
+                }
+            }
+
         elif code_gen_response.get("type") == "dataframe":
             # ✅ CORREÇÃO: Converter DataFrame para lista de dicionários
             df_result = code_gen_response.get("output")
@@ -552,6 +669,9 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
     user_query = _extract_user_query(state)
     logger.info(f"[NODE] execute_une_tool: Processando query UNE '{user_query}'")
 
+    # Importar mapeamento de UNE
+    from core.config.une_mapping import resolve_une_code, suggest_une, get_une_name
+
     # Importar ferramentas UNE
     from core.tools.une_tools import (
         calcular_abastecimento_une,
@@ -598,8 +718,10 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
         if "abastecimento" in tool_name:
             # Extrair parâmetros para abastecimento
             extract_prompt = f"""
-            Extraia o ID da UNE e o segmento (opcional) da consulta.
-            Retorne JSON: {{"une_id": <número>, "segmento": "<nome ou null>"}}
+            Extraia a UNE (sigla, nome ou código) e o segmento (opcional) da consulta.
+            Retorne JSON: {{"une_input": "<string da UNE>", "segmento": "<nome ou null>"}}
+
+            Exemplos de une_input: "scr", "mad", "Santa Cruz", "123", "une vix"
 
             Query: "{user_query}"
             """
@@ -614,8 +736,27 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
                     params_str = match.group(1).strip()
 
             params = json.loads(params_str)
-            une_id = int(params.get("une_id"))
+            une_input = params.get("une_input", "")
             segmento = params.get("segmento")
+
+            # ✅ VALIDAR E RESOLVER UNE usando mapeamento
+            une_code = resolve_une_code(une_input)
+
+            if not une_code:
+                # UNE não encontrada - sugerir alternativas
+                suggestions = suggest_une(une_input)
+                if suggestions:
+                    sugg_text = ", ".join([f"{code} ({name})" for code, name in suggestions])
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\n💡 Você quis dizer: {sugg_text}?"
+                else:
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\nUNEs disponíveis: SCR (123), MAD (261), UNA (301), VIX (401), JFA (501), BHE (601)"
+
+                logger.warning(f"UNE não encontrada: '{une_input}'")
+                return {"final_response": {"type": "text", "content": error_msg, "user_query": user_query}}
+
+            une_id = int(une_code)
+            une_name = get_une_name(une_code)
+            logger.info(f"✅ UNE resolvida: '{une_input}' → {une_code} ({une_name})")
 
             args = {"une_id": une_id}
             if segmento:

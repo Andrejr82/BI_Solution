@@ -8,7 +8,8 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from core.tools.visualization_tools import generate_plotly_chart_code
+# CORRIGIDO: visualization_tools não existe
+# from core.tools.visualization_tools import generate_plotly_chart_code
 
 # Importa as funcionalidades de visualização existentes
 
