@@ -1,5 +1,5 @@
 {
-  "timestamp": 1761958299.7836158,
+  "timestamp": 1761961691.1584573,
   "response": {
     "content": "{\n  \"intent\": \"une_operation\",\n  \"confidence\": 0.96,\n  \"reasoning\": \"Menciona 'UNE' e uma análise de vendas específica para essa operação.\"\n}"
   },
