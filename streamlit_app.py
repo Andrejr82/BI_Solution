@@ -1480,21 +1480,87 @@ else:
 
                         df_formatado = format_dataframe_for_display(df_original, auto_detect=True)
 
+                        # Preparar dados para download (necessário antes do DataFrame interativo)
+                        csv_data, csv_filename = create_download_csv(df_original, filename_prefix="export")
+
                         # Debug: Confirmar formatação aplicada
                         if user_role == 'admin':
                             st.caption(f"✅ Formatação brasileira aplicada (R$, separadores de milhar)")
 
                         # Exibir DataFrame formatado
-                        # ✅ Configuração otimizada baseada em Context7 (/streamlit/docs)
-                        st.dataframe(
+                        # ✅ Configuração avançada baseada em Context7 (/streamlit/docs)
+
+                        # Configuração de colunas com formatação personalizada
+                        column_config = {}
+
+                        # Detectar e configurar colunas monetárias
+                        for col in df_formatado.columns:
+                            col_lower = str(col).lower()
+
+                            # Colunas de vendas/valores monetários
+                            if any(kw in col_lower for kw in ['venda', 'preco', 'liquido', 'valor', 'custo', 'mes_']):
+                                column_config[col] = st.column_config.TextColumn(
+                                    col,
+                                    help=f"Valores em Reais (R$)",
+                                    width="medium"
+                                )
+
+                            # Colunas de estoque/quantidades
+                            elif any(kw in col_lower for kw in ['estoque', 'quantidade', 'qtd']):
+                                column_config[col] = st.column_config.TextColumn(
+                                    col,
+                                    help=f"Quantidade em unidades",
+                                    width="small"
+                                )
+
+                            # Colunas de texto (produto, categoria, etc)
+                            elif any(kw in col_lower for kw in ['nome', 'descricao', 'categoria', 'segmento', 'fabricante']):
+                                column_config[col] = st.column_config.TextColumn(
+                                    col,
+                                    help=f"Informação textual",
+                                    width="large"
+                                )
+
+                        # Exibir DataFrame com seleção interativa
+                        event = st.dataframe(
                             df_formatado,
                             use_container_width=True,
                             height=600,  # Altura fixa para scroll completo
-                            hide_index=True  # Ocultar índice numérico (melhor UX)
+                            hide_index=True,  # Ocultar índice numérico (melhor UX)
+                            column_config=column_config,  # Formatação personalizada por coluna
+                            row_height=35,  # Altura compacta para melhor densidade visual
+                            on_select="rerun",  # Recarregar app quando linhas forem selecionadas
+                            selection_mode="multi-row"  # Permitir seleção de múltiplas linhas
                         )
 
-                        # Botão de download com formatação
-                        csv_data, csv_filename = create_download_csv(df_original, filename_prefix="export")
+                        # Mostrar linhas selecionadas (se houver)
+                        if event and hasattr(event, 'selection') and event.selection.get('rows'):
+                            selected_rows = event.selection['rows']
+
+                            if selected_rows:
+                                st.info(f"🔍 **{len(selected_rows)} linha(s) selecionada(s)**")
+
+                                # Mostrar dados das linhas selecionadas
+                                with st.expander("📋 Ver detalhes das linhas selecionadas", expanded=False):
+                                    selected_data = df_formatado.iloc[selected_rows]
+                                    st.dataframe(
+                                        selected_data,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                        column_config=column_config
+                                    )
+
+                                    # Botão para exportar apenas selecionados
+                                    csv_selected = selected_data.to_csv(index=False, encoding='utf-8-sig')
+                                    st.download_button(
+                                        label="📥 Baixar linhas selecionadas (CSV)",
+                                        data=csv_selected,
+                                        file_name=f"selecionados_{csv_filename}",
+                                        mime="text/csv",
+                                        key=f"download_selected_{uuid.uuid4()}"
+                                    )
+
+                        # Botão de download com formatação (todos os dados)
                         st.download_button(
                             label="📥 Baixar CSV (formatado)",
                             data=csv_data,
@@ -1506,12 +1572,15 @@ else:
                         st.info(f"📊 {len(content)} registros encontrados")
                     except Exception as e:
                         logger.warning(f"Erro ao formatar DataFrame: {e}")
-                        # Fallback: exibir sem formatação
+                        # Fallback: exibir sem formatação (com recursos básicos)
                         st.dataframe(
                             pd.DataFrame(content),
                             use_container_width=True,
                             height=600,
-                            hide_index=True
+                            hide_index=True,
+                            row_height=35,  # Mesma densidade visual
+                            on_select="rerun",
+                            selection_mode="multi-row"
                         )
                         st.info(f"📊 {len(content)} registros encontrados")
                 else:
