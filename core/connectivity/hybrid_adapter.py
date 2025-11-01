@@ -290,7 +290,7 @@ class HybridDataAdapter:
 
     def _load_dataframe(self):
         """
-        Compatibilidade com DirectQueryEngine.
+        Carrega DataFrame completo.
         Delega para o parquet_adapter.
         """
         if hasattr(self.parquet_adapter, '_load_dataframe'):
@@ -299,7 +299,7 @@ class HybridDataAdapter:
     @property
     def _dataframe(self):
         """
-        Propriedade para compatibilidade com DirectQueryEngine.
+        Propriedade para acesso ao DataFrame.
         Retorna DataFrame do parquet_adapter.
         """
         if hasattr(self.parquet_adapter, '_dataframe'):
@@ -309,7 +309,7 @@ class HybridDataAdapter:
     @property
     def file_path(self):
         """
-        Propriedade para compatibilidade com DirectQueryEngine refatorado (Dask).
+        Propriedade para acesso ao caminho do arquivo.
         Retorna file_path do parquet_adapter interno.
         """
         if hasattr(self.parquet_adapter, 'file_path'):
