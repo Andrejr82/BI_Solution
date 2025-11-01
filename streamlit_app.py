@@ -1485,7 +1485,8 @@ else:
                             st.caption(f"✅ Formatação brasileira aplicada (R$, separadores de milhar)")
 
                         # Exibir DataFrame formatado
-                        st.dataframe(df_formatado, use_container_width=True)
+                        # ✅ height=600 permite scroll e visualização de mais registros
+                        st.dataframe(df_formatado, use_container_width=True, height=600)
 
                         # Botão de download com formatação
                         csv_data, csv_filename = create_download_csv(df_original, filename_prefix="export")
@@ -1501,7 +1502,7 @@ else:
                     except Exception as e:
                         logger.warning(f"Erro ao formatar DataFrame: {e}")
                         # Fallback: exibir sem formatação
-                        st.dataframe(pd.DataFrame(content))
+                        st.dataframe(pd.DataFrame(content), use_container_width=True, height=600)
                         st.info(f"📊 {len(content)} registros encontrados")
                 else:
                     st.warning("⚠️ Nenhum dado encontrado para a consulta.")

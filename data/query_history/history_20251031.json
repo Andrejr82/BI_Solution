@@ -7,5 +7,23 @@
     "results_count": 0,
     "error": null,
     "processing_time": 32.246698
+  },
+  {
+    "query": "quais produtos na une scr estão sem vendas ?",
+    "session_id": "639bc183-d827-486e-a1af-62c3d56cd017",
+    "timestamp": "2025-10-31T22:46:47.508024",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 18.390842
+  },
+  {
+    "query": "quais produtos na une scr estão sem vendas ?",
+    "session_id": "c4abd52b-c217-45d4-86ed-bcd004b5957a",
+    "timestamp": "2025-10-31T22:48:31.829390",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 22.234493
   }
 ]
