@@ -449,10 +449,6 @@ def get_backend_module(module_name):
         elif module_name == "QueryHistory":
             from core.utils.query_history import QueryHistory
             BACKEND_MODULES[module_name] = QueryHistory
-        # DirectQueryEngine desabilitado - 100% IA (12/10/2025)
-        # elif module_name == "DirectQueryEngine":
-        #     from core.business_intelligence.direct_query_engine import DirectQueryEngine
-        #     BACKEND_MODULES[module_name] = DirectQueryEngine
 
         return BACKEND_MODULES[module_name]
     except Exception as e:
@@ -847,11 +843,7 @@ else:
                 agent_response = None
                 start_time = datetime.now()
 
-                # NOTA: DirectQueryEngine desabilitado - usando 100% IA (agent_graph)
-                # Motivo: Taxa de acerto ~25% vs 100% com IA
-                # Data: 12/10/2025
-
-                # ✅ SEMPRE usar agent_graph (100% IA)
+                # ✅ Sistema 100% baseado em IA (GraphBuilder + CodeGenAgent)
                 if True:  # Simplificado para sempre processar com IA
                     # 💾 CACHE: Verificar cache antes de processar (com normalização)
                     try:
