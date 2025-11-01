@@ -9,6 +9,7 @@ import streamlit as st
 from datetime import datetime
 import logging
 import json
+import random
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -223,9 +224,43 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
             if 'selected_example' not in st.session_state:
                 st.session_state.selected_example = ""
 
+            # Pool de exemplos variados para cada categoria
+            exemplos_analise = [
+                "Explique como fazer uma análise exploratória de dados de vendas.",
+                "Quais são as principais métricas para analisar performance de vendas?",
+                "Como identificar tendências sazonais em dados de vendas?",
+                "Descreva técnicas para detectar outliers em dados de estoque.",
+                "Como analisar a correlação entre campanhas de marketing e vendas?"
+            ]
+
+            exemplos_sql = [
+                "Crie uma query SQL para calcular o total de vendas por categoria nos últimos 30 dias.",
+                "Escreva uma query SQL para encontrar os 10 produtos mais vendidos por filial.",
+                "Gere uma query SQL para calcular a taxa de crescimento mensal de vendas.",
+                "Crie uma query SQL para identificar produtos com baixo giro de estoque.",
+                "Escreva uma query SQL para analisar vendas por dia da semana."
+            ]
+
+            exemplos_python = [
+                "Escreva código Python para criar um gráfico de barras com matplotlib.",
+                "Crie código Python para gerar um dashboard interativo com Plotly.",
+                "Escreva código Python para análise de séries temporais com pandas.",
+                "Gere código Python para criar um heatmap de correlação com seaborn.",
+                "Crie código Python para fazer clustering de produtos com scikit-learn."
+            ]
+
             # Callbacks para os botões de exemplo (melhor prática do Streamlit)
-            def select_example(text):
-                st.session_state.selected_example = text
+            def select_example(categoria):
+                if categoria == "analise":
+                    exemplo = random.choice(exemplos_analise)
+                elif categoria == "sql":
+                    exemplo = random.choice(exemplos_sql)
+                elif categoria == "python":
+                    exemplo = random.choice(exemplos_python)
+                else:
+                    exemplo = ""
+
+                st.session_state.selected_example = exemplo
 
             col_ex1, col_ex2, col_ex3 = st.columns(3)
 
@@ -234,7 +269,7 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                     "📝 Análise de Dados",
                     use_container_width=True,
                     on_click=select_example,
-                    args=["Explique como fazer uma análise exploratória de dados de vendas."]
+                    args=["analise"]
                 )
 
             with col_ex2:
@@ -242,7 +277,7 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                     "🔍 SQL Query",
                     use_container_width=True,
                     on_click=select_example,
-                    args=["Crie uma query SQL para calcular o total de vendas por categoria nos últimos 30 dias."]
+                    args=["sql"]
                 )
 
             with col_ex3:
@@ -250,7 +285,7 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                     "📊 Python Code",
                     use_container_width=True,
                     on_click=select_example,
-                    args=["Escreva código Python para criar um gráfico de barras com matplotlib."]
+                    args=["python"]
                 )
 
             # Mostrar campo editável se um exemplo foi selecionado
