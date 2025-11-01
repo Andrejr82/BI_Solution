@@ -898,30 +898,40 @@ else:
                             result_queue = queue.Queue()
                             # 🚀 OTIMIZAÇÃO: Timeout adaptativo baseado no tipo de query
                             def calcular_timeout_dinamico(query: str) -> int:
-                                """Calcula timeout baseado na complexidade da query - AJUSTADO 20/10/2025"""
+                                """
+                                Calcula timeout baseado na complexidade da query
+                                Ajustado em 31/10/2025 com base em Context7 (performance optimization)
+                                """
                                 query_lower = query.lower()
 
                                 # Queries muito complexas (análises multi-dimensionais)
                                 if any(kw in query_lower for kw in ['análise abc', 'distribuição', 'alertas', 'sazonalidade']):
-                                    return 60  # 60s para análises complexas
+                                    return 90  # 90s para análises complexas
+
+                                # Queries com filtros UNE + condições (precisa scannear dataset completo)
+                                elif any(kw in query_lower for kw in ['sem vendas', 'sem venda', 'estoque zero', 'parados']):
+                                    return 75  # 75s para queries de filtro negativo (scan completo)
+
                                 # Queries gráficas/evolutivas
                                 elif any(kw in query_lower for kw in ['gráfico', 'chart', 'evolução', 'tendência', 'histórico']):
-                                    return 45  # 45s para gráficos (média 26s + margem 19s)
+                                    return 60  # 60s para gráficos (média 26s + margem)
+
                                 # Análises médias (ranking, top, agregações)
                                 elif any(kw in query_lower for kw in [
                                     'ranking', 'top', 'maior', 'menor', 'análise', 'compare', 'comparar',
                                     'mais vendido', 'menos vendido', 'vendidos', 'produtos',
                                     'liste', 'listar', 'mostre', 'mostrar'
                                 ]):
-                                    return 40  # 40s para análises médias
+                                    return 50  # 50s para análises médias
+
                                 # Queries simples (filtro direto)
                                 else:
-                                    return 40  # 40s para queries simples (média 27s + margem 13s)
+                                    return 45  # 45s para queries simples
 
                             timeout_seconds = calcular_timeout_dinamico(user_input)
                             logger.info(f"⏱️ Timeout adaptativo: {timeout_seconds}s para query: '{user_input[:50]}...'")
 
-                            # 🚀 OTIMIZAÇÃO: Progress feedback visual
+                            # 🚀 OTIMIZAÇÃO: Progress feedback visual com spinner
                             progress_placeholder = st.empty()
                             elapsed_time = 0
                             update_interval = 2  # Atualizar a cada 2s
@@ -933,41 +943,45 @@ else:
                                 except Exception as e:
                                     result_queue.put(("error", str(e)))
 
-                            # Executar em thread separada
-                            thread = threading.Thread(target=invoke_agent_graph, daemon=True)
-                            thread.start()
+                            # Executar em thread separada com spinner visual (Context7 best practice)
+                            with st.spinner(
+                                text="🤖 Processando sua consulta com IA...",
+                                show_time=True  # ✅ Mostra tempo decorrido (Context7)
+                            ):
+                                thread = threading.Thread(target=invoke_agent_graph, daemon=True)
+                                thread.start()
 
-                            # 🚀 Loop de progress feedback com mensagens contextuais
-                            # Mensagens de progresso baseadas em tempo decorrido
-                            progress_messages = [
-                                (0, "🔍 Analisando sua pergunta..."),
-                                (5, "🤖 Classificando intenção..."),
-                                (10, "📝 Gerando código Python..."),
-                                (15, "📊 Carregando dados do Parquet..."),
-                                (20, "⚙️ Executando análise de dados..."),
-                                (30, "📈 Processando visualização..."),
-                                (35, "✨ Finalizando resposta...")
-                            ]
+                                # 🚀 Loop de progress feedback com mensagens contextuais
+                                # Mensagens de progresso baseadas em tempo decorrido
+                                progress_messages = [
+                                    (0, "🔍 Analisando sua pergunta..."),
+                                    (5, "🤖 Classificando intenção..."),
+                                    (10, "📝 Gerando código Python..."),
+                                    (15, "📊 Carregando dados do Parquet..."),
+                                    (20, "⚙️ Executando análise de dados..."),
+                                    (30, "📈 Processando visualização..."),
+                                    (35, "✨ Finalizando resposta...")
+                                ]
 
-                            while thread.is_alive() and elapsed_time < timeout_seconds:
-                                time.sleep(update_interval)
-                                elapsed_time += update_interval
+                                while thread.is_alive() and elapsed_time < timeout_seconds:
+                                    time.sleep(update_interval)
+                                    elapsed_time += update_interval
 
-                                # Determinar mensagem apropriada baseada no tempo
-                                current_message = "⏳ Processando..."
-                                for time_threshold, message in progress_messages:
-                                    if elapsed_time >= time_threshold:
-                                        current_message = message
+                                    # Determinar mensagem apropriada baseada no tempo
+                                    current_message = "⏳ Processando..."
+                                    for time_threshold, message in progress_messages:
+                                        if elapsed_time >= time_threshold:
+                                            current_message = message
 
-                                # Atualizar progress bar com mensagem contextual
-                                progress = min(elapsed_time / timeout_seconds, 0.95)  # Máximo 95% durante execução
-                                progress_placeholder.progress(
-                                    progress,
-                                    text=f"{current_message} ({elapsed_time}s)"
-                                )
+                                    # Atualizar progress bar com mensagem contextual
+                                    progress = min(elapsed_time / timeout_seconds, 0.95)  # Máximo 95% durante execução
+                                    progress_placeholder.progress(
+                                        progress,
+                                        text=f"{current_message} ({elapsed_time}s)"
+                                    )
 
-                                if elapsed_time >= timeout_seconds:
-                                    break
+                                    if elapsed_time >= timeout_seconds:
+                                        break
 
                             # Limpar progress bar
                             progress_placeholder.empty()
