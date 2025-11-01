@@ -31,6 +31,11 @@ from core.utils.column_validator import validate_columns, get_available_columns_
 
 logger = logging.getLogger(__name__)
 
+# ✅ CACHE SIMPLES EM MEMÓRIA (evita reprocessar mesma query)
+_load_data_cache = {}
+_cache_hits = 0
+_cache_misses = 0
+
 
 def create_optimized_load_data(parquet_path: str, data_adapter=None):
     """
@@ -53,6 +58,7 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
         - Lazy evaluation (não carrega tudo na memória)
         - Validação automática de colunas
         - Streaming mode para datasets grandes
+        - Cache em memória para queries repetidas
 
         Args:
             filters: Filtros opcionais (ex: {'une': '2586', 'nomesegmento': 'TECIDOS'})
@@ -64,6 +70,20 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
             >>> df = load_data()  # Carrega top 10K linhas
             >>> df = load_data({'une': '2586'})  # Filtra por UNE
         """
+        # ✅ CACHE: Verificar se já processamos essa query antes
+        global _load_data_cache, _cache_hits, _cache_misses
+
+        # Criar chave de cache baseada nos filtros
+        cache_key = str(sorted(filters.items())) if filters else "no_filters"
+
+        if cache_key in _load_data_cache:
+            _cache_hits += 1
+            hit_rate = (_cache_hits / (_cache_hits + _cache_misses)) * 100
+            logger.info(f"✅ CACHE HIT! Retornando resultado cached (hit rate: {hit_rate:.1f}%)")
+            return _load_data_cache[cache_key].copy()  # Retornar cópia para evitar mutações
+
+        _cache_misses += 1
+
         if not POLARS_AVAILABLE:
             logger.error("❌ Polars não disponível! Usando fallback Pandas (LENTO)")
             return _load_data_pandas_fallback(parquet_path, filters)
@@ -142,8 +162,11 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
                 available_columns = ESSENTIAL_COLUMNS
 
             # 3. APLICAR FILTROS (se fornecidos)
-            if filters:
-                logger.info(f"🔍 Aplicando {len(filters)} filtro(s)")
+            # ✅ OTIMIZAÇÃO: Push-down filtering ANTES de qualquer processamento
+            has_filters = filters and len(filters) > 0
+
+            if has_filters:
+                logger.info(f"🔍 Aplicando {len(filters)} filtro(s) - PUSH-DOWN mode")
 
                 # Validar colunas dos filtros
                 filter_cols = list(filters.keys())
@@ -186,14 +209,21 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
                 logger.warning(f"⚠️ Erro ao selecionar colunas: {e}. Usando todas.")
 
             # 5. AMOSTRAGEM ESTRATIFICADA POR UNE (proteção contra OOM + representatividade)
-            MAX_ROWS = 200000  # Limite aumentado (Polars é eficiente)
+            # ✅ OTIMIZAÇÃO: Se já tem filtros (ex: UNE específica), aumentar limite
+            if has_filters:
+                # Com filtros: dataset já reduzido, pode carregar mais linhas
+                MAX_ROWS = 500000  # 500K linhas para queries filtradas
+                logger.info(f"📊 Query com filtros - limite aumentado para {MAX_ROWS:,} linhas")
+            else:
+                # Sem filtros: aplicar amostragem conservadora
+                MAX_ROWS = 200000  # 200K linhas para queries genéricas
+                logger.info(f"📊 Query sem filtros - amostragem estratificada ({MAX_ROWS:,} linhas)")
 
             # ✅ CORREÇÃO: Garantir que todas as UNEs estejam representadas
             # Estratégia: Amostrar N linhas por UNE ao invés de limitar globalmente
             #
             # ANTES: lf.limit(50000) → pegava primeiros 50K (apenas ITA e NIG)
             # DEPOIS: Amostragem distribuída entre todas as UNEs
-            logger.info(f"📊 Aplicando amostragem estratificada (max {MAX_ROWS} linhas)...")
 
             # Coletar metadados das UNEs antes de limitar
             try:
@@ -245,6 +275,17 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
             # Garantir que nomes estejam corretos
             logger.info(f"📝 DataFrame final: {df_pandas.shape}")
             logger.info(f"   Colunas: {list(df_pandas.columns)[:10]}...")
+
+            # ✅ CACHE: Salvar resultado para próximas execuções
+            # Limitar cache a 10 queries (evitar OOM)
+            if len(_load_data_cache) >= 10:
+                # Remover entrada mais antiga (FIFO)
+                oldest_key = next(iter(_load_data_cache))
+                del _load_data_cache[oldest_key]
+                logger.debug(f"🗑️  Cache cheio - removido: {oldest_key}")
+
+            _load_data_cache[cache_key] = df_pandas.copy()
+            logger.info(f"💾 Resultado salvo no cache (total: {len(_load_data_cache)} queries)")
 
             return df_pandas
 
