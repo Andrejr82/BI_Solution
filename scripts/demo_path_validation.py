@@ -10,6 +10,7 @@ Versão: 1.0.0
 """
 
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -85,6 +86,27 @@ def demo_path_validator():
         print(f"\n   ✗ ERRO ESPERADO: {e.error_type}")
         print(f"   Extensão fornecida: {Path('README.md').suffix}")
         print(f"   Extensões válidas: .parquet, .parq")
+
+    # Exemplo 4: Validar arquivo com permissão de leitura negada
+    print("\n4. Validando arquivo com permissão de leitura negada:")
+    restricted_file = Path("data/restricted_file.parquet")
+    try:
+        restricted_file.touch()
+        os.chmod(restricted_file, 0o000)  # Sem permissão de leitura/escrita/execução
+        print(f"   Path: {restricted_file}")
+        is_valid, info = validator.validate_parquet_path(restricted_file)
+        print(f"   Status: {'✓ VÁLIDO' if is_valid else '✗ INVÁLIDO'}")
+
+    except PathValidationError as e:
+        print(f"\n   ✗ ERRO ESPERADO: {e.error_type}")
+        print(f"   Path tentado: {e.path}")
+        print(f"\n   Sugestões fornecidas:")
+        for i, sugg in enumerate(e.suggestions, 1):
+            print(f"   {i}. {sugg}")
+    finally:
+        if restricted_file.exists():
+            os.chmod(restricted_file, 0o666)
+            restricted_file.unlink()
 
 
 def demo_safe_data_loader():

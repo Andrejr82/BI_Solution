@@ -326,6 +326,18 @@ header[data-testid="stHeader"] {
 """, unsafe_allow_html=True)
 
 # ============================================================================
+# LIMPEZA DE CACHE (TEMPORÁRIO)
+# Limpa o cache para garantir que as alterações recentes sejam aplicadas.
+# ============================================================================
+try:
+    from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
+    cache = get_agent_graph_cache()
+    cache.clear_all()
+    logger.info("✅ Cache limpo com sucesso!")
+except Exception as e:
+    logger.warning(f"⚠️ Não foi possível limpar o cache: {e}")
+
+# ============================================================================
 # FIM DO CSS CUSTOMIZADO
 # ============================================================================
 
@@ -1472,8 +1484,7 @@ else:
 
                         # Debug: Mostrar colunas ANTES da formatação (apenas para admin)
                         user_role = st.session_state.get('role', '')
-                        if user_role == 'admin':
-                            st.caption(f"🔍 Debug: Colunas = {list(df_original.columns)}, Tipos = {df_original.dtypes.to_dict()}")
+
 
                         df_formatado = format_dataframe_for_display(df_original, auto_detect=True)
 

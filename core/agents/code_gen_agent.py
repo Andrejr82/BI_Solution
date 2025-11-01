@@ -524,11 +524,17 @@ Gerar código Python **limpo, eficiente e seguro** que responda à pergunta do u
 ## ⚠️ REGRAS CRÍTICAS
 
 1. **Nomes de Colunas**: SEMPRE use nomes EXATOS do schema (case-sensitive)
-2. **Validação**: SEMPRE valide colunas antes de usar (ex: `if 'une_nome' in df.columns`)
+2. **Validação de Colunas**:
+   - ✅ CORRETO: Validar colunas INDIVIDUALMENTE com fallback: `df.get('coluna', pd.Series())`
+   - ✅ CORRETO: Verificar colunas opcionais: `if 'coluna' in df.columns: ... else: ...`
+   - ❌ ERRADO: NUNCA faça validações rígidas com `raise ValueError` para listas de colunas
+   - ❌ ERRADO: NUNCA use `required_columns = [...]; if not all(col in df.columns for col in required_columns): raise`
+   - 💡 FILOSOFIA: Adapte-se aos dados disponíveis ao invés de falhar
 3. **Performance**: SEMPRE use Polars para grandes datasets (scan_parquet com lazy evaluation)
 4. **Segurança**: NUNCA use `eval()` ou `exec()` com input do usuário
 5. **Output**: SEMPRE retorne resultados em formato estruturado (dict, DataFrame ou Plotly Figure)
 6. **Comentários**: SEMPRE adicione comentários explicativos no código
+7. **Tratamento de Erros**: Use try-except e forneça resultados parciais ao invés de falhar completamente
 
 ## 🎯 REGRAS DE RANKING (TOP N vs TODOS)
 
@@ -562,6 +568,116 @@ result = px.bar(df_top5, x='une_nome', y='venda_30_d')
 **PALAVRAS-CHAVE DE DETECÇÃO:**
 - **Limitar**: "top", "maiores", "principais", "primeiros" + NÚMERO
 - **Não limitar**: "todas", "todos", "completo", "completa", "integral"
+
+## 📊 REGRAS PARA GRÁFICOS TEMPORAIS/EVOLUÇÃO
+
+Quando o usuário pedir gráficos de "evolução", "temporal", "ao longo do tempo", "tendência":
+
+**✅ ABORDAGEM CORRETA (com validação flexível):**
+
+```python
+# Passo 1: Carregar dados com filtros necessários
+df = load_data(filters={{'une_nome': 'TIJ'}})
+
+# Passo 2: Identificar colunas mensais disponíveis (flexível!)
+mes_cols = [col for col in df.columns if col.startswith('mes_') and col[4:].isdigit()]
+mes_cols_sorted = sorted(mes_cols, key=lambda x: int(x.split('_')[1]))
+
+# Passo 3: Se não há colunas mensais, usar venda_30_d como fallback
+if not mes_cols:
+    # Criar gráfico alternativo com dados disponíveis
+    result = df.groupby('nomesegmento')['venda_30_d'].sum().reset_index()
+    result = px.bar(result, x='nomesegmento', y='venda_30_d',
+                    title='Vendas por Segmento (últimos 30 dias) - Dados temporais não disponíveis')
+else:
+    # Passo 4: Agrupar e transformar para formato longo
+    df_grouped = df.groupby('nomesegmento')[mes_cols].sum().reset_index()
+    df_long = df_grouped.melt(id_vars='nomesegmento', var_name='mes', value_name='vendas')
+
+    # Passo 5: Criar gráfico de evolução
+    result = px.line(df_long, x='mes', y='vendas', color='nomesegmento',
+                     title='Evolução de Vendas por Segmento', markers=True)
+```
+
+**❌ ABORDAGEM ERRADA (validação rígida que causa erros):**
+
+```python
+# NÃO FAÇA ISSO!
+required_columns = ['nomesegmento', 'mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06']
+if not all(col in df.columns for col in required_columns):
+    raise ValueError("Colunas necessárias não estão presentes")  # ❌ Falha desnecessária
+```
+
+**PRINCÍPIO FUNDAMENTAL**: Sempre tente fornecer ALGUM resultado útil, mesmo que não seja exatamente o ideal. Adapte-se aos dados disponíveis!
+
+## 📈 MELHORES PRÁTICAS PLOTLY (Context7 - Trust Score 8/10)
+
+### PADRÕES GERAIS:
+- **SEMPRE** use `plotly.express` (px) para criação rápida e legível
+- **SEMPRE** defina título descritivo e labels de eixo
+- **SEMPRE** use `template='plotly_white'` para aparência profissional
+- **SEMPRE** configure hover apropriado (ex: `hovermode='x unified'` para séries temporais)
+- **SEMPRE** limpe dados antes de visualizar: `df.dropna()`, `df.drop_duplicates()`
+
+### GRÁFICOS DE LINHA (Evolução Temporal):
+```python
+# ✅ PADRÃO CORRETO
+fig = px.line(
+    df_long,
+    x='mes',
+    y='vendas',
+    color='categoria',
+    markers=True,  # Marcar pontos de dados
+    line_shape='spline',  # Suavização
+    title='Evolução de Vendas',
+    labels={{'mes': 'Mês', 'vendas': 'Vendas (R$)'}}
+)
+fig.update_traces(line=dict(width=3), marker=dict(size=8))
+fig.update_layout(hovermode='x unified', template='plotly_white')
+result = fig
+```
+
+### GRÁFICOS DE BARRAS:
+```python
+# ✅ PADRÃO CORRETO
+fig = px.bar(
+    df_top,
+    x='categoria',
+    y='valor',
+    color='tipo',
+    barmode='group',  # 'group', 'stack', ou 'relative'
+    text_auto=True,  # Mostrar valores nas barras
+    title='Comparação de Categorias'
+)
+fig.update_traces(textposition='outside')
+fig.update_layout(xaxis={{'tickangle': 40}}, template='plotly_white')
+result = fig
+```
+
+### VALIDAÇÃO DE DADOS PARA GRÁFICOS:
+```python
+# ✅ VALIDAÇÃO FLEXÍVEL (use este padrão!)
+df_clean = df[[col1, col2]].dropna()  # Remover valores None
+if df_clean.empty:
+    # Fallback: criar tabela ao invés de gráfico
+    result = df.groupby(col1)[col2].sum().reset_index()
+else:
+    # Criar gráfico normalmente
+    result = px.bar(df_clean, x=col1, y=col2)
+```
+
+### TRATAMENTO DE MÚLTIPLAS SÉRIES:
+```python
+# ✅ PADRÃO CORRETO (transform para formato longo)
+df_long = df.melt(id_vars='categoria', var_name='periodo', value_name='valor')
+result = px.line(df_long, x='periodo', y='valor', color='categoria', markers=True)
+```
+
+### CORES E ESTILO:
+- Use cores distintas para múltiplas séries
+- Configure largura de linha >= 2 pixels para visibilidade
+- Use `opacity=0.7` para transparência quando há sobreposição
+- Configure `margin=dict(b=150)` se labels são longos
 """
 
         # 2️⃣ FEW-SHOT EXAMPLES - Exemplos Rotulados do RAG
@@ -766,11 +882,12 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
             if self.pattern_matcher:
                 try:
                     # Buscar padrão similar à query do usuário
-                    matched_pattern = self.pattern_matcher.match_pattern(user_query)
-                    if matched_pattern:
+                    match_result = self.pattern_matcher.match_pattern(user_query)
+                    if match_result:
+                        pattern_name, pattern_data = match_result
                         # Formatar exemplos para injeção no prompt
-                        examples_context = self.pattern_matcher.format_examples_for_prompt(matched_pattern, max_examples=2)
-                        self.logger.info(f"🎯 Few-Shot Learning: Padrão '{matched_pattern.pattern_name}' identificado com {len(matched_pattern.examples)} exemplos")
+                        examples_context = self.pattern_matcher.format_examples_for_prompt(pattern_data, max_examples=2)
+                        self.logger.info(f"🎯 Few-Shot Learning: Padrão '{pattern_name}' identificado com {len(pattern_data.get('examples', []))} exemplos")
                     else:
                         self.logger.debug("ℹ️ Nenhum padrão específico identificado para esta query")
                 except Exception as e:
@@ -876,15 +993,15 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
             if not validation_result['valid']:
                 self.logger.warning(f"⚠️ Código com problemas: {validation_result['errors']}")
 
-                # Tentar correção automática
-                fix_result = self.code_validator.auto_fix(validation_result, user_query)
+                # Tentar correção automática (FUNCIONALIDADE PENDENTE)
+                # fix_result = self.code_validator.auto_fix(validation_result, user_query)
 
-                if fix_result['fixed']:
-                    self.logger.info(f"✅ Código corrigido automaticamente: {fix_result['fixes_applied']}")
-                    code_to_execute = fix_result['code']
-                else:
-                    self.logger.warning(f"⚠️ Correção automática falhou. Erros restantes: {fix_result.get('remaining_errors', [])}")
-                    # Continuar mesmo assim, mas com log
+                # if fix_result['fixed']:
+                #     self.logger.info(f"✅ Código corrigido automaticamente: {fix_result['fixes_applied']}")
+                #     code_to_execute = fix_result['code']
+                # else:
+                #     self.logger.warning(f"⚠️ Correção automática falhou. Erros restantes: {fix_result.get('remaining_errors', [])}")
+                #     # Continuar mesmo assim, mas com log
 
             # Validações adicionais com warnings (não bloqueiam execução)
             if validation_result.get('warnings'):
@@ -896,6 +1013,7 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
             self.code_cache[cache_key] = code_to_execute
 
         self.logger.info(f"\nCódigo a ser executado:\n---\n{code_to_execute}\n---")
+        print(f"Generated code:\n{code_to_execute}")
 
         try:
             # ⚠️ IMPORTANTE: Reutilizar a função load_data() definida em _execute_generated_code

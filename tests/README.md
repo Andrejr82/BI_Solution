@@ -40,35 +40,14 @@ TODOS OS TESTES PASSARAM!
 
 ---
 
-### test_une_query.py
-**Propósito:** Validar queries de UNE e DirectQueryEngine.
 
-**Testa:**
-- ✅ DirectQueryEngine detecta UNE 261 corretamente
-- ✅ Retorna top 10 produtos corretos
-- ✅ Rejeita UNE inexistente (NIG) com erro apropriado
-- ✅ ParquetAdapter filtra por UNE corretamente
-
-**Como executar:**
-```bash
-python tests/test_une_query.py
-```
-
-**Resultado esperado:**
-```
-DirectQueryEngine: PASSOU
-ParquetAdapter:    PASSOU
-```
-
----
 
 ## 🛠️ Executando Todos os Testes
 
 ### Testes de Diagnóstico
 ```bash
-# Executar ambos os testes
+# Executar teste de diagnóstico
 python tests/test_llm_fix.py
-python tests/test_une_query.py
 ```
 
 ### Testes Unitários (pytest)
@@ -118,8 +97,7 @@ def test_feature_name():
 
 ### Módulos Testados
 - ✅ `core.llm_adapter` - LLM adapters (test_llm_fix.py)
-- ✅ `core.business_intelligence.direct_query_engine` - Queries UNE (test_une_query.py)
-- ✅ `core.connectivity.parquet_adapter` - Filtros de dados (test_une_query.py)
+
 
 ### Módulos a Testar
 - ⏳ `core.agents.*` - Agentes de IA

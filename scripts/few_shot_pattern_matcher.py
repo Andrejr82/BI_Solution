@@ -345,10 +345,9 @@ def main():
     """Função principal para testes"""
     import sys
 
-    project_root = Path(__file__).parent.parent
-    patterns_file = project_root / "query_patterns_complete.json"
+    patterns_file = "C:\\Users\\André\\Documents\\Agent_Solution_BI\\query_patterns_complete.json"
 
-    if not patterns_file.exists():
+    if not Path(patterns_file).exists():
         print(f"[ERRO] Arquivo não encontrado: {patterns_file}")
         return 1
 

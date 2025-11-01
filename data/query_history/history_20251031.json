@@ -1,0 +1,11 @@
+[
+  {
+    "query": "quais produtos na une scr estão sem vendas ?",
+    "session_id": "639bc183-d827-486e-a1af-62c3d56cd017",
+    "timestamp": "2025-10-31T21:52:08.456478",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 32.246698
+  }
+]

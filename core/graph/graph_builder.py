@@ -13,10 +13,15 @@ from langchain_core.messages import HumanMessage
 from core.agent_state import AgentState
 from core.llm_base import BaseLLMAdapter
 from core.connectivity.parquet_adapter import ParquetAdapter
+from core.connectivity.safe_parquet_adapter import SafeParquetAdapter
+import os
 from core.connectivity.hybrid_adapter import HybridDataAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 # CORREÇÃO: Removida a importação da função inexistente.
 import core.agents.bi_agent_nodes as bi_nodes
+
+parquet_path = os.path.join(os.getcwd(), "data", "parquet")
+data_adapter = SafeParquetAdapter(base_path=parquet_path)
 
 
 logger = logging.getLogger(__name__)
