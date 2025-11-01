@@ -223,22 +223,35 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
             if 'selected_example' not in st.session_state:
                 st.session_state.selected_example = ""
 
+            # Callbacks para os botões de exemplo (melhor prática do Streamlit)
+            def select_example(text):
+                st.session_state.selected_example = text
+
             col_ex1, col_ex2, col_ex3 = st.columns(3)
 
             with col_ex1:
-                if st.button("📝 Análise de Dados", use_container_width=True):
-                    st.session_state.selected_example = "Explique como fazer uma análise exploratória de dados de vendas."
-                    st.rerun()
+                st.button(
+                    "📝 Análise de Dados",
+                    use_container_width=True,
+                    on_click=select_example,
+                    args=["Explique como fazer uma análise exploratória de dados de vendas."]
+                )
 
             with col_ex2:
-                if st.button("🔍 SQL Query", use_container_width=True):
-                    st.session_state.selected_example = "Crie uma query SQL para calcular o total de vendas por categoria nos últimos 30 dias."
-                    st.rerun()
+                st.button(
+                    "🔍 SQL Query",
+                    use_container_width=True,
+                    on_click=select_example,
+                    args=["Crie uma query SQL para calcular o total de vendas por categoria nos últimos 30 dias."]
+                )
 
             with col_ex3:
-                if st.button("📊 Python Code", use_container_width=True):
-                    st.session_state.selected_example = "Escreva código Python para criar um gráfico de barras com matplotlib."
-                    st.rerun()
+                st.button(
+                    "📊 Python Code",
+                    use_container_width=True,
+                    on_click=select_example,
+                    args=["Escreva código Python para criar um gráfico de barras com matplotlib."]
+                )
 
             # Mostrar campo editável se um exemplo foi selecionado
             if st.session_state.selected_example:
@@ -327,9 +340,14 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                             st.rerun()
 
                 with col_cancel:
-                    if st.button("❌ Cancelar", use_container_width=True):
+                    def clear_example():
                         st.session_state.selected_example = ""
-                        st.rerun()
+
+                    st.button(
+                        "❌ Cancelar",
+                        use_container_width=True,
+                        on_click=clear_example
+                    )
 
     except ImportError as e:
         st.error(f"❌ Erro ao importar componentes necessários: {e}")
