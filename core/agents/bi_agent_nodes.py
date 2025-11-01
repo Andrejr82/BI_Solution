@@ -453,6 +453,9 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
             2. **RESPONDA À PERGUNTA:** Usando o dataframe `df`, escreva o código para responder à seguinte pergunta: "{user_query}"
             3. **SALVE O RESULTADO NA VARIÁVEL `result`:** A última linha do seu script DEVE ser a atribuição do resultado final à variável `result`. Esta é a única forma que o sistema tem para ver sua resposta. NÃO use `print()`.
 
+            **REGRAS DE NEGÓCIO ESPECÍFICAS:**
+            - **Produtos em Excesso:** Para perguntas sobre 'produtos em excesso', filtre o DataFrame para incluir apenas produtos onde a coluna `estoque_atual` é maior que a coluna `linha_verde`.
+
             **Exemplo de Script:**
             ```python
             # Passo 1: Carregar dados

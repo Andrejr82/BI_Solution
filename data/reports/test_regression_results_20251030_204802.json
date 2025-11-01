@@ -1,0 +1,459 @@
+{
+  "total_queries": 28,
+  "successful": 0,
+  "failed": 28,
+  "errors": [
+    {
+      "query": "gere um gráfico de evolução dos segmentos na une tij",
+      "category": "graficos_temporais",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "mostre a evolução temporal de vendas do segmento tecidos",
+      "category": "graficos_temporais",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "evolução de vendas nos últimos 6 meses",
+      "category": "graficos_temporais",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "gráfico de tendência de vendas por mês",
+      "category": "graficos_temporais",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "ranking de vendas do segmento tecidos",
+      "category": "rankings",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "ranking completo de vendas por produto",
+      "category": "rankings",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "ranking de vendas na une scr",
+      "category": "rankings",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "ranking de produtos mais vendidos",
+      "category": "rankings",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "top 10 produtos mais vendidos",
+      "category": "top_n",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "top 5 segmentos com maiores vendas",
+      "category": "top_n",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "top 20 produtos do segmento papelaria",
+      "category": "top_n",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "top 3 unes com maior faturamento",
+      "category": "top_n",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "total de vendas do segmento tecidos",
+      "category": "agregacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "soma das vendas da une tij",
+      "category": "agregacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "média de vendas por produto",
+      "category": "agregacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "quanto vendeu o segmento tecidos em 30 dias",
+      "category": "agregacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "comparar vendas entre une tij e une scr",
+      "category": "comparacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "diferença de vendas entre tecidos e papelaria",
+      "category": "comparacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "vendas tecidos versus papelaria",
+      "category": "comparacoes",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "vendas por nomesegmento",
+      "category": "validacao_colunas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "ranking por venda_30_d",
+      "category": "validacao_colunas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "produtos com estoque zero",
+      "category": "validacao_colunas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "mostre todas as vendas",
+      "category": "queries_amplas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "quero ver todos os dados",
+      "category": "queries_amplas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "mostre tudo do sistema",
+      "category": "queries_amplas",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "gráfico de barras de vendas por segmento",
+      "category": "graficos_complexos",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "gráfico de pizza de distribuição de vendas",
+      "category": "graficos_complexos",
+      "error": "No module named 'core.llm'"
+    },
+    {
+      "query": "gráfico de dispersão entre estoque e vendas",
+      "category": "graficos_complexos",
+      "error": "No module named 'core.llm'"
+    }
+  ],
+  "by_category": {
+    "graficos_temporais": {
+      "total": 4,
+      "successful": 0,
+      "failed": 4,
+      "queries": [
+        {
+          "query": "gere um gráfico de evolução dos segmentos na une tij",
+          "category": "graficos_temporais",
+          "success": false,
+          "execution_time": 20.03753113746643,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "mostre a evolução temporal de vendas do segmento tecidos",
+          "category": "graficos_temporais",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "evolução de vendas nos últimos 6 meses",
+          "category": "graficos_temporais",
+          "success": false,
+          "execution_time": 0.0005862712860107422,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "gráfico de tendência de vendas por mês",
+          "category": "graficos_temporais",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "rankings": {
+      "total": 4,
+      "successful": 0,
+      "failed": 4,
+      "queries": [
+        {
+          "query": "ranking de vendas do segmento tecidos",
+          "category": "rankings",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "ranking completo de vendas por produto",
+          "category": "rankings",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "ranking de vendas na une scr",
+          "category": "rankings",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "ranking de produtos mais vendidos",
+          "category": "rankings",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "top_n": {
+      "total": 4,
+      "successful": 0,
+      "failed": 4,
+      "queries": [
+        {
+          "query": "top 10 produtos mais vendidos",
+          "category": "top_n",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "top 5 segmentos com maiores vendas",
+          "category": "top_n",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "top 20 produtos do segmento papelaria",
+          "category": "top_n",
+          "success": false,
+          "execution_time": 0.0005803108215332031,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "top 3 unes com maior faturamento",
+          "category": "top_n",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "agregacoes": {
+      "total": 4,
+      "successful": 0,
+      "failed": 4,
+      "queries": [
+        {
+          "query": "total de vendas do segmento tecidos",
+          "category": "agregacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "soma das vendas da une tij",
+          "category": "agregacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "média de vendas por produto",
+          "category": "agregacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "quanto vendeu o segmento tecidos em 30 dias",
+          "category": "agregacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "comparacoes": {
+      "total": 3,
+      "successful": 0,
+      "failed": 3,
+      "queries": [
+        {
+          "query": "comparar vendas entre une tij e une scr",
+          "category": "comparacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "diferença de vendas entre tecidos e papelaria",
+          "category": "comparacoes",
+          "success": false,
+          "execution_time": 0.0005249977111816406,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "vendas tecidos versus papelaria",
+          "category": "comparacoes",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "validacao_colunas": {
+      "total": 3,
+      "successful": 0,
+      "failed": 3,
+      "queries": [
+        {
+          "query": "vendas por nomesegmento",
+          "category": "validacao_colunas",
+          "success": false,
+          "execution_time": 0.0005731582641601562,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "ranking por venda_30_d",
+          "category": "validacao_colunas",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "produtos com estoque zero",
+          "category": "validacao_colunas",
+          "success": false,
+          "execution_time": 0.0005645751953125,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "queries_amplas": {
+      "total": 3,
+      "successful": 0,
+      "failed": 3,
+      "queries": [
+        {
+          "query": "mostre todas as vendas",
+          "category": "queries_amplas",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "quero ver todos os dados",
+          "category": "queries_amplas",
+          "success": false,
+          "execution_time": 0.000583648681640625,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "mostre tudo do sistema",
+          "category": "queries_amplas",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    },
+    "graficos_complexos": {
+      "total": 3,
+      "successful": 0,
+      "failed": 3,
+      "queries": [
+        {
+          "query": "gráfico de barras de vendas por segmento",
+          "category": "graficos_complexos",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "gráfico de pizza de distribuição de vendas",
+          "category": "graficos_complexos",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        },
+        {
+          "query": "gráfico de dispersão entre estoque e vendas",
+          "category": "graficos_complexos",
+          "success": false,
+          "execution_time": 0.0,
+          "error": "No module named 'core.llm'",
+          "result_type": null,
+          "rows_returned": 0
+        }
+      ]
+    }
+  },
+  "start_time": "2025-10-30T20:47:42.887904",
+  "end_time": "2025-10-30T20:48:02.933381"
+}

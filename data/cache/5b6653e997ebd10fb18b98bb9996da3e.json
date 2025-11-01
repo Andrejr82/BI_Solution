@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761958301.3723571,
+  "response": {
+    "content": "{\"une_input\": \"scr\", \"segmento\": null}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "5b6653e997ebd10fb18b98bb9996da3e"
+  }
+}

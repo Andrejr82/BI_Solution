@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761958299.7836158,
+  "response": {
+    "content": "{\n  \"intent\": \"une_operation\",\n  \"confidence\": 0.96,\n  \"reasoning\": \"Menciona 'UNE' e uma análise de vendas específica para essa operação.\"\n}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "37dae047e6e2ecc9f1961d0f0e1d2bd4"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "timestamp": 1761958300.5544772,
+  "response": {
+    "content": "{\"tool\": \"calcular_abastecimento_une\"}"
+  },
+  "metadata": {
+    "model": null,
+    "temperature": 0,
+    "query_hash": "d0472b142103d7891df0b0e0c6de9e92"
+  }
+}

@@ -97,6 +97,11 @@ class SelfHealingSystem:
         if filter_feedback:
             feedback.extend(filter_feedback)
 
+        # 6. NOVO: Detectar e remover validações rígidas de colunas
+        rigid_validation_removed, code = self._remove_rigid_validations(code)
+        if rigid_validation_removed:
+            feedback.append("✅ Validações rígidas de colunas removidas automaticamente")
+
         logger.info(f"✅ Validação concluída: {len(feedback)} avisos/correções")
         return True, code, feedback
 
@@ -236,6 +241,43 @@ class SelfHealingSystem:
                     logger.info(f"✅ Substituído '{wrong_col}' → '{correct_col}'")
 
         return code
+
+    def _remove_rigid_validations(self, code: str) -> Tuple[bool, str]:
+        """
+        Remove validações rígidas de colunas que causam erros desnecessários.
+
+        Detecta padrões como:
+        - required_columns = [...]; if not all(col in df.columns...): raise ValueError
+        - if 'coluna' not in df.columns: raise ValueError
+
+        Returns:
+            (removed, corrected_code)
+        """
+        removed = False
+        original_code = code
+
+        # Padrão 1: required_columns = [...]; validação all(...); raise ValueError
+        pattern1 = r'required_columns\s*=\s*\[[^\]]+\]\s*\n\s*if\s+not\s+all\([^)]+\):\s*\n\s*raise\s+ValueError\([^)]+\)'
+        if re.search(pattern1, code, re.MULTILINE):
+            code = re.sub(pattern1, '# Validação rígida removida automaticamente pelo SelfHealingSystem', code, flags=re.MULTILINE)
+            removed = True
+            logger.info("🔧 Removida validação rígida: required_columns + all() + raise ValueError")
+
+        # Padrão 2: if 'coluna' not in df.columns: raise ValueError
+        pattern2 = r'if\s+[\'"]([^\'"]+)[\'"]\s+not\s+in\s+df\.columns:\s*\n\s*raise\s+ValueError\([^)]+\)'
+        if re.search(pattern2, code, re.MULTILINE):
+            code = re.sub(pattern2, '# Validação rígida removida automaticamente', code, flags=re.MULTILINE)
+            removed = True
+            logger.info("🔧 Removida validação rígida: if 'coluna' not in df.columns: raise ValueError")
+
+        # Padrão 3: Validações mais gerais com raise
+        pattern3 = r'if\s+not\s+all\([^)]+df\.columns[^)]+\):\s*\n\s*raise\s+(ValueError|KeyError)\([^)]+\)'
+        if re.search(pattern3, code, re.MULTILINE):
+            code = re.sub(pattern3, '# Validação rígida removida automaticamente', code, flags=re.MULTILINE)
+            removed = True
+            logger.info("🔧 Removida validação rígida: if not all(...df.columns...): raise")
+
+        return removed, code
 
     def _fix_keyerror(self, code: str, error_msg: str, context: Dict[str, Any]) -> str:
         """
