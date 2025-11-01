@@ -263,10 +263,67 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                                 "content": edited_prompt
                             })
 
+                            # Preparar mensagens para o modelo
+                            messages = [
+                                {"role": msg["role"], "content": msg["content"]}
+                                for msg in st.session_state.chat_history
+                            ]
+
+                            # Obter resposta do modelo
+                            try:
+                                if stream_mode:
+                                    # Modo streaming
+                                    with st.spinner("Gerando resposta..."):
+                                        stream = gemini.get_completion(
+                                            messages=messages,
+                                            temperature=temperature,
+                                            max_tokens=max_tokens,
+                                            json_mode=json_mode,
+                                            stream=True
+                                        )
+
+                                        full_response = ""
+                                        for chunk in stream:
+                                            full_response += chunk
+
+                                        response_content = full_response
+
+                                else:
+                                    # Modo normal
+                                    with st.spinner("Gerando resposta..."):
+                                        response = gemini.get_completion(
+                                            messages=messages,
+                                            temperature=temperature,
+                                            max_tokens=max_tokens,
+                                            json_mode=json_mode,
+                                            stream=False
+                                        )
+
+                                    if "error" in response:
+                                        error_msg = f"❌ Erro: {response['error']}"
+                                        if response.get("fallback_activated"):
+                                            error_msg += f"\n\n🔄 Fallback sugerido: {response.get('retry_with', 'N/A')}"
+                                        response_content = error_msg
+                                    else:
+                                        response_content = response.get("content", "")
+                                        if not response_content:
+                                            response_content = "❌ Resposta vazia recebida do modelo."
+
+                            except Exception as e:
+                                error_msg = f"❌ Erro ao gerar resposta: {str(e)}"
+                                response_content = error_msg
+                                logger.error(f"Erro no playground ao processar exemplo: {e}", exc_info=True)
+
+                            # Adicionar resposta ao histórico
+                            st.session_state.chat_history.append({
+                                "role": "assistant",
+                                "content": response_content
+                            })
+
                             # Limpar exemplo selecionado
                             st.session_state.selected_example = ""
 
-                            # Processar (o código de processamento já existe acima)
+                            # Recarregar para mostrar a conversa atualizada
                             st.rerun()
 
                 with col_cancel:
