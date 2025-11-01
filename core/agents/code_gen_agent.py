@@ -495,198 +495,40 @@ class CodeGenAgent:
             Prompt estruturado em formato string
         """
 
-        # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento
-        developer_context = f"""# 🤖 IDENTIDADE E COMPORTAMENTO
+        # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento (OTIMIZADO)
+        developer_context = f"""# 🤖 Analista Python
 
-Você é um especialista em análise de dados Python com foco em:
-- **Pandas/Polars**: Manipulação eficiente de DataFrames
-- **Plotly**: Visualizações interativas de alta qualidade
-- **Análise de Negócios**: Varejo, vendas, estoque, categorização
+Gere código Python eficiente para análise de vendas.
 
-## 🎯 Seu Objetivo
+## Dataset
+- `venda_30_d`: Vendas 30 dias
+- `estoque_atual`: Estoque
+- `mes_01` a `mes_12`: Vendas mensais
+- Colunas: {', '.join(list(self.column_descriptions.keys())[:15])}...
 
-Gerar código Python **limpo, eficiente e seguro** que responda à pergunta do usuário usando o dataset de vendas fornecido.
+## Regras
+1. Use nomes EXATOS de colunas
+2. Validação flexível: `if 'col' in df.columns`
+3. Retorne dict/DataFrame/Plotly
+4. Comentários no código
 
-## 📊 CONTEXTO DO DOMÍNIO
+## Ranking
+- "top N" → `.head(N)`
+- "todas" → sem `.head()`
+- genérico → `.head(10)`
 
-**Dataset**: Vendas de varejo (produtos, UNEs/lojas, categorias, estoques)
-**Período**: 12 meses de histórico (mes_01 = mais recente, mes_12 = mais antigo)
-**Métricas Principais**:
-- `venda_30_d`: Vendas dos últimos 30 dias (MÉTRICA PRIMÁRIA)
-- `estoque_atual`: Estoque total disponível
-- `preco_38_percent`: Preço de venda com margem de 38%
-- `mes_01` a `mes_12`: Vendas mensais (série temporal)
-
-## 🗂️ SCHEMA DE COLUNAS DISPONÍVEIS
-
-{json.dumps(self.column_descriptions, indent=2, ensure_ascii=False)}
-
-## ⚠️ REGRAS CRÍTICAS
-
-1. **Nomes de Colunas**: SEMPRE use nomes EXATOS do schema (case-sensitive)
-2. **Validação de Colunas**:
-   - ✅ CORRETO: Validar colunas INDIVIDUALMENTE com fallback: `df.get('coluna', pd.Series())`
-   - ✅ CORRETO: Verificar colunas opcionais: `if 'coluna' in df.columns: ... else: ...`
-   - ❌ ERRADO: NUNCA faça validações rígidas com `raise ValueError` para listas de colunas
-   - ❌ ERRADO: NUNCA use `required_columns = [...]; if not all(col in df.columns for col in required_columns): raise`
-   - 💡 FILOSOFIA: Adapte-se aos dados disponíveis ao invés de falhar
-3. **Performance**: SEMPRE use Polars para grandes datasets (scan_parquet com lazy evaluation)
-4. **Segurança**: NUNCA use `eval()` ou `exec()` com input do usuário
-5. **Output**: SEMPRE retorne resultados em formato estruturado (dict, DataFrame ou Plotly Figure)
-6. **Comentários**: SEMPRE adicione comentários explicativos no código
-7. **Tratamento de Erros**: Use try-except e forneça resultados parciais ao invés de falhar completamente
-
-## 🎯 REGRAS DE RANKING (TOP N vs TODOS)
-
-**DETECÇÃO DE INTENÇÃO:**
-- **"top 10", "top 5", "maiores", "menores" + NÚMERO** → Use `.head(N)` para limitar
-- **"ranking de TODAS", "ranking COMPLETO", "TODAS as unes/produtos"** → NÃO use `.head()`, mostre TODOS
-- **"ranking" genérico SEM "todas/todos" E SEM número** → Use `.head(10)` como padrão (melhor visualização)
-
-**EXEMPLOS:**
-
-```python
-# ✅ CASO 1: "gere gráfico ranking de vendas das unes" (SEM "top N", SEM "todas")
-df = load_data()
-ranking = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
-df_top10 = ranking.head(10)  # Padrão: top 10 para visualização limpa
-result = px.bar(df_top10, x='une_nome', y='venda_30_d')
-
-# ✅ CASO 2: "gere gráfico ranking de TODAS as unes" (EXPLICITAMENTE "todas")
-df = load_data()
-ranking_completo = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
-# NÃO usar .head() quando usuário pede "todas"
-result = px.bar(ranking_completo, x='une_nome', y='venda_30_d')
-
-# ✅ CASO 3: "top 5 unes por vendas" (Número EXPLÍCITO)
-df = load_data()
-ranking = df.groupby('une_nome')['venda_30_d'].sum().sort_values(ascending=False).reset_index()
-df_top5 = ranking.head(5)
-result = px.bar(df_top5, x='une_nome', y='venda_30_d')
-```
-
-**PALAVRAS-CHAVE DE DETECÇÃO:**
-- **Limitar**: "top", "maiores", "principais", "primeiros" + NÚMERO
-- **Não limitar**: "todas", "todos", "completo", "completa", "integral"
-
-## 📊 REGRAS PARA GRÁFICOS TEMPORAIS/EVOLUÇÃO
-
-Quando o usuário pedir gráficos de "evolução", "temporal", "ao longo do tempo", "tendência":
-
-**✅ ABORDAGEM CORRETA (com validação flexível):**
-
-```python
-# Passo 1: Carregar dados com filtros necessários
-df = load_data(filters={{'une_nome': 'TIJ'}})
-
-# Passo 2: Identificar colunas mensais disponíveis (flexível!)
-mes_cols = [col for col in df.columns if col.startswith('mes_') and col[4:].isdigit()]
-mes_cols_sorted = sorted(mes_cols, key=lambda x: int(x.split('_')[1]))
-
-# Passo 3: Se não há colunas mensais, usar venda_30_d como fallback
-if not mes_cols:
-    # Criar gráfico alternativo com dados disponíveis
-    result = df.groupby('nomesegmento')['venda_30_d'].sum().reset_index()
-    result = px.bar(result, x='nomesegmento', y='venda_30_d',
-                    title='Vendas por Segmento (últimos 30 dias) - Dados temporais não disponíveis')
-else:
-    # Passo 4: Agrupar e transformar para formato longo
-    df_grouped = df.groupby('nomesegmento')[mes_cols].sum().reset_index()
-    df_long = df_grouped.melt(id_vars='nomesegmento', var_name='mes', value_name='vendas')
-
-    # Passo 5: Criar gráfico de evolução
-    result = px.line(df_long, x='mes', y='vendas', color='nomesegmento',
-                     title='Evolução de Vendas por Segmento', markers=True)
-```
-
-**❌ ABORDAGEM ERRADA (validação rígida que causa erros):**
-
-```python
-# NÃO FAÇA ISSO!
-required_columns = ['nomesegmento', 'mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06']
-if not all(col in df.columns for col in required_columns):
-    raise ValueError("Colunas necessárias não estão presentes")  # ❌ Falha desnecessária
-```
-
-**PRINCÍPIO FUNDAMENTAL**: Sempre tente fornecer ALGUM resultado útil, mesmo que não seja exatamente o ideal. Adapte-se aos dados disponíveis!
-
-## 📈 MELHORES PRÁTICAS PLOTLY (Context7 - Trust Score 8/10)
-
-### PADRÕES GERAIS:
-- **SEMPRE** use `plotly.express` (px) para criação rápida e legível
-- **SEMPRE** defina título descritivo e labels de eixo
-- **SEMPRE** use `template='plotly_white'` para aparência profissional
-- **SEMPRE** configure hover apropriado (ex: `hovermode='x unified'` para séries temporais)
-- **SEMPRE** limpe dados antes de visualizar: `df.dropna()`, `df.drop_duplicates()`
-
-### GRÁFICOS DE LINHA (Evolução Temporal):
-```python
-# ✅ PADRÃO CORRETO
-fig = px.line(
-    df_long,
-    x='mes',
-    y='vendas',
-    color='categoria',
-    markers=True,  # Marcar pontos de dados
-    line_shape='spline',  # Suavização
-    title='Evolução de Vendas',
-    labels={{'mes': 'Mês', 'vendas': 'Vendas (R$)'}}
-)
-fig.update_traces(line=dict(width=3), marker=dict(size=8))
-fig.update_layout(hovermode='x unified', template='plotly_white')
-result = fig
-```
-
-### GRÁFICOS DE BARRAS:
-```python
-# ✅ PADRÃO CORRETO
-fig = px.bar(
-    df_top,
-    x='categoria',
-    y='valor',
-    color='tipo',
-    barmode='group',  # 'group', 'stack', ou 'relative'
-    text_auto=True,  # Mostrar valores nas barras
-    title='Comparação de Categorias'
-)
-fig.update_traces(textposition='outside')
-fig.update_layout(xaxis={{'tickangle': 40}}, template='plotly_white')
-result = fig
-```
-
-### VALIDAÇÃO DE DADOS PARA GRÁFICOS:
-```python
-# ✅ VALIDAÇÃO FLEXÍVEL (use este padrão!)
-df_clean = df[[col1, col2]].dropna()  # Remover valores None
-if df_clean.empty:
-    # Fallback: criar tabela ao invés de gráfico
-    result = df.groupby(col1)[col2].sum().reset_index()
-else:
-    # Criar gráfico normalmente
-    result = px.bar(df_clean, x=col1, y=col2)
-```
-
-### TRATAMENTO DE MÚLTIPLAS SÉRIES:
-```python
-# ✅ PADRÃO CORRETO (transform para formato longo)
-df_long = df.melt(id_vars='categoria', var_name='periodo', value_name='valor')
-result = px.line(df_long, x='periodo', y='valor', color='categoria', markers=True)
-```
-
-### CORES E ESTILO:
-- Use cores distintas para múltiplas séries
-- Configure largura de linha >= 2 pixels para visibilidade
-- Use `opacity=0.7` para transparência quando há sobreposição
-- Configure `margin=dict(b=150)` se labels são longos
+## Plotly
+- Use `px.bar()`, `px.line()` para gráficos
+- Template: `'plotly_white'`
+- Sempre defina `title` e `labels`
 """
 
-        # 2️⃣ FEW-SHOT EXAMPLES - Exemplos Rotulados do RAG
+        # 2️⃣ FEW-SHOT EXAMPLES - Exemplos Rotulados do RAG (OTIMIZADO: apenas 1 exemplo)
         few_shot_section = ""
         if rag_examples and len(rag_examples) > 0:
-            few_shot_section = "\n\n# 📚 EXEMPLOS DE QUERIES BEM-SUCEDIDAS (Few-Shot Learning)\n\n"
-            few_shot_section += "Use os exemplos abaixo como referência para gerar código similar:\n\n"
+            few_shot_section = "\n\n# 📚 EXEMPLO SIMILAR\n\n"
 
-            for i, ex in enumerate(rag_examples[:3], 1):  # Máximo 3 exemplos
+            for i, ex in enumerate(rag_examples[:1], 1):  # Apenas 1 exemplo (era 3)
                 similarity = ex.get('similarity_score', 0)
                 few_shot_section += f"""## Exemplo {i} (Similaridade: {similarity:.1%})
 
@@ -703,68 +545,15 @@ result = px.line(df_long, x='periodo', y='valor', color='categoria', markers=Tru
 
 """
 
-        # 3️⃣ CHAIN-OF-THOUGHT (para queries complexas)
-        cot_section = ""
-        if self._detect_complex_query(user_query):
-            cot_section = """
-
-## 🧠 RACIOCÍNIO PASSO-A-PASSO (Chain of Thought)
-
-Esta é uma query complexa. Divida o problema em etapas:
-
-**Etapa 1: Análise da Query**
-- Qual a métrica principal? (vendas, estoque, preço)
-- Qual a dimensão de análise? (produto, UNE, categoria, tempo)
-- Há filtros específicos? (segmento, categoria, período, UNE)
-
-**Etapa 2: Planejamento do Código**
-- Quais colunas do schema serão necessárias?
-- Quais transformações? (group by, pivot, melt, cálculos)
-- Qual visualização? (gráfico de barras, linha, pizza, tabela)
-
-**Etapa 3: Implementação**
-- Código Python otimizado com validação
-- Tratamento de valores NA/null
-- Comentários explicativos
-
-Execute cada etapa mentalmente antes de gerar o código final.
-
-"""
-
-        # 4️⃣ USER MESSAGE - Query Atual
+        # 3️⃣ USER MESSAGE - Query Atual (OTIMIZADO - removido Chain-of-Thought)
         user_message = f"""
+Query: {user_query}
 
-## 🎯 QUERY ATUAL DO USUÁRIO
-
-**Pergunta:** {user_query}
-
-## 📝 INSTRUÇÕES DE GERAÇÃO
-
-1. **Analise** a query e identifique:
-   - Tipo de análise (ranking, filtro, agregação, visualização)
-   - Colunas necessárias do schema
-   - Filtros aplicáveis
-
-2. **Gere código Python** que:
-   - Use a função `load_data()` para carregar dados
-   - Valide colunas antes de usar
-   - Implemente a lógica de análise solicitada
-   - Retorne resultado em variável `result`
-
-3. **Formato de Saída**:
-   - Para tabelas: `result` = DataFrame
-   - Para gráficos: `result` = Plotly Figure (px.bar, px.pie, px.line)
-   - Para métricas: `result` = dict com valores
-
-## 💻 CÓDIGO PYTHON A SER GERADO:
-
-```python
-# Seu código aqui
-```
+Gere código Python usando `load_data()` que retorne resultado em `result`.
 """
 
-        # CONCATENAR TODAS AS SEÇÕES
-        full_prompt = developer_context + few_shot_section + cot_section + user_message
+        # CONCATENAR SEÇÕES (otimizado - ~70% menor que antes)
+        full_prompt = developer_context + few_shot_section + user_message
 
         return full_prompt
 
