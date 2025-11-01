@@ -109,7 +109,7 @@ def check_core_modules():
     results = {}
 
     modules = {
-        "DirectQueryEngine": "core.business_intelligence.direct_query_engine",
+        # "DirectQueryEngine": "core.business_intelligence.direct_query_engine",  # DESCONTINUADO 31/10/2025
         "ParquetAdapter": "core.connectivity.parquet_adapter",
         "HybridDataAdapter": "core.connectivity.hybrid_adapter",
         "GeminiLLMAdapter": "core.llm_adapter",
