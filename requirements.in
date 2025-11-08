@@ -6,6 +6,7 @@ langchain-core>=0.1.20
 langchain_community>=0.0.20
 langchain_openai>=0.0.5
 langgraph>=0.0.30
+langgraph-checkpoint-sqlite<3.0.0
 
 # --- LLM & Environment ---
 openai>=1.6.1
@@ -51,6 +52,7 @@ colorama>=0.4.6
 tqdm>=4.60.0
 pydantic
 mssql-mcp-server
+structlog>=24.0.0
 
 # Pacote exclusivo do Windows (ignorado no Vercel/Linux)
 pywin32; sys_platform == "win32"

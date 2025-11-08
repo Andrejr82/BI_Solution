@@ -25,5 +25,41 @@
     "results_count": 0,
     "error": null,
     "processing_time": 22.234493
+  },
+  {
+    "query": "quais produtos na une nigestão sem vendas ?",
+    "session_id": "c55d6bcc-46a1-44d1-9786-ee4687393ad2",
+    "timestamp": "2025-10-31T23:06:19.355779",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.025767
+  },
+  {
+    "query": "quais produtos na une taq estão sem vendas ?",
+    "session_id": "c55d6bcc-46a1-44d1-9786-ee4687393ad2",
+    "timestamp": "2025-10-31T23:09:12.271682",
+    "success": false,
+    "results_count": 0,
+    "error": "⏰ **Tempo Limite Excedido**\n\nO processamento da sua consulta demorou muito tempo (>40s).\n\n**Sugestões:**\n- Tente uma consulta mais específica\n- Simplifique a pergunta\n- Verifique sua conexão de internet",
+    "processing_time": 0.0
+  },
+  {
+    "query": "quais produtos na une taq estão sem vendas ?",
+    "session_id": "c55d6bcc-46a1-44d1-9786-ee4687393ad2",
+    "timestamp": "2025-10-31T23:27:56.924871",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 38.097763
+  },
+  {
+    "query": "quais produtos na une taq estão sem vendas ?",
+    "session_id": "c55d6bcc-46a1-44d1-9786-ee4687393ad2",
+    "timestamp": "2025-10-31T23:46:12.282747",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 38.107093
   }
 ]

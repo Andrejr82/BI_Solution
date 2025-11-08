@@ -81,6 +81,17 @@ def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         if parquet_col in df.columns and std_col not in df.columns:
             df[std_col] = df[parquet_col]
 
+    # Mapear colunas do Parquet para nomes padronizados
+    # (mapeamento reverso do que é feito em _load_data)
+    if 'media_considerada_lv' in df.columns and 'mc' not in df.columns:
+        df['mc'] = df['media_considerada_lv']
+
+    if 'estoque_lv' in df.columns and 'linha_verde' not in df.columns:
+        df['linha_verde'] = df['estoque_lv']
+
+    if 'estoque_gondola_lv' in df.columns and 'estoque_gondola' not in df.columns:
+        df['estoque_gondola'] = df['estoque_gondola_lv']
+
     return df
 
 def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.DataFrame:
@@ -115,6 +126,12 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
                         parquet_cols.append('estoque_lv')
                     elif col == 'mc':
                         parquet_cols.append('media_considerada_lv')
+                    elif col == 'estoque_gondola_lv':
+                        # Já é o nome correto do Parquet
+                        parquet_cols.append(col)
+                    elif col in ['ESTOQUE_GONDOLA', 'estoque_gondola']:
+                        # Mapear variações antigas para coluna correta
+                        parquet_cols.append('estoque_gondola_lv')
                     else:
                         parquet_cols.append(col)
                 columns = parquet_cols
@@ -129,27 +146,61 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
                 if col in df.columns:
                     df = df[df[col] == val]
     else:
+        # 🚀 OTIMIZAÇÃO URGENTE: PRIORIZAR PARQUET (SQL Server muito lento - 5min/query)
         # HybridAdapter (SQL ou Parquet automático)
-        # Se não há filtros e está usando Parquet, carregar arquivo direto
-        if not filters and adapter.current_source == "parquet":
-            logger.info("Carregando Parquet completo (sem filtros)")
-            parquet_path = adapter.file_path
+        try:
+            # Sempre tentar Parquet primeiro para performance máxima
+            import glob
 
+            parquet_path = adapter.file_path if hasattr(adapter, 'file_path') else os.path.join(os.getcwd(), 'data', 'parquet', 'admmat.parquet')
+
+            # Expandir wildcard se necessário
+            if '*' in parquet_path:
+                matched_files = glob.glob(parquet_path)
+                if matched_files:
+                    # Priorizar admmat.parquet se existir, senão pegar primeiro
+                    parquet_path = next((f for f in matched_files if 'admmat.parquet' in f), matched_files[0])
+
+            logger.info(f"🚀 OTIMIZAÇÃO: Usando Parquet direto (SQL muito lento) - {parquet_path}")
+
+            # Mapear colunas padrão para colunas do Parquet
             if columns:
-                # Mapear colunas padrão para colunas do Parquet
                 parquet_cols = []
                 for col in columns:
                     if col == 'linha_verde':
                         parquet_cols.append('estoque_lv')
                     elif col == 'mc':
                         parquet_cols.append('media_considerada_lv')
+                    elif col == 'estoque_gondola_lv':
+                        # Já é o nome correto do Parquet
+                        parquet_cols.append(col)
+                    elif col in ['ESTOQUE_GONDOLA', 'estoque_gondola']:
+                        # Mapear variações antigas para coluna correta
+                        parquet_cols.append('estoque_gondola_lv')
                     else:
                         parquet_cols.append(col)
 
                 df = pd.read_parquet(parquet_path, columns=parquet_cols)
             else:
                 df = pd.read_parquet(parquet_path)
-        else:
+
+            # Aplicar filtros manualmente (SUPER RÁPIDO com Polars/Pandas)
+            if filters:
+                for col, val in filters.items():
+                    # Normalizar nome da coluna
+                    if col == 'linha_verde' and 'estoque_lv' in df.columns:
+                        col = 'estoque_lv'
+                    elif col == 'mc' and 'media_considerada_lv' in df.columns:
+                        col = 'media_considerada_lv'
+
+                    if col in df.columns:
+                        df = df[df[col] == val]
+
+            logger.info(f"✅ Parquet carregado com sucesso: {len(df)} registros")
+
+        except Exception as e:
+            # Fallback: usar HybridAdapter (Polars/SQL)
+            logger.info(f"⚠️ Fallback para HybridAdapter: {e}")
             result = adapter.execute_query(filters or {})
             df = pd.DataFrame(result)
 
@@ -345,15 +396,15 @@ def calcular_mc_produto(produto_id: int, une_id: int) -> Dict[str, Any]:
         if not isinstance(une_id, int) or une_id <= 0:
             return {"error": "une_id deve ser um inteiro positivo"}
 
-        if not os.path.exists(PARQUET_PATH):
-            return {"error": f"Arquivo não encontrado: {PARQUET_PATH}"}
-
-        # Carregar dados do Parquet
+        # Carregar dados usando _load_data() com filtros (padrão refatorado)
         logger.info(f"Buscando MC do produto {produto_id} na UNE {une_id}")
-        df = pd.read_parquet(PARQUET_PATH)
-
-        # Filtrar por produto e UNE
-        produto_df = df[(df['codigo'] == produto_id) & (df['une'] == une_id)]
+        # CORREÇÃO: Remover colunas ESTOQUE_GONDOLA/estoque_gondola que não existem no Parquet
+        # Usar estoque_gondola_lv que existe no Parquet
+        produto_df = _load_data(
+            filters={'codigo': produto_id, 'une': une_id},
+            columns=['codigo', 'nome_produto', 'une', 'mc', 'estoque_atual',
+                    'linha_verde', 'nomesegmento', 'estoque_gondola_lv']
+        )
 
         if produto_df.empty:
             return {
@@ -370,9 +421,11 @@ def calcular_mc_produto(produto_id: int, une_id: int) -> Dict[str, Any]:
         estoque_atual = float(row['estoque_atual']) if pd.notna(row['estoque_atual']) else 0.0
         linha_verde = float(row['linha_verde']) if pd.notna(row['linha_verde']) else 0.0
 
-        # Estoque gôndola (se existir)
+        # Estoque gôndola (usar estoque_gondola_lv que existe no Parquet)
         estoque_gondola = None
-        if 'ESTOQUE_GONDOLA' in row:
+        if 'estoque_gondola_lv' in row:
+            estoque_gondola = float(row['estoque_gondola_lv']) if pd.notna(row['estoque_gondola_lv']) else 0.0
+        elif 'ESTOQUE_GONDOLA' in row:
             estoque_gondola = float(row['ESTOQUE_GONDOLA']) if pd.notna(row['ESTOQUE_GONDOLA']) else 0.0
         elif 'estoque_gondola' in row:
             estoque_gondola = float(row['estoque_gondola']) if pd.notna(row['estoque_gondola']) else 0.0
@@ -825,7 +878,7 @@ def validar_transferencia_produto(
 
 
 @tool
-def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int = None) -> Dict[str, Any]:
+def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int = None, une_destino_id: int = None) -> Dict[str, Any]:
     """
     Sugere transferências automáticas entre UNEs baseadas em regras de negócio.
 
@@ -970,6 +1023,9 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
                 for _, destino in produto_falta.sort_values('perc_linha_verde').head(3).iterrows():
                     une_destino = int(destino['une'])
 
+                    if une_destino_id is not None and une_destino != une_destino_id:
+                        continue
+
                     if une_origem == une_destino:
                         continue
 
@@ -1110,11 +1166,245 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
         return {"error": f"Erro ao gerar sugestões: {str(e)}"}
 
 
+@tool
+@error_handler_decorator(
+    context_func=lambda une_id: {"une_id": une_id, "funcao": "calcular_produtos_sem_vendas"},
+    return_on_error={"error": "Erro ao calcular produtos sem vendas", "total_produtos": 0, "produtos": []}
+)
+def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any]:
+    """
+    Identifica produtos sem vendas (VENDA_30DD = 0) em uma UNE.
+
+    Esta ferramenta é útil para:
+    - Identificar produtos sem giro
+    - Detectar itens parados em estoque
+    - Sugerir remanejamento ou promoções
+
+    Args:
+        une_id: ID da UNE (ex: 2586 para SCR, 261 para MAD)
+        limite: Número máximo de produtos a retornar (default: 50)
+
+    Returns:
+        dict com:
+        - total_produtos: int (total de produtos sem vendas)
+        - produtos: list[dict] (produtos sem vendas com estoque > 0)
+        - une_id: int
+        - criterio: str (descrição do filtro aplicado)
+
+    Example:
+        >>> result = calcular_produtos_sem_vendas(une_id=2586, limite=20)
+        >>> print(f"Total: {result['total_produtos']} produtos sem vendas")
+    """
+    # Validação de inputs
+    if not isinstance(une_id, int) or une_id <= 0:
+        return {"error": "une_id deve ser um inteiro positivo"}
+
+    if not isinstance(limite, int) or limite <= 0:
+        limite = 50
+
+    logger.info(f"Buscando produtos sem vendas na UNE {une_id}")
+
+    # Carregar dados da UNE
+    df = _load_data(
+        filters={'une': une_id},
+        columns=['codigo', 'nome_produto', 'une', 'estoque_atual', 'venda_30_d',
+                'linha_verde', 'nomesegmento', 'mc']
+    )
+
+    if df.empty:
+        logger.warning(f"Nenhum dado encontrado para UNE {une_id}")
+        return {
+            "error": f"Nenhum dado encontrado para UNE {une_id}",
+            "une_id": une_id,
+            "total_produtos": 0,
+            "produtos": []
+        }
+
+    # Normalizar DataFrame
+    df = _normalize_dataframe(df)
+
+    # Filtrar produtos SEM vendas (venda_30_d = 0) mas COM estoque
+    df_sem_vendas = df[
+        (df['venda_30_d'] == 0) &
+        (df['estoque_atual'] > 0)
+    ].copy()
+
+    total_produtos = len(df_sem_vendas)
+
+    if total_produtos == 0:
+        return {
+            "total_produtos": 0,
+            "produtos": [],
+            "une_id": une_id,
+            "criterio": "VENDA_30DD = 0 E ESTOQUE > 0",
+            "mensagem": "Nenhum produto sem vendas encontrado na UNE (todos os produtos com estoque têm vendas)"
+        }
+
+    # Ordenar por estoque (produtos com mais estoque parado = mais críticos)
+    df_sem_vendas = df_sem_vendas.sort_values('estoque_atual', ascending=False)
+
+    # Limitar ao número solicitado
+    top_produtos = df_sem_vendas.head(limite)
+
+    # Preparar lista de produtos
+    produtos = []
+    for _, row in top_produtos.iterrows():
+        produto = {
+            "codigo": int(row['codigo']) if pd.notna(row['codigo']) else None,
+            "nome_produto": str(row['nome_produto']) if pd.notna(row['nome_produto']) else "N/A",
+            "segmento": str(row['nomesegmento']) if 'nomesegmento' in row and pd.notna(row['nomesegmento']) else "N/A",
+            "estoque_atual": float(row['estoque_atual']) if pd.notna(row['estoque_atual']) else 0.0,
+            "linha_verde": float(row['linha_verde']) if pd.notna(row['linha_verde']) else 0.0,
+            "venda_30d": 0.0,  # Sempre zero (critério da busca)
+            "dias_sem_venda": "> 30 dias"
+        }
+        produtos.append(produto)
+
+    logger.info(f"Encontrados {total_produtos} produtos sem vendas na UNE {une_id}")
+
+    return {
+        "total_produtos": total_produtos,
+        "produtos": produtos,
+        "une_id": une_id,
+        "criterio": "VENDA_30DD = 0 E ESTOQUE > 0",
+        "limite_exibido": len(produtos),
+        "recomendacao": "Considere ações promocionais ou transferência para UNEs com demanda" if total_produtos > 0 else None
+    }
+
+
 # Lista de ferramentas disponíveis para exportação
 __all__ = [
     'calcular_abastecimento_une',
     'calcular_mc_produto',
     'calcular_preco_final_une',
     'validar_transferencia_produto',
-    'sugerir_transferencias_automaticas'
+    'sugerir_transferencias_automaticas',
+    'calcular_produtos_sem_vendas'
 ]
+
+
+# -----------------------------------------------------------------------------
+# Compatibility wrapper functions (shims) expected by older tests/scripts
+# These provide a stable, high-level API (get_*) that returns the
+# standardized dict: {"success": bool, "data": ..., "message": str}
+# They call the existing implementations where possible or provide
+# safe fallbacks so test-collection/imports do not fail.
+# -----------------------------------------------------------------------------
+
+
+def _standard_response(data=None, message: str = "", success: bool = True):
+    return {"success": success, "data": data if data is not None else [], "message": message}
+
+
+def get_produtos_une(une_id: int):
+    """Compat wrapper: retorna produtos para uma UNE.
+
+    Usa `_load_data` e devolve lista de registros normalizados.
+    """
+    try:
+        if not isinstance(une_id, int) or une_id <= 0:
+            return _standard_response([], "une_id inválido", False)
+
+        df = _load_data(filters={"une": une_id})
+        records = df.to_dict(orient="records") if not df.empty else []
+
+        return _standard_response(records, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_produtos_une: {e}", exc_info=True)
+        return _standard_response([], f"Erro: {e}", False)
+
+
+def get_transferencias(une: int = None, data_inicio: str = None, data_fim: str = None, status: str = None):
+    """Compat wrapper: retorna transferencias (usa sugerir_transferencias_automaticas como fallback)."""
+    try:
+        limite = 50
+        result = sugerir_transferencias_automaticas(limite=limite, une_origem_filtro=une)
+        sugestoes = result.get("sugestoes") if isinstance(result, dict) else []
+        return _standard_response(sugestoes, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_transferencias: {e}", exc_info=True)
+        return _standard_response([], f"Erro: {e}", False)
+
+
+def get_estoque_une(une_id: int):
+    try:
+        df = _load_data(filters={"une": une_id})
+        if df.empty:
+            return _standard_response([], "Nenhum dado", True)
+
+        total_estoque = int(df['estoque_atual'].fillna(0).sum()) if 'estoque_atual' in df.columns else 0
+        return _standard_response({"une": une_id, "total_estoque": total_estoque}, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_estoque_une: {e}", exc_info=True)
+        return _standard_response([], f"Erro: {e}", False)
+
+
+def get_vendas_une(une_id: int):
+    try:
+        df = _load_data(filters={"une": une_id})
+        total_vendas = float(df['venda_30_d'].fillna(0).sum()) if 'venda_30_d' in df.columns else 0.0
+        return _standard_response({"une": une_id, "total_vendas_30d": total_vendas}, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_vendas_une: {e}", exc_info=True)
+        return _standard_response([], f"Erro: {e}", False)
+
+
+def get_unes_disponiveis():
+    try:
+        df = _load_data()
+        if 'une' in df.columns:
+            unes = sorted(list(df['une'].dropna().unique()))
+        else:
+            unes = []
+        return _standard_response(unes, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_unes_disponiveis: {e}", exc_info=True)
+        return _standard_response([], f"Erro: {e}", False)
+
+
+def get_preco_produto(une_id: int, produto_codigo: str):
+    try:
+        df = _load_data(filters={"une": une_id, "codigo": produto_codigo})
+        if df.empty:
+            return _standard_response({}, "Produto não encontrado", False)
+        row = df.iloc[0].to_dict()
+        preco = row.get('preco_venda') or row.get('preco') or 0.0
+        return _standard_response({"produto": produto_codigo, "preco_venda": float(preco)}, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_preco_produto: {e}", exc_info=True)
+        return _standard_response({}, f"Erro: {e}", False)
+
+
+def get_total_vendas_une(une_id: int):
+    try:
+        df = _load_data(filters={"une": une_id})
+        total = float(df['venda_30_d'].fillna(0).sum()) if 'venda_30_d' in df.columns else 0.0
+        return _standard_response(total, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_total_vendas_une: {e}", exc_info=True)
+        return _standard_response(0, f"Erro: {e}", False)
+
+
+def get_total_estoque_une(une_id: int):
+    try:
+        df = _load_data(filters={"une": une_id})
+        total = int(df['estoque_atual'].fillna(0).sum()) if 'estoque_atual' in df.columns else 0
+        return _standard_response(total, "OK", True)
+    except Exception as e:
+        logger.error(f"Erro em get_total_estoque_une: {e}", exc_info=True)
+        return _standard_response(0, f"Erro: {e}", False)
+
+
+def health_check():
+    try:
+        base = os.path.join(os.getcwd(), 'data', 'parquet')
+        files = os.listdir(base) if os.path.exists(base) else []
+        expected = ['produtos.parquet', 'transferencias.parquet']
+        missing = [f for f in expected if f not in files]
+        status = {"present_files": files, "missing_expected": missing}
+        success = len(missing) == 0
+        return _standard_response(status, "OK" if success else "Arquivos faltando", success)
+    except Exception as e:
+        logger.error(f"Erro em health_check: {e}", exc_info=True)
+        return _standard_response({}, f"Erro: {e}", False)
+

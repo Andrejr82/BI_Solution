@@ -1,0 +1,263 @@
+[
+  {
+    "query": "qual a mc de produto 25 na une nit",
+    "session_id": "6f468be5-b187-455d-83c6-8d5a078e800c",
+    "timestamp": "2025-11-02T10:19:58.306760",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 10.053934
+  },
+  {
+    "query": "mc do produto 369947 na une 261",
+    "session_id": "6f468be5-b187-455d-83c6-8d5a078e800c",
+    "timestamp": "2025-11-02T10:30:30.355931",
+    "success": false,
+    "results_count": 0,
+    "error": "⏰ **Tempo Limite Excedido**\n\nO processamento da sua consulta demorou muito tempo (>45s).\n\n**Sugestões:**\n- Tente uma consulta mais específica\n- Simplifique a pergunta\n- Verifique sua conexão de internet",
+    "processing_time": 0.0
+  },
+  {
+    "query": "gere um gráfico de evoluçaso produto 59294 une 2365",
+    "session_id": "999d68f2-3b8c-4899-9775-99f85b4cddf0",
+    "timestamp": "2025-11-02T12:34:21.361169",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 14.056536
+  },
+  {
+    "query": "gere um gráfico de evoluçaso produto 59294 une 2365",
+    "session_id": "999d68f2-3b8c-4899-9775-99f85b4cddf0",
+    "timestamp": "2025-11-02T12:34:56.607192",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.034398
+  },
+  {
+    "query": "gere um gráfico de vendas do produto 59294 une 1685",
+    "session_id": "999d68f2-3b8c-4899-9775-99f85b4cddf0",
+    "timestamp": "2025-11-02T12:36:29.073720",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 12.057414
+  },
+  {
+    "query": "gere gráfico de evolução do produto 592294 na une 2365",
+    "session_id": "12d203a6-22da-465b-a7f6-acff18b3318c",
+    "timestamp": "2025-11-02T14:39:32.932082",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 24.169093
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 369947 na une 2365",
+    "session_id": "a43281c1-2bb0-4004-ad33-1cf449440f05",
+    "timestamp": "2025-11-02T15:29:36.790797",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.027395
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 369947 na une 2365",
+    "session_id": "a43281c1-2bb0-4004-ad33-1cf449440f05",
+    "timestamp": "2025-11-02T15:58:55.531649",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.039716
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 369947 na une 2365",
+    "session_id": "a43281c1-2bb0-4004-ad33-1cf449440f05",
+    "timestamp": "2025-11-02T15:59:07.951943",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.028429
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 369947 na une 2365",
+    "session_id": "1d9cbd3f-5196-4fc8-8faf-c65c429bb70f",
+    "timestamp": "2025-11-02T16:00:31.212722",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.025857
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 369947 na une bar",
+    "session_id": "1d9cbd3f-5196-4fc8-8faf-c65c429bb70f",
+    "timestamp": "2025-11-02T16:00:47.603633",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.042611
+  },
+  {
+    "query": "gere um gráfico de barras do produto 369947 na une bar",
+    "session_id": "db97b972-a40b-4b2a-afaa-a9ce38b61574",
+    "timestamp": "2025-11-02T16:23:33.411996",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 18.051845
+  },
+  {
+    "query": "gere um gráfico de evolução do produto 59294 na une 261",
+    "session_id": "db97b972-a40b-4b2a-afaa-a9ce38b61574",
+    "timestamp": "2025-11-02T16:25:08.607972",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.035332
+  },
+  {
+    "query": "gere um gráficos de evolução do produto 369947 na une bar",
+    "session_id": "52080cee-a0c0-4aa8-8985-898e7a19f051",
+    "timestamp": "2025-11-02T16:33:34.409397",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.02827
+  },
+  {
+    "query": "gere um gráfico de vendas do produto 59294 em todas as unes",
+    "session_id": "6efeba98-1129-49fa-90f1-fb3214cefab4",
+    "timestamp": "2025-11-02T20:17:07.703882",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 14.059297
+  },
+  {
+    "query": "qual é a mc do produto 369947 na une nit",
+    "session_id": "6efeba98-1129-49fa-90f1-fb3214cefab4",
+    "timestamp": "2025-11-02T20:22:40.945741",
+    "success": false,
+    "results_count": 0,
+    "error": "⏰ **Tempo Limite Excedido**\n\nO processamento da sua consulta demorou muito tempo (>75s).\n\n**Sugestões:**\n- Tente uma consulta mais específica\n- Simplifique a pergunta\n- Verifique sua conexão de internet",
+    "processing_time": 0.0
+  },
+  {
+    "query": "qual é o estoque do produto 59294 na une scr",
+    "session_id": "6efeba98-1129-49fa-90f1-fb3214cefab4",
+    "timestamp": "2025-11-02T20:24:47.793983",
+    "success": false,
+    "results_count": 0,
+    "error": "⏰ **Tempo Limite Excedido**\n\nO processamento da sua consulta demorou muito tempo (>45s).\n\n**Sugestões:**\n- Tente uma consulta mais específica\n- Simplifique a pergunta\n- Verifique sua conexão de internet",
+    "processing_time": 0.0
+  },
+  {
+    "query": "qual a mc do produto 59294 na une 135",
+    "session_id": "8483ecf7-b0eb-43ae-9cf3-075662c29d40",
+    "timestamp": "2025-11-02T20:50:25.827435",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.04321
+  },
+  {
+    "query": "qual é a mc do produto  59294 na une nig",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T21:20:11.213442",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.070007
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos em todas as unes",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T21:22:30.843107",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 16.111162
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos todas as unes",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T21:23:02.933963",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.048338
+  },
+  {
+    "query": "grafico vendas segmento tecidos todas as unes",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T21:24:07.561085",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.068411
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos todas as unes",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T21:34:59.421296",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.523283
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos todas as unes",
+    "session_id": "62883c12-7a2a-4d98-b188-4ca75f147b1b",
+    "timestamp": "2025-11-02T22:11:29.200502",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.042866
+  },
+  {
+    "query": "gere um gráfico de vendas do produto 59294 todas as unes",
+    "session_id": "9de0c06e-624f-4839-b883-430baa5c6eab",
+    "timestamp": "2025-11-02T22:21:47.858068",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 18.037331
+  },
+  {
+    "query": "qual a mc do produto 369947 na une taq",
+    "session_id": "9de0c06e-624f-4839-b883-430baa5c6eab",
+    "timestamp": "2025-11-02T22:22:22.126847",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.03085
+  },
+  {
+    "query": "qual estoque do produto 59294 em todas as unes",
+    "session_id": "9de0c06e-624f-4839-b883-430baa5c6eab",
+    "timestamp": "2025-11-02T22:23:58.441889",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.025256
+  },
+  {
+    "query": "qual estoque do produto 59294 em todas as unes",
+    "session_id": "9de0c06e-624f-4839-b883-430baa5c6eab",
+    "timestamp": "2025-11-02T22:24:46.532456",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.027982
+  },
+  {
+    "query": "qual estoque do produto 59294 em todas as unes",
+    "session_id": "2a362c8b-c7c1-4d6a-b8f9-a541908be44c",
+    "timestamp": "2025-11-02T22:26:34.341571",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 2.025657
+  }
+]

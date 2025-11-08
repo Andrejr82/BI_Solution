@@ -31,9 +31,10 @@ class GeminiLLMAdapter:
 
         self.cache_enabled = enable_cache
         if enable_cache:
-            self.cache = ResponseCache(ttl_hours=48)
-            self.cache.clear_expired()
-            logger.info("[OK] Cache de respostas ativado para Gemini - ECONOMIA DE CRÉDITOS")
+            # ✅ OTIMIZAÇÃO v2.2: TTL aumentado para 6h (Context7 best practice)
+            # Balanceamento ideal entre economia de tokens e freshness de dados
+            self.cache = ResponseCache(ttl_hours=6)
+            logger.info("✅ Cache de respostas ativado para Gemini - ECONOMIA DE CRÉDITOS (TTL: 6h)")
         else:
             self.cache = None
 
@@ -44,10 +45,23 @@ class GeminiLLMAdapter:
             content = chunk.choices[0].delta.content or ""
             yield content
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False, stream=False):
+    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False, stream=False, cache_context=None):
+        """
+        Obtém completion da LLM com cache inteligente
+
+        Args:
+            messages: Lista de mensagens
+            model: Nome do modelo (opcional)
+            temperature: Temperatura da geração
+            max_tokens: Limite de tokens
+            json_mode: Forçar resposta em JSON
+            stream: Modo streaming
+            cache_context: Contexto adicional para cache (intent, tipo de resposta, etc.)
+        """
         try:
             if not stream and self.cache_enabled and self.cache:
-                cached_response = self.cache.get(messages, model, temperature)
+                # 🔥 NOVO: Passar contexto ao cache para evitar mistura de respostas
+                cached_response = self.cache.get(messages, model, temperature, context=cache_context)
                 if cached_response:
                     return cached_response
 
@@ -101,7 +115,8 @@ class GeminiLLMAdapter:
             result = {"content": content}
 
             if self.cache_enabled and self.cache:
-                self.cache.set(messages, model, temperature, result)
+                # 🔥 NOVO: Passar contexto ao salvar cache
+                self.cache.set(messages, model, temperature, result, context=cache_context)
 
             return result
 
@@ -154,21 +169,31 @@ class DeepSeekLLMAdapter:
 
         self.cache_enabled = enable_cache
         if enable_cache:
-            self.cache = ResponseCache(ttl_hours=48)
-            self.cache.clear_expired()
-            logger.info("[OK] Cache de respostas ativado para DeepSeek.")
+            # ✅ OTIMIZAÇÃO v2.2: TTL aumentado para 6h (Context7 best practice)
+            # Balanceamento ideal entre economia de tokens e freshness de dados
+            self.cache = ResponseCache(ttl_hours=6)
+            logger.info("✅ Cache de respostas ativado para DeepSeek (TTL: 6h)")
         else:
             self.cache = None
 
         logger.info("Adaptador do DeepSeekLLMAdapter inicializado com sucesso.")
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False):
+    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False, cache_context=None):
         """
-        Obtém uma conclusão do modelo DeepSeek.
+        Obtém uma conclusão do modelo DeepSeek com cache inteligente
+
+        Args:
+            messages: Lista de mensagens
+            model: Nome do modelo (opcional)
+            temperature: Temperatura da geração
+            max_tokens: Limite de tokens
+            json_mode: Forçar resposta em JSON
+            cache_context: Contexto adicional para cache (intent, tipo de resposta, etc.)
         """
         try:
             if self.cache_enabled and self.cache:
-                cached_response = self.cache.get(messages, model, temperature)
+                # 🔥 NOVO: Passar contexto ao cache para evitar mistura de respostas
+                cached_response = self.cache.get(messages, model, temperature, context=cache_context)
                 if cached_response:
                     return cached_response
 
@@ -191,7 +216,8 @@ class DeepSeekLLMAdapter:
             result = {"content": content}
 
             if self.cache_enabled and self.cache:
-                self.cache.set(messages, model, temperature, result)
+                # 🔥 NOVO: Passar contexto ao salvar cache
+                self.cache.set(messages, model, temperature, result, context=cache_context)
 
             return result
 

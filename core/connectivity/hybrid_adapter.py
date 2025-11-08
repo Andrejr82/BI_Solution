@@ -6,10 +6,12 @@ Uso:
     adapter = HybridDataAdapter()
     result = adapter.execute_query({})  # tenta SQL Server, fallback para Parquet
 """
+import glob
 import logging
 from typing import Dict, Any, List, Optional
 import os
 from pathlib import Path
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -85,14 +87,46 @@ class HybridDataAdapter:
 
             self.sql_adapter = SQLServerAdapter(settings)
 
-            # Testar conexão
-            logger.info("Tentando conectar SQL Server...")
-            self.sql_adapter.connect()
+            # Testar conexão COM TIMEOUT CURTO (não bloquear startup)
+            logger.info("Tentando conectar SQL Server (timeout: 2s)...")
+            import threading
+            import queue
 
-            # Se chegou aqui, conexão OK
-            self.sql_available = True
-            self.current_source = "sqlserver"
-            logger.info("[OK] SQL Server conectado - modo HIBRIDO ativo")
+            result_queue = queue.Queue()
+
+            def try_connect():
+                try:
+                    self.sql_adapter.connect()
+                    result_queue.put(("success", None))
+                except Exception as e:
+                    result_queue.put(("error", str(e)))
+
+            thread = threading.Thread(target=try_connect, daemon=True)
+            thread.start()
+            thread.join(timeout=2)  # Máximo 2s para conectar
+
+            if thread.is_alive():
+                # Timeout - usar Parquet
+                logger.warning("SQL Server timeout (>2s) - usando Parquet")
+                self.sql_available = False
+                self.current_source = "parquet"
+            else:
+                try:
+                    status, error = result_queue.get_nowait()
+                    if status == "success":
+                        # Conexão OK
+                        self.sql_available = True
+                        self.current_source = "sqlserver"
+                        logger.info("[OK] SQL Server conectado - modo HIBRIDO ativo")
+                    else:
+                        # Erro na conexão
+                        logger.warning(f"SQL Server falhou: {error} - usando Parquet")
+                        self.sql_available = False
+                        self.current_source = "parquet"
+                except queue.Empty:
+                    logger.warning("SQL Server sem resposta - usando Parquet")
+                    self.sql_available = False
+                    self.current_source = "parquet"
 
         except ImportError as e:
             logger.warning(f"SQL Server adapter nao disponivel: {e}")
@@ -182,7 +216,12 @@ class HybridDataAdapter:
                 result = self.sql_adapter.execute_query(sql_query)
 
                 logger.info(f"[OK] Query via SQL Server ({len(result)} rows)")
-                return result
+                # Normalizar chaves do resultado também para SQL Server
+                try:
+                    mapped_sql = self._normalize_result_rows(result)
+                    return mapped_sql
+                except Exception:
+                    return result
 
             except Exception as e:
                 logger.error(f"[ERRO] SQL Server: {e}")
@@ -196,7 +235,166 @@ class HybridDataAdapter:
         # Usar Parquet (fallback ou primário)
         result = self.parquet_adapter.execute_query(query_filters)
         logger.info(f"[OK] Query via Parquet ({len(result)} rows)")
-        return result
+
+        # Se o Parquet devolveu um erro (ex: problemas de parsing em colunas
+        # numéricas como preco_38_percent), tentar uma segunda tentativa mais
+        # tolerante pedindo apenas colunas essenciais (omitindo colunas
+        # problemáticas). Isso evita propagar um dict de erro para callers
+        # que esperam uma lista de registros.
+        if isinstance(result, list) and len(result) == 1 and isinstance(result[0], dict) and result[0].get("error"):
+            details = result[0].get("details", "") or ""
+            logger.warning(f"Parquet returned error: {result[0].get('error')} - details: {details}")
+            try:
+                # Escolher um conjunto seguro de colunas essenciais (sem preco)
+                # Safe set: evitar colunas numéricas problemáticas (preco, estoque)
+                # Incluir 'une' para permitir filtro por UNE e reduzir volume lido
+                safe_required = [
+                    'codigo',
+                    'nome_produto',
+                    'nomesegmento',
+                    'une',
+                ]
+
+                # Chamar o híbrido diretamente passando required_columns
+                logger.info("Tentando leitura tolerante com apenas colunas essenciais (fallback)")
+                retry = []
+                try:
+                    retry = self.parquet_adapter._hybrid.execute_query(
+                        query_filters, required_columns=safe_required
+                    )
+                except Exception:
+                    # se o _hybrid interno não funcionar, vamos tentar leitura segura via pyarrow+pandas
+                    retry = []
+
+                # Se obteve resultado válido, normalizar e retornar
+                if isinstance(retry, list) and retry and not (len(retry) == 1 and isinstance(retry[0], dict) and retry[0].get('error')):
+                    logger.info("Fallback tolerante bem-sucedido - retornando resultado reduzido")
+                    return self._normalize_result_rows(retry)
+
+                # Se retry falhou ou retornou erro, tentar leitura segura direta de arquivos parquet
+                logger.info("Retry via _hybrid falhou ou retornou erro; tentando leitura segura direta de arquivos parquet")
+                safe_rows = self._read_parquet_safe(required_columns=safe_required, query_filters=query_filters)
+                if safe_rows:
+                    # Garantir colunas numéricas esperadas para evitar KeyError em callers
+                    for r in safe_rows:
+                        if 'estoque_atual' not in r:
+                            r['estoque_atual'] = 0
+                        if 'venda_30_d' not in r:
+                            r['venda_30_d'] = 0
+                        if 'preco_38_percent' not in r:
+                            r['preco_38_percent'] = 0
+                    logger.info("Leitura segura de parquet obteve registros - retornando resultado reduzido")
+                    return self._normalize_result_rows(safe_rows)
+                else:
+                    logger.warning("Leitura segura de parquet não retornou registros utilizáveis; retornando lista vazia")
+                    return []
+            except Exception as e:
+                logger.warning(f"Fallback tolerante também falhou: {e}")
+
+        # Normalizar resultado do Parquet
+        try:
+            return self._normalize_result_rows(result)
+        except Exception:
+            return result
+
+    def _normalize_result_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Normaliza chaves de cada linha retornada (SQL ou Parquet) para nomes canônicos.
+
+        Converte nomes MAIÚSCULOS/legados para nomes em minúsculas usados no código.
+        """
+        mapped = []
+        col_map = {
+            'PRODUTO': 'codigo',
+            'NOME': 'nome_produto',
+            'UNE_NOME': 'une_nome',
+            'NOMESEGMENTO': 'nomesegmento',
+            'VENDA_30DD': 'venda_30_d',
+            'ESTOQUE_UNE': 'estoque_atual',
+            'ESTOQUE_ATUAL': 'estoque_atual',
+            'ESTOQUE_LV': 'estoque_lv',
+        }
+
+        for row in rows:
+            if not isinstance(row, dict):
+                mapped.append(row)
+                continue
+
+            new_row = {}
+            for k, v in row.items():
+                if isinstance(k, str) and k in col_map:
+                    new_key = col_map[k]
+                else:
+                    new_key = k.lower() if isinstance(k, str) else k
+                new_row[new_key] = v
+
+            mapped.append(new_row)
+
+        return mapped
+
+    def _read_parquet_safe(self, required_columns: Optional[List[str]] = None, query_filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Tentativa robusta de leitura de arquivos Parquet usando pyarrow + pandas.
+
+        - Expande globs para lista de arquivos (evita passar wildcard diretamente ao pyarrow)
+        - Lê apenas as colunas necessárias (se informado)
+        - Faz coercao de colunas de texto para numérico quando detectado
+        - Retorna lista de dicts (ou [] em caso de falha)
+        """
+        try:
+            fp = getattr(self.parquet_adapter, 'file_path', None)
+            if not fp:
+                logger.debug("_read_parquet_safe: parquet file_path indisponivel")
+                return []
+
+            # Expandir wildcard se houver
+            files = []
+            try:
+                if isinstance(fp, str) and ('*' in fp):
+                    files = glob.glob(fp)
+                elif isinstance(fp, str) and os.path.isdir(fp):
+                    files = glob.glob(os.path.join(fp, '*.parquet'))
+                elif isinstance(fp, str) and os.path.isfile(fp):
+                    files = [fp]
+                else:
+                    # tentar diretório pai
+                    parent = os.path.dirname(fp)
+                    files = glob.glob(os.path.join(parent, '*.parquet'))
+            except Exception:
+                files = glob.glob(str(fp)) if isinstance(fp, str) else []
+
+            if not files:
+                logger.warning("_read_parquet_safe: nenhum arquivo parquet encontrado para leitura segura")
+                return []
+
+            # Ler via pyarrow (mais tolerante ao passar lista de arquivos)
+            try:
+                import pyarrow.parquet as pq
+
+                table = pq.read_table(files, columns=required_columns if required_columns else None)
+                df = table.to_pandas()
+            except Exception as e:
+                logger.exception(f"_read_parquet_safe: falha ao ler arquivos com pyarrow: {e}")
+                return []
+
+            if df is None or df.empty:
+                return []
+
+            # Coercao heuristica: tentar converter colunas object -> numerico quando fizer sentido
+            for col in list(df.columns):
+                if df[col].dtype == object:
+                    coerced = pd.to_numeric(df[col], errors='coerce')
+                    # Se houver ao menos um valor convertido, aceitar coercao
+                    if coerced.notna().sum() > 0:
+                        df[col] = coerced
+
+            # Substituir NaN por None para serializacao
+            df = df.where(pd.notnull(df), None)
+
+            return df.to_dict(orient='records')
+
+        except Exception as e:
+            logger.exception(f"_read_parquet_safe: erro inesperado: {e}")
+            return []
 
     def _build_sql_query(self, filters: Dict[str, Any]) -> str:
         """

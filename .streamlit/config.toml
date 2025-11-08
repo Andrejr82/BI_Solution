@@ -1,4 +1,48 @@
+# Streamlit Configuration File
+# Reference: https://docs.streamlit.io/develop/api-reference/configuration/config.toml
+
+# ==============================================================================
+# RUNNER CONFIGURATION
+# ==============================================================================
+[runner]
+# Enforce serializable session state for security
+# Context7: Previne vulnerabilidades de pickle/desserializacao
+enforceSerializableSessionState = true
+
+# Faster script runs
+fastReruns = true
+
+# ==============================================================================
+# SERVER CONFIGURATION
+# ==============================================================================
+[server]
+# Security: Disable CORS (enable only if needed)
+enableCORS = false
+
+# Security: Enable XSRF protection
+enableXsrfProtection = true
+
+# Max upload size (200MB)
+maxUploadSize = 200
+
+# Port (default 8501)
+port = 8501
+
+# Enable Websocket compression
+enableWebsocketCompression = true
+
+# ==============================================================================
+# BROWSER CONFIGURATION
+# ==============================================================================
+[browser]
+# Automatically open browser on start (development)
+gatherUsageStats = false
+
+# ==============================================================================
+# THEME CONFIGURATION (Consistência visual)
+# ==============================================================================
 [theme]
+# Tema escuro consistente (alinhado com CSS customizado)
 primaryColor = "#10a37f"
 backgroundColor = "#343541"
 secondaryBackgroundColor = "#444654"

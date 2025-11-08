@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🏗️ Manifesto de Arquitetura Alvo - Agent_Solution_BI
 
 **Data:** 21 de setembro de 2025
@@ -541,7 +540,6 @@ tests/
 ---
 
 **© 2025 Agent_Solution_BI - Transformando dados em insights através de IA conversacional**
-=======
 Manifesto da Arquitetura Alvo: Agent_BI 3.0
 Propósito: Este documento é o mapa definitivo da nova arquitetura do Agent_BI. Ele detalha todos os ficheiros essenciais para o funcionamento do sistema, o seu propósito e as suas interações, servindo como guia para o desenvolvimento, manutenção e futuras expansões.
 
@@ -727,4 +725,3 @@ scripts/ (diretório)
 
 Contém todos os scripts de pipeline de dados (ETL), limpeza, geração de catálogos, avaliação de agentes
 
->>>>>>> 946e2ce9d874562f3c9e0f0d54e9c41c50cb3399

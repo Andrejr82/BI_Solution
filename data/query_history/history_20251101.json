@@ -1,0 +1,92 @@
+[
+  {
+    "query": "quais na une bar estão sem vendas ?",
+    "session_id": "1579989d-fc23-493e-a658-446afcf1e03a",
+    "timestamp": "2025-11-01T06:22:06.272370",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.028638
+  },
+  {
+    "query": "qual a mc do produto 59294 na une scr",
+    "session_id": "f229aa40-870d-410a-931a-031c1e658108",
+    "timestamp": "2025-11-01T18:41:38.479866",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.088634
+  },
+  {
+    "query": "qual é a mc do produto 59294 na une mad",
+    "session_id": "5e0a0c08-a7e2-472a-98c0-976bcfcf6231",
+    "timestamp": "2025-11-01T18:49:55.747515",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.023858
+  },
+  {
+    "query": "qual a mc do produto 369947 na une 2365",
+    "session_id": "49dd951a-7e81-4bb4-b6ad-b40856faafe8",
+    "timestamp": "2025-11-01T19:03:25.687186",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.045513
+  },
+  {
+    "query": "qual a mc do produto 59294 na une bar",
+    "session_id": "49dd951a-7e81-4bb4-b6ad-b40856faafe8",
+    "timestamp": "2025-11-01T19:04:19.475413",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.043493
+  },
+  {
+    "query": "qual a mc do produto 25 na une tij",
+    "session_id": "49dd951a-7e81-4bb4-b6ad-b40856faafe8",
+    "timestamp": "2025-11-01T19:05:11.465170",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.029151
+  },
+  {
+    "query": "qual é a mc do produto 369947 na une 261",
+    "session_id": "49dd951a-7e81-4bb4-b6ad-b40856faafe8",
+    "timestamp": "2025-11-01T19:18:30.749742",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 4.025396
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos une scr",
+    "session_id": "49dd951a-7e81-4bb4-b6ad-b40856faafe8",
+    "timestamp": "2025-11-01T19:22:45.538801",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 8.057694
+  },
+  {
+    "query": "qual mc do produto 59294 na une 261",
+    "session_id": "354afc1e-dff4-489c-8a3b-dced85f89668",
+    "timestamp": "2025-11-01T19:30:54.474445",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.029225
+  },
+  {
+    "query": "gere um gráfico de vendas do segmento tecidos une bar",
+    "session_id": "354afc1e-dff4-489c-8a3b-dced85f89668",
+    "timestamp": "2025-11-01T19:32:24.168000",
+    "success": true,
+    "results_count": 0,
+    "error": null,
+    "processing_time": 6.073484
+  }
+]

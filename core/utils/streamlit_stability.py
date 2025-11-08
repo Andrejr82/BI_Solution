@@ -342,9 +342,9 @@ def run_health_check() -> dict:
             health["warnings"].append(f"Reruns frequentes: {monitor['consecutive_reruns']}")
 
     # 4. Verificar backend
-    if "backend_components" not in st.session_state or not st.session_state.backend_components:
-        health["issues"].append("Backend não inicializado")
-        health["status"] = "degraded"
+    # ✅ CORREÇÃO CONTEXT7: backend_components não está mais no session_state
+    # O backend é gerenciado via @st.cache_resource e acessado diretamente
+    # Esta verificação não é mais necessária (backend é singleton via cache_resource)
 
     # Determinar status final
     if health["issues"]:

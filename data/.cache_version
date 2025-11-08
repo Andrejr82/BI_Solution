@@ -1,0 +1,16 @@
+{
+  "version_hash": "4a73f0a8a8c4",
+  "last_cleaned": "2025-11-07T22:42:55.244411",
+  "max_age_days": 7,
+  "stats": {
+    "timestamp": "2025-11-07T22:42:53.096057",
+    "forced": false,
+    "pycache_removed": 156,
+    "pycache_size_mb": 21.46,
+    "old_files_removed": 0,
+    "old_files_size_mb": 0.0,
+    "cache_invalidated": false,
+    "previous_version": "4a73f0a8a8c4",
+    "current_version": "4a73f0a8a8c4"
+  }
+}
