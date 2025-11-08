@@ -6,9 +6,13 @@ Cada função representa um passo no fluxo de processamento da consulta.
 import logging
 import json
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import pandas as pd
 import numpy as np
+
+# Structured logging: use project-wide helper to ensure compatibility
+from core.config.logging_config import get_logger
+logger = get_logger(__name__)
 
 # Importações corrigidas baseadas na estrutura completa do projeto
 from core.agent_state import AgentState
@@ -16,17 +20,289 @@ from core.llm_base import BaseLLMAdapter
 from core.agents.code_gen_agent import CodeGenAgent
 from core.tools.data_tools import fetch_data_from_query
 from core.connectivity.parquet_adapter import ParquetAdapter
-
-
-from core.utils.json_utils import _clean_json_values # Import the cleaning function
-
-
-logger = logging.getLogger(__name__)
+from core.utils.json_utils import _clean_json_values
 
 def _extract_user_query(state: AgentState) -> str:
     """Extrai a query do usuário do state, lidando com objetos LangChain."""
     last_message = state['messages'][-1]
     return last_message.content if hasattr(last_message, 'content') else last_message.get('content', '')
+
+def format_mc_response(result: Dict[str, Any]) -> str:
+    """
+    ✅ OTIMIZAÇÃO v2.2: Formata resposta de MC com markdown limpo (sem caracteres especiais)
+
+    Args:
+        result: Dicionário com dados do produto retornado por calcular_mc_produto
+
+    Returns:
+        String formatada em markdown para renderização perfeita no Streamlit
+    """
+    # ✅ Formatação limpa usando markdown (renderiza perfeitamente no Streamlit)
+    response_text = f"""
+### 📦 PRODUTO: {result['nome']}
+
+**Informações Básicas:**
+- **Segmento:** {result['segmento']}
+- **UNE:** {result['une_id']}
+
+---
+
+### 📊 INDICADORES
+
+- 📈 **MC Calculada:** {result['mc_calculada']:.0f} unidades/dia
+- 📦 **Estoque Atual:** {result['estoque_atual']:.0f} unidades
+- 🟢 **Linha Verde:** {result['linha_verde']:.0f} unidades
+- 📊 **Percentual da LV:** {result['percentual_linha_verde']:.1f}%
+
+---
+
+### ⚠️ RECOMENDAÇÃO
+
+**{result['recomendacao']}**
+"""
+
+    return response_text
+
+def format_abastecimento_response(result: Dict[str, Any]) -> str:
+    """
+    Formata a resposta de abastecimento no padrão ideal de apresentação.
+
+    Args:
+        result: Dicionário com lista de produtos retornado por calcular_abastecimento_une
+
+    Returns:
+        String formatada no padrão ideal de apresentação
+    """
+    une_id = result.get('une_id', 'N/A')
+    segmento = result.get('segmento', 'Todos')
+    total_produtos = result.get('total_produtos', 0)
+    produtos = result.get('produtos', [])
+
+    # Cabeçalho
+    response_text = f"""Produtos que Precisam Abastecimento
+
+UNE: {une_id}
+Segmento: {segmento}
+Total de Produtos: {total_produtos}
+
+"""
+
+    # Se não há produtos, mensagem específica
+    if total_produtos == 0:
+        response_text += "[OK] Nenhum produto precisa de abastecimento no momento."
+        return response_text
+
+    # Lista os top produtos (máximo 10 para não poluir)
+    response_text += "Top Produtos:\n\n"
+
+    for idx, prod in enumerate(produtos[:10], 1):
+        nome = prod.get('nome_produto', 'N/A')[:40]  # Truncar nome se muito longo
+        estoque = prod.get('estoque_atual', 0)
+        linha_verde = prod.get('linha_verde', 0)
+        qtd_abastecer = prod.get('qtd_a_abastecer', 0)
+        percentual = prod.get('percentual_estoque', 0)
+
+        response_text += f"{idx}. {nome}\n"
+        response_text += f"   Estoque: {estoque:.0f} un | LV: {linha_verde:.0f} | Abastecer: {qtd_abastecer:.0f} un ({percentual:.1f}% da LV)\n\n"
+
+    if total_produtos > 10:
+        response_text += f"\n... e mais {total_produtos - 10} produtos."
+
+    return response_text
+
+def format_preco_response(result: Dict[str, Any]) -> str:
+    """
+    Formata a resposta de cálculo de preço no padrão ideal de apresentação.
+
+    Args:
+        result: Dicionário com cálculo de preço retornado por calcular_preco_final_une
+
+    Returns:
+        String formatada no padrão ideal de apresentação
+    """
+    valor_original = result.get('valor_original', 0)
+    tipo = result.get('tipo', 'N/A')
+    ranking = result.get('ranking', 0)
+    desconto_ranking = result.get('desconto_ranking', '0%')
+    forma_pagamento = result.get('forma_pagamento', 'N/A')
+    desconto_pagamento = result.get('desconto_pagamento', '0%')
+    preco_final = result.get('preco_final', 0)
+    economia = result.get('economia', 0)
+    percentual_economia = result.get('percentual_economia', 0)
+
+    # Determinar limite de tipo
+    limite_tipo = ">= R$ 750,00" if tipo == "Atacado" else "< R$ 750,00"
+    if tipo == "Único":
+        limite_tipo = "(Preco unico)"
+
+    response_text = f"""Calculo de Preco Final UNE
+
+Valor Original: R$ {valor_original:,.2f}
+Tipo de Venda: {tipo} {limite_tipo}
+
+Descontos:
+- Ranking {ranking}: {desconto_ranking}
+- Pagamento ({forma_pagamento}): {desconto_pagamento}
+
+Desconto Total: {percentual_economia:.1f}%
+
+PRECO FINAL: R$ {preco_final:,.2f}
+Economia: R$ {economia:,.2f} ({percentual_economia:.1f}%)"""
+
+    return response_text
+
+def format_produtos_sem_vendas_response(result: Dict[str, Any]) -> str:
+    """
+    Formata a resposta de produtos sem vendas no padrão ideal de apresentação.
+
+    Args:
+        result: Dicionário com lista de produtos retornado por calcular_produtos_sem_vendas
+
+    Returns:
+        String formatada no padrão ideal de apresentação
+    """
+    from core.config.une_mapping import get_une_name
+
+    une_id = result.get('une_id', 'N/A')
+    total_produtos = result.get('total_produtos', 0)
+    produtos = result.get('produtos', [])
+    criterio = result.get('criterio', 'VENDA_30DD = 0')
+    recomendacao = result.get('recomendacao', '')
+
+    # Resolver nome da UNE
+    une_name = get_une_name(str(une_id)) if une_id != 'N/A' else 'N/A'
+    une_display = f"{une_name} (UNE {une_id})" if une_name != 'N/A' else str(une_id)
+
+    # Calcular estatísticas
+    estoque_total_parado = sum([p.get('estoque_atual', 0) for p in produtos])
+
+    # Identificar produtos críticos (estoque alto)
+    produtos_criticos = [p for p in produtos if p.get('estoque_atual', 0) > 1000]
+
+    # Cabeçalho com estatísticas
+    response_text = f"""# 🔴 Produtos Sem Vendas (Sem Giro)
+
+---
+
+### 📍 **{une_display}**
+
+| Métrica | Valor |
+|---------|-------|
+| 📦 **Total de Produtos** | **{total_produtos:,}** produtos |
+| 🏭 **Estoque Parado** | **{estoque_total_parado:,.0f}** unidades |
+| ⚠️ **Produtos Críticos** | **{len(produtos_criticos)}** (estoque > 1000 un) |
+| 📊 **Critério** | {criterio} |
+
+---
+
+"""
+
+    # Se não há produtos
+    if total_produtos == 0:
+        response_text += """
+### ✅ Situação Ideal
+
+**Nenhum produto sem vendas encontrado!**
+
+Todos os produtos com estoque apresentam movimento nos últimos 30 dias.
+"""
+        return response_text
+
+    # Análise rápida
+    if len(produtos_criticos) > 0:
+        response_text += f"""
+### ⚠️ Alerta Crítico
+
+**{len(produtos_criticos)} produtos** com estoque alto (> 1000 un) estão **parados há mais de 30 dias**.
+
+💡 **Ação Recomendada:** Priorizar estes produtos para ação promocional ou transferência.
+
+---
+
+"""
+
+    # Lista os top produtos (máximo 10 para não poluir)
+    response_text += f"### 🔝 Top {min(10, total_produtos)} Produtos Mais Críticos\n\n"
+    response_text += "_Ordenado por quantidade de estoque parado_\n\n"
+
+    for idx, prod in enumerate(produtos[:10], 1):
+        codigo = prod.get('codigo', 'N/A')
+        nome = prod.get('nome_produto', 'N/A')[:50]  # Truncar nome
+        segmento = prod.get('segmento', 'N/A')
+        estoque = prod.get('estoque_atual', 0)
+        linha_verde = prod.get('linha_verde', 0)
+
+        # Emoji de criticidade baseado em estoque
+        emoji_criticidade = "🔥" if estoque > 10000 else "⚠️" if estoque > 1000 else "📦"
+
+        # Card do produto
+        response_text += f"""
+<details>
+<summary><b>{idx}. {emoji_criticidade} [{codigo}]</b> {nome}</summary>
+
+- **Segmento:** {segmento}
+- **Estoque Parado:** {estoque:,.0f} unidades
+- **Linha Verde:** {linha_verde:,.0f} unidades
+- **Status:** 🔴 Sem vendas há > 30 dias
+- **Criticidade:** {'MUITO ALTA' if estoque > 10000 else 'ALTA' if estoque > 1000 else 'MÉDIA'}
+
+</details>
+
+"""
+
+    if total_produtos > 10:
+        response_text += f"\n_📋 Exibindo 10 de {total_produtos:,} produtos. {total_produtos - 10:,} produtos adicionais não exibidos._\n"
+
+    # Análise de segmentos se disponível
+    if produtos:
+        segmentos = {}
+        for p in produtos[:50]:  # Analisar top 50
+            seg = p.get('segmento', 'Sem Segmento')
+            segmentos[seg] = segmentos.get(seg, 0) + 1
+
+        if len(segmentos) > 1:
+            top_segmentos = sorted(segmentos.items(), key=lambda x: x[1], reverse=True)[:5]
+            response_text += f"""
+---
+
+### 📊 Distribuição por Segmento (Top 5)
+
+"""
+            for seg, qtd in top_segmentos:
+                percentual = (qtd / len(produtos[:50])) * 100
+                barra = "█" * int(percentual / 5)  # Barra visual
+                response_text += f"- **{seg}:** {qtd} produtos ({percentual:.1f}%) {barra}\n"
+
+    # Recomendação
+    response_text += f"""
+
+---
+
+### 💡 Recomendações de Ação
+
+"""
+
+    if len(produtos_criticos) > 10:
+        response_text += f"""
+#### ⚡ Prioridade URGENTE
+- **{len(produtos_criticos)} produtos** com estoque > 1000 unidades parados
+- **Ação:** Campanhas promocionais agressivas ou transferência para UNEs com demanda
+
+"""
+
+    if recomendacao:
+        response_text += f"#### 📋 Análise Geral\n{recomendacao}\n\n"
+
+    response_text += """
+#### 🎯 Sugestões Práticas
+1. **Transferências:** Verificar UNEs com demanda usando `sugerir_transferencias_automaticas`
+2. **Promoções:** Criar campanhas para produtos com maior estoque parado
+3. **Reavaliação:** Considerar descontinuar produtos sem movimento há > 90 dias
+4. **Reposicionamento:** Verificar se produtos estão em local visível na loja
+
+"""
+
+    return response_text
 
 def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
     """
@@ -188,7 +464,13 @@ Analise a query acima e retorne um JSON com:
     logger.info(f"[CLASSIFY_INTENT] 📝 Query original: '{user_query}'")
 
     # Use json_mode=True para forçar a resposta em JSON
-    response_dict = llm_adapter.get_completion(messages=[{"role": "user", "content": prompt}], json_mode=True)
+    # 🔥 NOVO: Passar contexto ao cache para separar cache de classify_intent
+    cache_context = {"operation": "classify_intent", "query_type": "intent_classification"}
+    response_dict = llm_adapter.get_completion(
+        messages=[{"role": "user", "content": prompt}],
+        json_mode=True,
+        cache_context=cache_context
+    )
     plan_str = response_dict.get("content", "{}")
 
     # 🔍 LOGGING: Resposta raw da LLM
@@ -281,6 +563,14 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
         column_descriptions_str = f"Erro ao carregar descrições de coluna: {e}"
         logger.error(f"Erro ao carregar descrições de coluna: {e}", exc_info=True)
     
+    # ✅ CONTEXT7: Adicionar required_columns ao estado se for gráfico de evolução
+    required_columns = []
+    if state.get("intent") == "gerar_grafico":
+        query_lower = user_query.lower()
+        if any(kw in query_lower for kw in ['evolução', 'evolucao', 'tendência', 'tendencia', 'meses', 'histórico', 'historico']):
+            required_columns = ['codigo', 'une_nome'] + [f'mes_{i:02d}' for i in range(1, 13)]
+            logger.info(f"Gráfico de evolução detectado. Adicionando required_columns: {required_columns}")
+
     # Inicializar field_mapper
     field_mapper = get_field_mapper(catalog_file_path)
     
@@ -350,7 +640,13 @@ Quando o usuário mencionar:
     **Filtros JSON Resultantes:**
     """
 
-    response_dict = llm_adapter.get_completion(messages=[{"role": "user", "content": prompt}], json_mode=True)
+    # 🔥 NOVO: Passar contexto ao cache para separar queries Parquet
+    cache_context = {"operation": "generate_parquet_query", "query_type": "filter_generation", "intent": state.get("intent")}
+    response_dict = llm_adapter.get_completion(
+        messages=[{"role": "user", "content": prompt}],
+        json_mode=True,
+        cache_context=cache_context
+    )
     filters_str = response_dict.get("content", "{}").strip()
 
     # Fallback para extrair JSON de blocos de markdown
@@ -389,23 +685,25 @@ Quando o usuário mencionar:
     logger.info(f"Filtros originais: {parquet_filters}")
     logger.info(f"Filtros mapeados: {mapped_filters}")
 
-    return {"parquet_filters": mapped_filters}
+    return {"parquet_filters": mapped_filters, "required_columns": required_columns}
 
 
-def execute_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
+def execute_query(state: AgentState, parquet_adapter: ParquetAdapter, required_columns: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Executa os filtros Parquet do estado.
     """
     user_query = _extract_user_query(state)
     parquet_filters = state.get('parquet_filters', {})
+    required_columns_from_state = state.get('required_columns', None) # Retrieve from state
 
     logger.info(f"[NODE] execute_query: Executando com filtros {parquet_filters}")
     logger.info(f"📊 QUERY EXECUTION - User query: '{user_query}'")
     logger.info(f"📊 QUERY EXECUTION - Filters: {parquet_filters}")
+    logger.info(f"📊 QUERY EXECUTION - Required Columns: {required_columns_from_state}")
 
     # A lógica de fallback para filtros vazios foi removida, pois era a causa do MemoryError.
     # Agora, a proteção no ParquetAdapter será acionada se os filtros estiverem vazios.
-    retrieved_data = fetch_data_from_query.invoke({"query_filters": parquet_filters, "parquet_adapter": parquet_adapter})
+    retrieved_data = fetch_data_from_query.invoke({"query_filters": parquet_filters, "parquet_adapter": parquet_adapter, "required_columns": required_columns_from_state})
 
     # ✅ LOG DETALHADO DOS RESULTADOS
     if isinstance(retrieved_data, list):
@@ -453,21 +751,30 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
             2. **RESPONDA À PERGUNTA:** Usando o dataframe `df`, escreva o código para responder à seguinte pergunta: "{user_query}"
             3. **SALVE O RESULTADO NA VARIÁVEL `result`:** A última linha do seu script DEVE ser a atribuição do resultado final à variável `result`. Esta é a única forma que o sistema tem para ver sua resposta. NÃO use `print()`.
 
-            **REGRAS DE NEGÓCIO ESPECÍFICAS:**
-            - **Produtos em Excesso:** Para perguntas sobre 'produtos em excesso', filtre o DataFrame para incluir apenas produtos onde a coluna `estoque_atual` é maior que a coluna `linha_verde`.
+            **REGRAS OBRIGATÓRIAS:**
+            1. **SEMPRE defina variáveis antes de usar:** Se usar `produto_id`, defina antes (ex: `produto_id = 369947`)
+            2. **Produtos em Excesso:** Filtre `estoque_atual > linha_verde`
+            3. **"em todas as UNEs":** Use merge para incluir UNEs com venda = 0
+            4. **Evite variáveis não definidas:** NÃO use `produto_id`, `une_id`, etc. sem definir primeiro
 
-            **Exemplo de Script:**
+            **Exemplo 1 - Gráfico simples por segmento:**
             ```python
-            # Passo 1: Carregar dados
             df = load_data()
 
-            # Passo 2: Responder à pergunta (ex: "ranking de vendas do segmento tecidos")
-            tecidos_df = df[df['NOMESEGMENTO'].str.upper() == 'TECIDO']
-            ranking = tecidos_df.groupby('NOME')['VENDA_30DD'].sum().sort_values(ascending=False).reset_index()
+            # Filtrar segmento
+            df_tecidos = df[df['nomesegmento'].str.upper() == 'TECIDOS']
 
-            # Passo 3: Salvar resultado
-            result = ranking
+            # Agrupar por UNE
+            vendas_une = df_tecidos.groupby('une_nome')['venda_30_d'].sum().reset_index()
+            vendas_une = vendas_une.sort_values('venda_30_d', ascending=False)
+
+            # Gráfico
+            import plotly.express as px
+            result = px.bar(vendas_une, x='une_nome', y='venda_30_d',
+                           title='Vendas Tecidos por UNE')
             ```
+
+
 
             **Seu Script Python (Lembre-se, a última linha deve ser `result = ...`):**
             """
@@ -679,26 +986,81 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
     from core.tools.une_tools import (
         calcular_abastecimento_une,
         calcular_mc_produto,
-        calcular_preco_final_une
+        calcular_preco_final_une,
+        calcular_produtos_sem_vendas
     )
 
-    # Detectar qual ferramenta usar
-    tool_detection_prompt = f"""
-    Analise a consulta e identifique qual ferramenta UNE usar.
+    # 🚀 OTIMIZAÇÃO: Combinar detecção de ferramenta + extração de parâmetros em UMA ÚNICA chamada LLM
+    # Isso reduz de 2 chamadas para 1, economizando ~10s por query
+    unified_prompt = f"""
+    # 🛠️ Analisador de Operações UNE (Otimizado)
 
-    Ferramentas disponíveis:
-    - calcular_abastecimento_une: Para queries sobre abastecimento, reposição, produtos para abastecer
-    - calcular_mc_produto: Para queries sobre MC, média comum, média de vendas
-    - calcular_preco_final_une: Para queries sobre preço final, calcular preço, preço com desconto
+    Analise a query do usuário e:
+    1. Identifique qual ferramenta UNE usar
+    2. Extraia os parâmetros necessários
 
-    Retorne APENAS um JSON: {{"tool": "nome_da_ferramenta"}}
+    ## 📚 EXEMPLOS (Few-Shot Learning)
 
-    Query: "{user_query}"
+    **Exemplo 1 - MC:**
+    Query: "qual a MC do produto 704559 na une scr?"
+    Output: {{"tool": "calcular_mc_produto", "params": {{"produto_id": 704559, "une": "scr"}}, "confidence": 0.98}}
+
+    **Exemplo 2 - MC simplificado:**
+    Query: "mc do produto 369947 na une nit"
+    Output: {{"tool": "calcular_mc_produto", "params": {{"produto_id": 369947, "une": "nit"}}, "confidence": 0.97}}
+
+    **Exemplo 3 - Abastecimento:**
+    Query: "quais produtos precisam abastecimento na UNE MAD?"
+    Output: {{"tool": "calcular_abastecimento_une", "params": {{"une_input": "mad", "segmento": null}}, "confidence": 0.95}}
+
+    **Exemplo 4 - Preço:**
+    Query: "calcule o preço de R$ 800 ranking 0 a vista"
+    Output: {{"tool": "calcular_preco_final_une", "params": {{"valor_compra": 800, "ranking": 0, "forma_pagamento": "vista"}}, "confidence": 0.92}}
+
+    **Exemplo 5 - Estoque (usar MC como proxy):**
+    Query: "qual é o estoque do produto 59294 na une scr"
+    Output: {{"tool": "calcular_mc_produto", "params": {{"produto_id": 59294, "une": "scr"}}, "confidence": 0.90}}
+
+    **Exemplo 6 - Produtos sem vendas:**
+    Query: "quais produtos na une scr estão sem giro"
+    Output: {{"tool": "calcular_produtos_sem_vendas", "params": {{"une_input": "scr", "limite": 50}}, "confidence": 0.95}}
+
+    **Exemplo 7 - Produtos sem vendas (variação):**
+    Query: "quantos produtos estão sem vendas na une 261"
+    Output: {{"tool": "calcular_produtos_sem_vendas", "params": {{"une_input": "261", "limite": 50}}, "confidence": 0.93}}
+
+    ## 🎯 FERRAMENTAS E PARÂMETROS
+
+    1. **calcular_mc_produto** (MC, média, estoque)
+       - Params: {{"produto_id": <int>, "une": "<sigla>"}}
+
+    2. **calcular_abastecimento_une** (abastecimento, reposição)
+       - Params: {{"une_input": "<sigla>", "segmento": "<nome ou null>"}}
+
+    3. **calcular_preco_final_une** (preço, desconto)
+       - Params: {{"valor_compra": <float>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}
+
+    4. **calcular_produtos_sem_vendas** (produtos sem giro, sem vendas, parados)
+       - Params: {{"une_input": "<sigla>", "limite": <int, default 50>}}
+
+    ## 🎯 QUERY ATUAL: "{user_query}"
+
+    ## 📤 RETORNE JSON:
+    ```json
+    {{
+      "tool": "nome_da_ferramenta",
+      "params": {{...}},
+      "confidence": 0.95
+    }}
+    ```
     """
 
+    # 🔥 NOVO: Passar contexto ao cache para separar operações UNE
+    cache_context = {"operation": "une_tool", "query_type": "une_operation"}
     tool_response = llm_adapter.get_completion(
-        messages=[{"role": "user", "content": tool_detection_prompt}],
-        json_mode=True
+        messages=[{"role": "user", "content": unified_prompt}],
+        json_mode=True,
+        cache_context=cache_context
     )
 
     tool_str = tool_response.get("content", "{}").strip()
@@ -710,35 +1072,24 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
     try:
         tool_data = json.loads(tool_str)
         tool_name = tool_data.get("tool", "")
+        confidence = tool_data.get("confidence", 0.5)
+        params = tool_data.get("params", {})  # 🚀 NOVO: Parâmetros já vêm extraídos!
     except json.JSONDecodeError:
-        logger.error(f"Erro ao detectar ferramenta UNE: {tool_str}")
+        logger.error(f"Erro ao parsear resposta UNE: {tool_str}")
         return {"final_response": {"type": "text", "content": "Não consegui identificar a operação UNE solicitada."}}
 
-    logger.info(f"Ferramenta UNE detectada: {tool_name}")
+    logger.info(f"🔧 Ferramenta UNE: {tool_name} (confidence: {confidence:.2f})")
+    logger.info(f"📦 Parâmetros extraídos: {params}")
+
+    # Validar confidence mínimo
+    if confidence < 0.6:
+        logger.warning(f"⚠️ Baixa confiança na detecção de ferramenta UNE: {confidence:.2f}")
+        # Continuar mesmo assim, mas logar aviso
 
     # Executar ferramenta apropriada
     try:
         if "abastecimento" in tool_name:
-            # Extrair parâmetros para abastecimento
-            extract_prompt = f"""
-            Extraia a UNE (sigla, nome ou código) e o segmento (opcional) da consulta.
-            Retorne JSON: {{"une_input": "<string da UNE>", "segmento": "<nome ou null>"}}
-
-            Exemplos de une_input: "scr", "mad", "Santa Cruz", "123", "une vix"
-
-            Query: "{user_query}"
-            """
-            params_response = llm_adapter.get_completion(
-                messages=[{"role": "user", "content": extract_prompt}],
-                json_mode=True
-            )
-            params_str = params_response.get("content", "{}").strip()
-            if "```json" in params_str:
-                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
-                if match:
-                    params_str = match.group(1).strip()
-
-            params = json.loads(params_str)
+            # 🚀 OTIMIZADO: Parâmetros já foram extraídos na chamada unificada!
             une_input = params.get("une_input", "")
             segmento = params.get("segmento")
 
@@ -757,7 +1108,19 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
                 logger.warning(f"UNE não encontrada: '{une_input}'")
                 return {"final_response": {"type": "text", "content": error_msg, "user_query": user_query}}
 
-            une_id = int(une_code)
+            # Converter une_code para int de forma segura
+            try:
+                une_id = int(une_code)
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Erro ao converter UNE code '{une_code}' para int: {e}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Erro ao processar UNE '{une_input}'. O código '{une_code}' não é válido.",
+                        "user_query": user_query
+                    }
+                }
+
             une_name = get_une_name(une_code)
             logger.info(f"✅ UNE resolvida: '{une_input}' → {une_code} ({une_name})")
 
@@ -768,57 +1131,144 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
             result = calcular_abastecimento_une.invoke(args)
 
         elif "mc_produto" in tool_name:
-            # Extrair parâmetros para MC
-            extract_prompt = f"""
-            Extraia o código do produto e o ID da UNE da consulta.
-            Retorne JSON: {{"produto_id": <número>, "une_id": <número>}}
+            # 🚀 OTIMIZADO: Parâmetros já foram extraídos na chamada unificada!
+            produto_id_str = params.get("produto_id")
+            une_input = params.get("une")
 
-            Query: "{user_query}"
-            """
-            params_response = llm_adapter.get_completion(
-                messages=[{"role": "user", "content": extract_prompt}],
-                json_mode=True
-            )
-            params_str = params_response.get("content", "{}").strip()
-            if "```json" in params_str:
-                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
+            # ✅ VALIDAÇÃO: Verificar se parâmetros foram extraídos
+            if produto_id_str is None or produto_id_str == "":
+                logger.error(f"❌ produto_id não foi extraído dos parâmetros. Params: {params}")
+                logger.error(f"❌ Query original: {user_query}")
+
+                # Tentar extrair produto_id diretamente da query como fallback
+                import re
+                match = re.search(r'\b(\d{5,})\b', user_query)
                 if match:
-                    params_str = match.group(1).strip()
+                    produto_id_str = match.group(1)
+                    logger.info(f"✅ Produto_id extraído da query via regex: {produto_id_str}")
+                else:
+                    return {
+                        "final_response": {
+                            "type": "text",
+                            "content": f"❌ Não consegui identificar o código do produto na consulta.\n\nPor favor, informe o código do produto (ex: 'MC do produto 369947 na UNE SCR')",
+                            "user_query": user_query
+                        }
+                    }
 
-            params = json.loads(params_str)
-            produto_id = int(params.get("produto_id"))
-            une_id = int(params.get("une_id"))
+            if une_input is None or une_input == "":
+                logger.error(f"❌ UNE não foi extraída dos parâmetros. Params: {params}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Não consegui identificar a UNE na consulta.\n\nPor favor, informe a UNE (ex: 'MC do produto 369947 na UNE SCR')",
+                        "user_query": user_query
+                    }
+                }
 
+            # Converter produto_id com segurança
+            try:
+                produto_id = int(produto_id_str)
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Erro ao converter produto_id '{produto_id_str}' para int: {e}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Erro ao processar o código do produto '{produto_id_str}'.\n\nO código deve ser um número válido.",
+                        "user_query": user_query
+                    }
+                }
+
+            # Resolver UNE usando mapeamento
+            une_code = resolve_une_code(une_input)
+            if not une_code:
+                # Tentar sugestões
+                suggestions = suggest_une(une_input)
+                if suggestions:
+                    sugg_text = ", ".join([f"{code} ({name})" for code, name in suggestions])
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\n💡 Você quis dizer: {sugg_text}?"
+                else:
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\nUNEs disponíveis: SCR (1), MAD (2720), BAR (2365), etc."
+
+                logger.warning(f"UNE não encontrada para MC: '{une_input}'")
+                return {"final_response": {"type": "text", "content": error_msg, "user_query": user_query}}
+
+            # Converter une_code para int
+            try:
+                une_id = int(une_code)
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Erro ao converter UNE code '{une_code}' para int: {e}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Erro ao processar UNE '{une_input}'. O código '{une_code}' não é válido.",
+                        "user_query": user_query
+                    }
+                }
+
+            logger.info(f"✅ Parâmetros MC extraídos: produto_id={produto_id}, une={une_input}→{une_id}")
             result = calcular_mc_produto.invoke({"produto_id": produto_id, "une_id": une_id})
 
         elif "preco" in tool_name:
-            # Extrair parâmetros para preço
-            extract_prompt = f"""
-            Extraia o valor da compra, ranking e forma de pagamento.
-            Retorne JSON: {{"valor_compra": <número>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}
-
-            Query: "{user_query}"
-            """
-            params_response = llm_adapter.get_completion(
-                messages=[{"role": "user", "content": extract_prompt}],
-                json_mode=True
-            )
-            params_str = params_response.get("content", "{}").strip()
-            if "```json" in params_str:
-                match = re.search(r"```json\n(.*?)```", params_str, re.DOTALL)
-                if match:
-                    params_str = match.group(1).strip()
-
-            params = json.loads(params_str)
-            valor_compra = float(params.get("valor_compra"))
-            ranking = int(params.get("ranking"))
-            forma_pagamento = params.get("forma_pagamento")
+            # 🚀 OTIMIZADO: Parâmetros já foram extraídos na chamada unificada!
+            # Converter parâmetros com segurança
+            try:
+                valor_compra = float(params.get("valor_compra"))
+                ranking = int(params.get("ranking"))
+                forma_pagamento = params.get("forma_pagamento")
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Erro ao converter parâmetros de preço: {e}")
+                logger.error(f"Parâmetros recebidos: {params}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Erro ao processar parâmetros de preço. Verifique os valores informados.",
+                        "user_query": user_query
+                    }
+                }
 
             result = calcular_preco_final_une.invoke({
                 "valor_compra": valor_compra,
                 "ranking": ranking,
                 "forma_pagamento": forma_pagamento
             })
+
+        elif "sem_vendas" in tool_name or "sem giro" in user_query.lower():
+            # 🚀 NOVA FERRAMENTA: Produtos sem vendas
+            une_input = params.get("une_input", "")
+            limite = params.get("limite", 50)
+
+            # Validar e resolver UNE
+            une_code = resolve_une_code(une_input)
+
+            if not une_code:
+                suggestions = suggest_une(une_input)
+                if suggestions:
+                    sugg_text = ", ".join([f"{code} ({name})" for code, name in suggestions])
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\n💡 Você quis dizer: {sugg_text}?"
+                else:
+                    error_msg = f"❌ UNE '{une_input}' não encontrada.\n\nUNEs disponíveis: SCR (2586), MAD (261), UNA (301), VIX (401), etc."
+
+                logger.warning(f"UNE não encontrada: '{une_input}'")
+                return {"final_response": {"type": "text", "content": error_msg, "user_query": user_query}}
+
+            # Converter une_code para int
+            try:
+                une_id = int(une_code)
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Erro ao converter UNE code '{une_code}' para int: {e}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"❌ Erro ao processar UNE '{une_input}'. O código '{une_code}' não é válido.",
+                        "user_query": user_query
+                    }
+                }
+
+            une_name = get_une_name(une_code)
+            logger.info(f"✅ UNE resolvida: '{une_input}' → {une_code} ({une_name})")
+
+            result = calcular_produtos_sem_vendas.invoke({"une_id": une_id, "limite": limite})
+
         else:
             return {"final_response": {"type": "text", "content": f"Ferramenta UNE '{tool_name}' não reconhecida."}}
 
@@ -827,39 +1277,49 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
             return {"final_response": {"type": "text", "content": f"Erro: {result['error']}"}}
 
         # Formatar resposta baseado no tipo de ferramenta
-        if "produtos" in result:  # Abastecimento
-            retrieved_data = result.get("produtos", [])
-            return {"retrieved_data": retrieved_data}
+        if "produtos" in result and "criterio" in result:  # Produtos sem vendas
+            # ✅ NOVO: Formatar produtos sem vendas + dados para download
+            response_text = format_produtos_sem_vendas_response(result)
+
+            # Retornar resposta formatada + dados brutos para download
+            return {
+                "final_response": {
+                    "type": "text_with_data",
+                    "content": response_text,
+                    "download_data": result.get("produtos", []),
+                    "download_filename": f"produtos_sem_vendas_une_{result.get('une_id', 'unknown')}",
+                    "user_query": user_query
+                }
+            }
+        elif "produtos" in result:  # Abastecimento
+            # ✅ NOVO: Usar formatação ideal para lista de abastecimento
+            total_produtos = result.get('total_produtos', 0)
+            if total_produtos == 0:
+                # Se não há produtos, retornar texto formatado
+                response_text = format_abastecimento_response(result)
+                return {"final_response": {"type": "text", "content": response_text}}
+            elif total_produtos <= 10:
+                # Se poucos produtos, mostrar como texto formatado + download
+                response_text = format_abastecimento_response(result)
+                return {
+                    "final_response": {
+                        "type": "text_with_data",
+                        "content": response_text,
+                        "download_data": result.get("produtos", []),
+                        "download_filename": f"abastecimento_une_{result.get('une_id', 'unknown')}",
+                        "user_query": user_query
+                    }
+                }
+            else:
+                # Se muitos produtos, retornar como tabela (formato original)
+                # Mas adicionar cabeçalho formatado antes
+                header = f"Produtos que Precisam Abastecimento - UNE {result['une_id']} ({result.get('segmento', 'Todos')})\nTotal: {total_produtos} produtos\n\n"
+                return {"retrieved_data": result.get("produtos", []), "summary": header}
         elif "mc_calculada" in result:  # MC - Formatar para usuário
-            response_text = f"""**Média Comum (MC) - Produto {result['produto_id']}**
-
-**Produto:** {result['nome']}
-**Segmento:** {result['segmento']}
-**UNE:** {result['une_id']}
-
-**Indicadores:**
-- MC Calculada: {result['mc_calculada']:.2f} unidades/dia
-- Estoque Atual: {result['estoque_atual']:.2f} unidades
-- Linha Verde: {result['linha_verde']:.2f} unidades
-- Percentual da LV: {result['percentual_linha_verde']:.1f}%
-
-**Recomendação:**
-{result['recomendacao']}"""
+            response_text = format_mc_response(result)
             return {"final_response": {"type": "text", "content": response_text}}
         elif "valor_original" in result:  # Preço - Formatar para usuário
-            response_text = f"""**Cálculo de Preço Final UNE**
-
-**Valor Original:** R$ {result['valor_original']:.2f}
-**Tipo de Venda:** {result['tipo']}
-**Ranking:** {result['ranking']} ({result['desconto_ranking']})
-**Forma de Pagamento:** {result['forma_pagamento']} ({result['desconto_pagamento']})
-
-**Cálculo:**
-- Desconto Ranking: {result['desconto_aplicado_ranking']:.1f}%
-- Desconto Pagamento: {result['desconto_aplicado_pagamento']:.1f}%
-- **Desconto Total:** {result['desconto_total']:.1f}%
-
-**PREÇO FINAL:** R$ {result['preco_final']:.2f}"""
+            response_text = format_preco_response(result)
             return {"final_response": {"type": "text", "content": response_text}}
         else:  # Fallback - JSON formatado
             response_text = json.dumps(result, indent=2, ensure_ascii=False)

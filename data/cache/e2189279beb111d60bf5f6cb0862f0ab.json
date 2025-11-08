@@ -1,0 +1,16 @@
+{
+  "timestamp": 1762570410.3054316,
+  "response": {
+    "content": "{\n  \"intent\": \"une_operation\",\n  \"confidence\": 0.98,\n  \"reasoning\": \"A query menciona 'MC' e 'une', indicando uma operação específica da UNE.\"\n}"
+  },
+  "metadata": {
+    "version": "v2.1.4",
+    "model": null,
+    "temperature": 0,
+    "query_hash": "e2189279beb111d60bf5f6cb0862f0ab",
+    "context": {
+      "operation": "classify_intent",
+      "query_type": "intent_classification"
+    }
+  }
+}

@@ -35,6 +35,11 @@ class SafeSettings:
         self.DB_DRIVER = self._get_secret_or_env("DB_DRIVER", "ODBC Driver 17 for SQL Server")
         self.DB_TRUST_SERVER_CERTIFICATE = self._get_secret_or_env("DB_TRUST_SERVER_CERTIFICATE", "yes")
 
+        # Configurações de limpeza de cache
+        self.CACHE_AUTO_CLEAN = self._get_bool_setting("CACHE_AUTO_CLEAN", True)
+        self.CACHE_MAX_AGE_DAYS = self._get_int_setting("CACHE_MAX_AGE_DAYS", 7)
+        self.CACHE_FORCE_CLEAN = self._get_bool_setting("CACHE_FORCE_CLEAN", False)
+
     def _get_gemini_key(self):
         """Obtém chave Gemini de forma segura"""
         try:
@@ -116,6 +121,23 @@ class SafeSettings:
             pass
 
         return os.getenv(key, default)
+
+    def _get_bool_setting(self, key, default=False):
+        """Obtém configuração booleana de secrets ou env"""
+        value = self._get_secret_or_env(key, str(default))
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return default
+
+    def _get_int_setting(self, key, default=0):
+        """Obtém configuração inteira de secrets ou env"""
+        value = self._get_secret_or_env(key, str(default))
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
 
     def get_sql_connection_string(self):
         """Gera string de conexão SQL se disponível"""

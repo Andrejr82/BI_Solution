@@ -92,64 +92,41 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
             logger.info(f"🚀 load_data() usando POLARS - Lazy evaluation")
             logger.info(f"📂 Parquet path: {parquet_path}")
 
-            # Verificar se path existe (glob pattern ou arquivo direto)
-            import glob
+            # ✅ CORREÇÃO v2.2.2: Suporte completo a múltiplos arquivos com wildcard
             if '*' in parquet_path:
-                matched_files = glob.glob(parquet_path)
-                logger.info(f"🔍 Glob pattern encontrou {len(matched_files)} arquivo(s): {matched_files}")
-                if not matched_files:
-                    raise FileNotFoundError(f"Nenhum arquivo encontrado para pattern: {parquet_path}")
+                # Expandir wildcard SEMPRE (mesmo se diretório existe)
+                import glob
+                matching_files = glob.glob(parquet_path)
+
+                if not matching_files:
+                    logger.error(f"❌ Nenhum arquivo encontrado com padrão: {parquet_path}")
+                    raise FileNotFoundError(
+                        f"Nenhum arquivo Parquet encontrado com padrão: {parquet_path}\n"
+                        f"Verifique se os arquivos existem no diretório."
+                    )
+
+                # ✅ FIX CRÍTICO: Usar TODOS os arquivos (não só o primeiro!)
+                # Polars scan_parquet aceita lista de arquivos
+                parquet_path = matching_files
+                logger.info(f"✅ Wildcard expandido para {len(matching_files)} arquivo(s)")
             elif not os.path.exists(parquet_path):
-                raise FileNotFoundError(f"Arquivo não encontrado: {parquet_path}")
+                logger.error(f"❌ Arquivo não encontrado: {parquet_path}")
+                raise FileNotFoundError(f"Arquivo Parquet não encontrado: {parquet_path}")
 
             # 1. SCAN PARQUET (lazy - 0 memória até collect)
-            # ✅ CORREÇÃO: Ler múltiplos arquivos com schemas diferentes
-            import glob
-
-            # Se for pattern com *, processar cada arquivo separadamente
-            if '*' in parquet_path:
-                matched_files = glob.glob(parquet_path)
-                logger.info(f"🔍 Glob pattern encontrou {len(matched_files)} arquivo(s): {matched_files}")
-
-                if not matched_files:
-                    raise FileNotFoundError(f"Nenhum arquivo encontrado para pattern: {parquet_path}")
-
-                # Ler cada arquivo e selecionar apenas colunas essenciais
-                lazy_frames = []
-                for file in matched_files:
-                    try:
-                        # Scan arquivo individual
-                        lf_single = pl.scan_parquet(
-                            file,
-                            low_memory=True,
-                            rechunk=False
-                        )
-
-                        # Selecionar apenas colunas essenciais (que existem em todos os arquivos)
-                        schema_single = lf_single.collect_schema()
-                        available_cols = [col for col in ESSENTIAL_COLUMNS if col in schema_single.names()]
-
-                        lf_single = lf_single.select(available_cols)
-                        lazy_frames.append(lf_single)
-
-                        logger.info(f"   ✅ {file}: {len(available_cols)} colunas selecionadas")
-
-                    except Exception as e:
-                        logger.warning(f"   ⚠️ Erro ao ler {file}: {e}. Pulando...")
-
-                # Concatenar todos os LazyFrames
-                if lazy_frames:
-                    lf = pl.concat(lazy_frames)
-                    logger.info(f"📚 Concatenados {len(lazy_frames)} arquivo(s)")
-                else:
-                    raise FileNotFoundError("Nenhum arquivo válido encontrado")
-
-            else:
-                # Arquivo único
+            try:
                 lf = pl.scan_parquet(
                     parquet_path,
                     low_memory=True,
                     rechunk=False
+                )
+                logger.info(f"✅ Arquivo Parquet carregado (lazy mode)")
+            except Exception as scan_error:
+                logger.error(f"❌ Erro ao fazer scan do Parquet: {scan_error}", exc_info=True)
+                raise RuntimeError(
+                    f"Falha ao escanear arquivo Parquet: {os.path.basename(parquet_path)}\n"
+                    f"Erro: {str(scan_error)}\n"
+                    f"Sugestão: Verifique se o arquivo não está corrompido"
                 )
 
             # 2. VALIDAR SCHEMA
@@ -299,7 +276,7 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
 
 def _load_data_pandas_fallback(parquet_path: str, filters: Dict[str, Any] = None) -> pd.DataFrame:
     """
-    Fallback usando Pandas puro (mais lento mas sempre funciona).
+    ✅ v2.2: Fallback usando Pandas com verificação robusta de colunas.
 
     Args:
         parquet_path: Caminho do Parquet
@@ -311,11 +288,27 @@ def _load_data_pandas_fallback(parquet_path: str, filters: Dict[str, Any] = None
     logger.warning("⚠️ Usando Pandas fallback (LENTO)")
 
     try:
-        # Carregar apenas colunas essenciais
+        import pyarrow.parquet as pq
+
+        # ✅ OTIMIZAÇÃO v2.2: Verificar quais colunas realmente existem antes de ler
+        schema = pq.read_schema(parquet_path)
+        available_cols = [field.name for field in schema]
+
+        # Filtrar ESSENTIAL_COLUMNS para apenas as que existem
+        cols_to_read = [col for col in ESSENTIAL_COLUMNS if col in available_cols]
+
+        if not cols_to_read:
+            # Se nenhuma coluna essencial existe, carregar todas (seguro)
+            logger.warning("⚠️ Nenhuma coluna essencial encontrada, carregando todas")
+            cols_to_read = None
+
+        logger.info(f"📊 Carregando {len(cols_to_read) if cols_to_read else 'todas as'} colunas do Parquet")
+
+        # Carregar dados
         df = pd.read_parquet(
             parquet_path,
             engine='pyarrow',
-            columns=ESSENTIAL_COLUMNS
+            columns=cols_to_read
         ).head(10000)  # Limitar a 10K linhas
 
         # Aplicar filtros se fornecidos
@@ -328,19 +321,28 @@ def _load_data_pandas_fallback(parquet_path: str, filters: Dict[str, Any] = None
                         df = df[df[col_normalized].isin(value)]
                     else:
                         df = df[df[col_normalized] == value]
+                else:
+                    logger.warning(f"⚠️ Coluna de filtro '{col_normalized}' não encontrada, ignorando")
 
         logger.info(f"✅ [FALLBACK] Carregados {len(df)} registros")
         return df
 
     except Exception as e:
-        logger.error(f"❌ Fallback Pandas também falhou: {e}")
+        logger.error(f"❌ Fallback Pandas também falhou: {e}", exc_info=True)
+
+        # ✅ Mensagem de erro mais útil com detalhes
+        error_details = str(e)[:200]  # Primeiros 200 chars do erro
         raise RuntimeError(
-            "❌ **Erro ao Carregar Dados**\n\n"
-            "Não foi possível carregar o dataset.\n\n"
-            "**Sugestões:**\n"
-            "- Verifique se o arquivo Parquet existe\n"
-            "- Tente reiniciar o sistema\n"
-            "- Entre em contato com o suporte"
+            f"❌ **Erro ao Carregar Dados**\n\n"
+            f"Não foi possível carregar o dataset do arquivo:\n"
+            f"`{os.path.basename(parquet_path)}`\n\n"
+            f"**Erro técnico:**\n"
+            f"```\n{error_details}\n```\n\n"
+            f"**Sugestões:**\n"
+            f"- Verifique se o arquivo Parquet não está corrompido\n"
+            f"- Tente limpar o cache: `rm -rf data/cache/*`\n"
+            f"- Reinicie o sistema\n"
+            f"- Consulte os logs para mais detalhes"
         )
 
 

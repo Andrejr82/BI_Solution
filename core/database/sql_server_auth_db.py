@@ -119,73 +119,82 @@ def init_db():
 
 # --- Autenticação ---
 def autenticar_usuario(username, password):
-    """Autentica usuário (MODO DESENVOLVIMENTO - apenas local)"""
+    """Autentica usuário via SQL Server ou fallback local"""
     logger.info(f"Tentativa de autenticação para: {username}")
 
-    # FORÇAR MODO LOCAL (DEV ONLY - ignorar SQL Server para evitar bcrypt)
-    logger.info("🔧 MODO DEV: Usando autenticação local (ignorando SQL Server)")
-    return _autenticar_local(username, password)
+    # ✅ CORREÇÃO: Removido override DEV - usar SQL Server quando disponível
+    # Modo local (cloud sem banco)
+    if not is_database_configured():
+        logger.info("🌤️ Usando autenticação local (SQL Server não configurado)")
+        return _autenticar_local(username, password)
 
-    # # Modo local (cloud sem banco)
-    # if not is_database_configured():
-    #     return _autenticar_local(username, password)
+    # Modo SQL Server
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            logger.warning("⚠️ Banco indisponível - usando autenticação local")
+            return _autenticar_local(username, password)
 
-    # # Modo SQL Server (DESABILITADO TEMPORARIAMENTE)
-    # try:
-    #     conn = get_db_connection()
-    #     if conn is None:
-    #         logger.warning("⚠️ Banco indisponível - usando autenticação local")
-    #         return _autenticar_local(username, password)
+        with conn:
+            result = conn.execute(
+                text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role FROM usuarios WHERE username=:username"),
+                {"username": username}
+            ).fetchone()
 
-    #     with conn:
-    #         result = conn.execute(
-    #             text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role FROM usuarios WHERE username=:username"),
-    #             {"username": username}
-    #         ).fetchone()
+            if not result:
+                logger.warning(f"Usuário '{username}' não encontrado no banco.")
+                return None, "Usuário não encontrado"
 
-    #         if not result:
-    #             logger.warning(f"Usuário '{username}' não encontrado no banco.")
-    #             return None, "Usuário não encontrado"
+            user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role = result
+            now = datetime.now()
 
-    #         user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role = result
-    #         now = datetime.now()
+            if not ativo:
+                return None, "Usuário inativo"
 
-    #         if not ativo:
-    #             return None, "Usuário inativo"
+            if bloqueado_ate and now < bloqueado_ate:
+                return None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
 
-    #         if bloqueado_ate and now < bloqueado_ate:
-    #             return None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
+            # ✅ CORREÇÃO: Truncar senha para bcrypt (máx 72 bytes)
+            password_truncated = password[:72] if len(password.encode('utf-8')) > 72 else password
 
-    #         if not verify_password(password, db_password_hash):
-    #             tentativas += 1
-    #             if tentativas >= MAX_TENTATIVAS:
-    #                 bloqueado_ate = now + timedelta(minutes=BLOQUEIO_MINUTOS)
-    #                 conn.execute(
-    #                     text("UPDATE usuarios SET tentativas_invalidas=:tentativas, bloqueado_ate=:bloqueado_ate WHERE id=:id"),
-    #                     {"tentativas": tentativas, "bloqueado_ate": bloqueado_ate, "id": user_id}
-    #                 )
-    #                 conn.commit()
-    #                 return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
-    #             else:
-    #                 conn.execute(
-    #                     text("UPDATE usuarios SET tentativas_invalidas=:tentativas WHERE id=:id"),
-    #                     {"tentativas": tentativas, "id": user_id}
-    #                 )
-    #                 conn.commit()
-    #                 return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
+            try:
+                senha_valida = verify_password(password_truncated, db_password_hash)
+            except Exception as bcrypt_error:
+                logger.error(f"Erro ao verificar senha com bcrypt: {bcrypt_error}")
+                # Fallback: tentar autenticação local se bcrypt falhar
+                logger.warning("⚠️ Bcrypt falhou - usando fallback local")
+                return _autenticar_local(username, password)
 
-    #         # Sucesso
-    #         conn.execute(
-    #             text("UPDATE usuarios SET tentativas_invalidas=0, bloqueado_ate=NULL, ultimo_login=:now WHERE id=:id"),
-    #             {"now": now, "id": user_id}
-    #         )
-    #         conn.commit()
-    #         logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}")
-    #         return role, None
+            if not senha_valida:
+                tentativas += 1
+                if tentativas >= MAX_TENTATIVAS:
+                    bloqueado_ate = now + timedelta(minutes=BLOQUEIO_MINUTOS)
+                    conn.execute(
+                        text("UPDATE usuarios SET tentativas_invalidas=:tentativas, bloqueado_ate=:bloqueado_ate WHERE id=:id"),
+                        {"tentativas": tentativas, "bloqueado_ate": bloqueado_ate, "id": user_id}
+                    )
+                    conn.commit()
+                    return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
+                else:
+                    conn.execute(
+                        text("UPDATE usuarios SET tentativas_invalidas=:tentativas WHERE id=:id"),
+                        {"tentativas": tentativas, "id": user_id}
+                    )
+                    conn.commit()
+                    return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
 
-    # except Exception as e:
-    #     logger.error(f"Erro SQL Server: {e}")
-    #     return None, f"Erro de autenticação: {str(e)}"
+            # Sucesso
+            conn.execute(
+                text("UPDATE usuarios SET tentativas_invalidas=0, bloqueado_ate=NULL, ultimo_login=:now WHERE id=:id"),
+                {"now": now, "id": user_id}
+            )
+            conn.commit()
+            logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}")
+            return role, None
+
+    except Exception as e:
+        logger.error(f"Erro SQL Server: {e}")
+        return None, f"Erro de autenticação: {str(e)}"
 
 def _autenticar_local(username, password):
     """Autenticação local (fallback para cloud) - MODO DESENVOLVIMENTO"""
@@ -333,8 +342,31 @@ def alterar_senha_usuario(user_id, nova_senha):
 def reset_user_password(user_id, nova_senha_temporaria):
     """Admin reseta senha de um usuário (sem precisar da senha antiga)"""
     if not is_database_configured():
-        logger.warning("⚠️ Reset de senha não disponível em modo cloud")
-        return False
+        # ✅ CORREÇÃO: Suportar reset de senha em modo cloud
+        logger.info("🌤️ Reset de senha em modo cloud - atualizando usuário local")
+
+        try:
+            users = _get_local_users()
+
+            # Encontrar usuário por ID (user_id é o índice no modo cloud)
+            user_list = list(users.keys())
+            if user_id < 0 or user_id >= len(user_list):
+                logger.error(f"User ID {user_id} inválido para modo cloud")
+                return False
+
+            username = user_list[user_id]
+            if username not in users:
+                logger.error(f"Usuário com ID {user_id} não encontrado")
+                return False
+
+            # Atualizar senha no dicionário local (modo DEV)
+            _local_users[username]["password"] = nova_senha_temporaria
+            logger.info(f"✅ Senha resetada para usuário '{username}' (modo cloud)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Erro ao resetar senha em modo cloud: {e}")
+            return False
 
     try:
         conn = get_db_connection()

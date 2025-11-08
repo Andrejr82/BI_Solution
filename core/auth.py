@@ -28,9 +28,9 @@ def get_auth_db():
             from core.database import sql_server_auth_db as _auth_db
             auth_db = _auth_db
             SQL_AUTH_AVAILABLE = True
-            logging.info("✅ SQL Server auth carregado")
+            logging.info("[AUTH] SQL Server auth carregado")
         except Exception as e:
-            logging.warning(f"❌ SQL Server auth não disponível: {e}")
+            logging.warning(f"[AUTH] SQL Server auth não disponível: {e}")
             SQL_AUTH_AVAILABLE = False
             auth_db = None
     return auth_db if SQL_AUTH_AVAILABLE else None
@@ -44,15 +44,15 @@ def init_auth_system():
                 current_auth_db.init_db()
                 st.session_state["db_inicializado"] = True
                 st.session_state["auth_mode"] = "sql_server"
-                logging.info("✅ Autenticação SQL Server inicializada")
+                logging.info("[AUTH] SQL Server inicializado")
             except Exception as e:
-                logging.warning(f"❌ Falha na inicialização SQL Server: {e}")
+                logging.warning(f"[AUTH] Falha SQL Server: {e}")
                 st.session_state["db_inicializado"] = True
                 st.session_state["auth_mode"] = "cloud_fallback"
         else:
             st.session_state["db_inicializado"] = True
             st.session_state["auth_mode"] = "cloud_fallback"
-            logging.info("🌤️ Usando autenticação cloud (SQL Server não disponível)")
+            logging.info("[AUTH] Modo cloud ativo")
 
 
 # Usuários para modo cloud (quando SQL Server não estiver disponível)
@@ -74,29 +74,31 @@ def login():
     # Inicializar sistema de autenticação de forma lazy
     init_auth_system()
 
-    # Coloca o formulário de login em uma coluna centralizada para melhor apelo visual
-    _, col2, _ = st.columns([1, 2.5, 1])
+    # ✅ OTIMIZAÇÃO CONTEXT7: Layout 60% centralizado (melhor proporção)
+    # Usar proporção 20% - 60% - 20% para melhor estética
+    col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         st.markdown(
             """
             <style>
                 .login-container {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, #2a2b32 0%, #40414f 100%);
                     padding: 2.5rem 3rem;
                     border-radius: 15px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+                    border: 1px solid #444654;
                     text-align: center;
                     margin-bottom: 1.5rem;
                 }
                 .login-title {
-                    color: white;
+                    color: #ececf1;
                     font-size: 2.5rem;
                     font-weight: bold;
                     margin: 1rem 0 0.5rem 0;
                     letter-spacing: -0.5px;
                 }
                 .login-subtitle {
-                    color: rgba(255,255,255,0.95);
+                    color: #8e8ea0;
                     font-size: 1.1rem;
                     margin-top: 0.5rem;
                     font-weight: 300;
@@ -104,12 +106,12 @@ def login():
             </style>
             <div class='login-container'>
                 <svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom: 0.5rem; opacity: 0.9;">
-                    <rect x="15" y="60" width="10" height="30" fill="white" opacity="0.7"/>
-                    <rect x="30" y="45" width="10" height="45" fill="white" opacity="0.8"/>
-                    <rect x="45" y="30" width="10" height="60" fill="white" opacity="0.9"/>
-                    <rect x="60" y="20" width="10" height="70" fill="white"/>
-                    <rect x="75" y="35" width="10" height="55" fill="white" opacity="0.85"/>
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="white" stroke-width="2" opacity="0.3"/>
+                    <rect x="15" y="60" width="10" height="30" fill="#10a37f" opacity="0.7"/>
+                    <rect x="30" y="45" width="10" height="45" fill="#10a37f" opacity="0.8"/>
+                    <rect x="45" y="30" width="10" height="60" fill="#10a37f" opacity="0.9"/>
+                    <rect x="60" y="20" width="10" height="70" fill="#10a37f"/>
+                    <rect x="75" y="35" width="10" height="55" fill="#10a37f" opacity="0.85"/>
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#10a37f" stroke-width="2" opacity="0.3"/>
                 </svg>
                 <h2 class='login-title'>Agente de Negócios</h2>
                 <p class='login-subtitle'>Acesse com seu usuário e senha para continuar</p>
@@ -118,15 +120,39 @@ def login():
             unsafe_allow_html=True,
         )
 
-        with st.form("login_form"):
-            username = st.text_input("Usuário", placeholder="Digite seu usuário")
-            password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+        # ✅ OTIMIZAÇÃO CONTEXT7: Form com melhor UX e feedback visual
+        with st.form("login_form", clear_on_submit=False):
+            # Inputs com ícones e ajuda contextual
+            username = st.text_input(
+                "👤 Usuário",
+                placeholder="Digite seu usuário",
+                help="Use seu nome de usuário corporativo",
+                key="login_username"
+            )
+            password = st.text_input(
+                "🔒 Senha",
+                type="password",
+                placeholder="Digite sua senha",
+                help="Senha criada no cadastro ou fornecida pelo administrador",
+                key="login_password"
+            )
 
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                login_btn = st.form_submit_button("Entrar", use_container_width=True, type="primary")
-            with col2:
-                forgot_btn = st.form_submit_button("Esqueci", use_container_width=True)
+            # Checkbox "Lembrar-me" (visual apenas, funcionalidade futura)
+            remember_me = st.checkbox("🔐 Manter conectado por 7 dias", value=False)
+
+            # Botões com melhor proporção
+            col_btn1, col_btn2 = st.columns([2, 1])
+            with col_btn1:
+                login_btn = st.form_submit_button(
+                    "🚀 Entrar",
+                    use_container_width=True,
+                    type="primary"
+                )
+            with col_btn2:
+                forgot_btn = st.form_submit_button(
+                    "🔑 Esqueci",
+                    use_container_width=True
+                )
 
             if forgot_btn:
                 st.info("🔑 Entre em contato com o administrador para redefinir sua senha.")
@@ -143,86 +169,115 @@ def login():
                     st.error(f"⚠️ Muitas tentativas de login. Tente novamente em {reset_time:.0f} segundos.")
                     st.stop()
 
-                # Bypass de autenticação APENAS para desenvolvimento (NUNCA em produção)
-                import os
-                ENABLE_DEV_BYPASS = os.getenv("ENABLE_DEV_BYPASS", "false").lower() == "true"
+                # ✅ OTIMIZAÇÃO CONTEXT7: Feedback visual com st.status()
+                # Mostrar progresso da autenticação passo a passo
+                with st.status("🔐 Autenticando...", expanded=True) as status:
+                    st.write("🔍 Verificando credenciais...")
+                    time.sleep(0.3)  # Feedback visual
 
-                if ENABLE_DEV_BYPASS and username == 'admin' and password == 'bypass':
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = "admin"
-                    st.session_state["role"] = "admin"
-                    st.session_state["ultimo_login"] = time.time()
-                    audit_logger.warning(f"⚠️ DEV BYPASS USADO - Usuário admin (DESENVOLVIMENTO APENAS)")
-                    st.warning("⚠️ Modo de Desenvolvimento - Bypass Ativo")
-                    st.success(f"Bem-vindo, admin! Acesso de desenvolvedor concedido.")
-                    time.sleep(1)
-                    st.rerun()
-                    return
+                    # Bypass de autenticação APENAS para desenvolvimento (NUNCA em produção)
+                    import os
+                    ENABLE_DEV_BYPASS = os.getenv("ENABLE_DEV_BYPASS", "false").lower() == "true"
 
-                # Verificar autenticação baseada no modo
-                auth_mode = st.session_state.get("auth_mode", "cloud_fallback")
-
-                if auth_mode == "sql_server":
-                    # Usar autenticação SQL Server original
-                    current_auth_db = get_auth_db()
-                    if current_auth_db:
-                        role, erro = current_auth_db.autenticar_usuario(username, password)
-                    else:
-                        role, erro = None, "Banco de dados não disponível"
-
-                    if role:
-                        # Login bem-sucedido - resetar rate limiter
-                        login_limiter.reset(username)
+                    if ENABLE_DEV_BYPASS and username == 'admin' and password == 'bypass':
+                        st.write("⚠️ Modo de desenvolvimento detectado...")
+                        status.update(label="✅ Acesso de desenvolvimento concedido!", state="complete", expanded=False)
 
                         st.session_state["authenticated"] = True
-                        st.session_state["username"] = username
-                        st.session_state["role"] = role
+                        st.session_state["username"] = "admin"
+                        st.session_state["role"] = "admin"
                         st.session_state["ultimo_login"] = time.time()
-                        audit_logger.info(f"Usuário {username} logado com sucesso (SQL Server). Papel: {role}")
-                        st.success(f"Bem-vindo, {username}! Redirecionando...")
+                        audit_logger.warning(f"⚠️ DEV BYPASS USADO - Usuário admin (DESENVOLVIMENTO APENAS)")
+                        st.warning("⚠️ Modo de Desenvolvimento - Bypass Ativo")
+                        st.success(f"Bem-vindo, admin! Acesso de desenvolvedor concedido.")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        # Se SQL Server falhar, tentar cloud fallback
-                        audit_logger.warning(f"SQL Server falhou para {username}, tentando cloud fallback...")
-                        is_valid, cloud_role = verify_cloud_user(username, password)
-                        if is_valid:
+                        return
+
+                    st.write("🔐 Validando permissões...")
+                    time.sleep(0.3)
+
+                    # Verificar autenticação baseada no modo
+                    auth_mode = st.session_state.get("auth_mode", "cloud_fallback")
+
+                    if auth_mode == "sql_server":
+                        # Usar autenticação SQL Server original
+                        st.write("📊 Conectando ao SQL Server...")
+                        current_auth_db = get_auth_db()
+                        if current_auth_db:
+                            role, erro = current_auth_db.autenticar_usuario(username, password)
+                        else:
+                            role, erro = None, "Banco de dados não disponível"
+
+                        if role:
+                            # Login bem-sucedido
+                            st.write(f"✅ Autenticação bem-sucedida como {role}!")
+                            status.update(label="🎉 Login completo!", state="complete", expanded=False)
+
+                            # Resetar rate limiter
                             login_limiter.reset(username)
+
                             st.session_state["authenticated"] = True
                             st.session_state["username"] = username
-                            st.session_state["role"] = cloud_role
+                            st.session_state["role"] = role
                             st.session_state["ultimo_login"] = time.time()
-                            audit_logger.info(f"Usuário {username} logado com sucesso (Cloud Fallback). Papel: {cloud_role}")
-                            st.success(f"Bem-vindo, {username}! (Modo Cloud)")
+                            audit_logger.info(f"Usuário {username} logado com sucesso (SQL Server). Papel: {role}")
+                            st.success(f"🎉 Bem-vindo, {username}! Redirecionando...")
                             time.sleep(1)
                             st.rerun()
                         else:
-                            # Ambos falharam
-                            audit_logger.warning(f"Tentativa de login falha para o usuário: {username}. Erro: {erro or 'Usuário ou senha inválidos.'}")
-                            if erro and "bloqueado" in erro:
-                                st.error(f"{erro} Contate o administrador.")
-                            elif erro and "Tentativas restantes" in erro:
-                                st.warning(erro)
-                            else:
-                                st.error(erro or "Usuário ou senha inválidos.")
-                else:
-                    # Usar autenticação cloud fallback
-                    is_valid, role = verify_cloud_user(username, password)
-                    if is_valid:
-                        # Login bem-sucedido - resetar rate limiter
-                        login_limiter.reset(username)
+                            # Se SQL Server falhar, tentar cloud fallback
+                            st.write("⚠️ SQL Server indisponível, tentando fallback...")
+                            audit_logger.warning(f"SQL Server falhou para {username}, tentando cloud fallback...")
+                            is_valid, cloud_role = verify_cloud_user(username, password)
+                            if is_valid:
+                                st.write(f"✅ Autenticado via Cloud como {cloud_role}!")
+                                status.update(label="🎉 Login completo (Cloud)!", state="complete", expanded=False)
 
-                        st.session_state["authenticated"] = True
-                        st.session_state["username"] = username
-                        st.session_state["role"] = role
-                        st.session_state["ultimo_login"] = time.time()
-                        audit_logger.info(f"Usuário {username} logado com sucesso (Cloud). Papel: {role}")
-                        st.success(f"Bem-vindo, {username}! (Modo Cloud)")
-                        time.sleep(1)
-                        st.rerun()
+                                login_limiter.reset(username)
+                                st.session_state["authenticated"] = True
+                                st.session_state["username"] = username
+                                st.session_state["role"] = cloud_role
+                                st.session_state["ultimo_login"] = time.time()
+                                audit_logger.info(f"Usuário {username} logado com sucesso (Cloud Fallback). Papel: {cloud_role}")
+                                st.success(f"🎉 Bem-vindo, {username}! (Modo Cloud)")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                # Ambos falharam
+                                status.update(label="❌ Falha na autenticação", state="error", expanded=False)
+                                audit_logger.warning(f"Tentativa de login falha para o usuário: {username}. Erro: {erro or 'Usuário ou senha inválidos.'}")
+                                if erro and "bloqueado" in erro:
+                                    st.error(f"🚫 {erro} Contate o administrador.")
+                                elif erro and "Tentativas restantes" in erro:
+                                    st.warning(f"⚠️ {erro}")
+                                else:
+                                    st.error(f"❌ {erro or 'Usuário ou senha inválidos.'}")
                     else:
-                        audit_logger.warning(f"Tentativa de login falha para o usuário: {username} (Cloud)")
-                        st.error("Usuário ou senha inválidos.")
+                        # Usar autenticação cloud fallback
+                        st.write("☁️ Usando autenticação Cloud...")
+                        is_valid, role = verify_cloud_user(username, password)
+                        if is_valid:
+                            # Login bem-sucedido
+                            st.write(f"✅ Autenticação bem-sucedida como {role}!")
+                            status.update(label="🎉 Login completo (Cloud)!", state="complete", expanded=False)
+
+                            # Resetar rate limiter
+                            login_limiter.reset(username)
+
+                            st.session_state["authenticated"] = True
+                            st.session_state["username"] = username
+                            st.session_state["role"] = role
+                            st.session_state["ultimo_login"] = time.time()
+                            audit_logger.info(f"Usuário {username} logado com sucesso (Cloud). Papel: {role}")
+                            st.success(f"🎉 Bem-vindo, {username}! (Modo Cloud)")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            # Falha na autenticação
+                            status.update(label="❌ Falha na autenticação", state="error", expanded=False)
+                            audit_logger.warning(f"Tentativa de login falha para o usuário: {username} (Cloud)")
+                            st.error("❌ Usuário ou senha inválidos.")
 
 
 # --- Expiração automática de sessão ---

@@ -314,6 +314,13 @@ class QueryValidator:
 _validator = QueryValidator()
 
 
+def safe_convert_types(df: pd.DataFrame, column_types: Dict[str, str]) -> pd.DataFrame:
+    """Compat shim: nome legado esperado por alguns testes/scripts.
+
+    Encaminha para `validate_and_convert_types` do `QueryValidator`.
+    """
+    return _validator.validate_and_convert_types(df, column_types)
+
 # Funções auxiliares para uso direto
 def validate_columns(df: pd.DataFrame, required_columns: List[str], table_name: str = "DataFrame") -> tuple[bool, List[str]]:
     """Valida colunas em DataFrame."""

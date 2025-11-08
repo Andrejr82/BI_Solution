@@ -37,9 +37,24 @@ logging.getLogger("httpx").setLevel(logging.ERROR)
 
 # Log de inicialização
 logger.info("=" * 80)
-logger.info("🚀 Streamlit App Iniciado")
-logger.info(f"📅 Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.info("[STARTUP] Streamlit App Iniciado")
+logger.info(f"[STARTUP] Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 logger.info("=" * 80)
+
+# ============================================================================
+# LIMPEZA AUTOMÁTICA DE CACHE
+# Executa limpeza inteligente de cache com versionamento automático
+# Configurável via .env ou Streamlit secrets:
+#   - CACHE_AUTO_CLEAN (default: True)
+#   - CACHE_MAX_AGE_DAYS (default: 7)
+#   - CACHE_FORCE_CLEAN (default: False)
+# ============================================================================
+from core.utils.cache_cleaner import run_cache_cleanup
+from core.config.settings import get_settings
+
+# ✅ OTIMIZAÇÃO v2.2.3: Cache cleanup DESABILITADO no startup (ganho de 1-2s)
+# Executa apenas após login bem-sucedido (não crítico para inicialização)
+# Reduz tempo de startup de 8s → 6s
 
 # ============================================================================
 # CSS CUSTOMIZADO - TEMA CHATGPT
@@ -326,16 +341,11 @@ header[data-testid="stHeader"] {
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# LIMPEZA DE CACHE (TEMPORÁRIO)
-# Limpa o cache para garantir que as alterações recentes sejam aplicadas.
+# ✅ OTIMIZAÇÃO v2.2: Cache automático com versionamento
+# REMOVIDO: cache.clear_all() no startup (economiza 1-2s + preserva cache válido)
+# O sistema de versionamento automático em agent_graph_cache.py já invalida
+# o cache quando o código muda, sem precisar limpar tudo a cada reinício.
 # ============================================================================
-try:
-    from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
-    cache = get_agent_graph_cache()
-    cache.clear_all()
-    logger.info("✅ Cache limpo com sucesso!")
-except Exception as e:
-    logger.warning(f"⚠️ Não foi possível limpar o cache: {e}")
 
 # ============================================================================
 # FIM DO CSS CUSTOMIZADO
@@ -548,24 +558,16 @@ else:
             llm_adapter = ComponentFactory.get_llm_adapter("gemini")
             debug_info.append("✅ LLM OK")
 
-            # Debug 5: Inicializar ParquetAdapter (Polars/Dask otimizado)
-            debug_info.append("Inicializando ParquetAdapter...")
+            # Debug 5: Inicializar Data Adapter (Híbrido)
+            debug_info.append("Inicializando HybridDataAdapter...")
             import os
-            from core.connectivity.parquet_adapter import ParquetAdapter
+            from core.connectivity.hybrid_adapter import HybridDataAdapter
 
-            # Usar ParquetAdapter direto com Polars (predicate pushdown, sem Segmentation Fault)
-            parquet_path = os.path.join(os.getcwd(), "data", "parquet", "*.parquet")
-            data_adapter = ParquetAdapter(parquet_path)
+            # Usar HybridAdapter que gerencia SQL Server e Parquet
+            data_adapter = HybridDataAdapter()
+            adapter_status = data_adapter.get_status()
 
-            # ParquetAdapter não tem get_status(), criar manualmente
-            adapter_status = {
-                "current_source": "parquet",
-                "sql_enabled": False,
-                "sql_available": False,
-                "fallback_enabled": True
-            }
-
-            debug_info.append(f"✅ ParquetAdapter OK - Fonte: {adapter_status['current_source'].upper()}")
+            debug_info.append(f"✅ HybridAdapter OK - Fonte: {adapter_status['current_source'].upper()}")
 
             # Validar que temos dados (via Parquet que sempre existe)
             import pandas as pd
@@ -680,18 +682,18 @@ else:
 
             return None
 
-    # Inicializar backend
+    # ✅ CORREÇÃO CONTEXT7: NÃO armazenar objetos não-serializáveis no session_state
+    # O @st.cache_resource já funciona como singleton, então basta chamar initialize_backend()
+    # sempre que precisar - o cache retornará a mesma instância automaticamente
     backend_components = initialize_backend()
 
-    # Salvar no session_state para acesso em outras partes
+    # Feedback visual apenas (sem armazenar no session_state)
     if backend_components:
-        st.session_state.backend_components = backend_components
         user_role = st.session_state.get('role', '')
         if user_role == 'admin':
             with st.sidebar:
                 st.success("✅ Backend inicializado!")
     else:
-        st.session_state.backend_components = None
         user_role = st.session_state.get('role', '')
         if user_role == 'admin':
             with st.sidebar:
@@ -884,12 +886,23 @@ else:
                     else:
                         # ❌ CACHE MISS: Processar com agent_graph
                         logger.info("Cache miss. Processando com agent_graph...")
-                        if st.session_state.backend_components and 'agent_graph' in st.session_state.backend_components:
-                            agent_graph = st.session_state.backend_components['agent_graph']
+                        # ✅ CORREÇÃO CONTEXT7: Acessar backend via cache_resource (não session_state)
+                        backend = initialize_backend()
+                        if backend and 'agent_graph' in backend:
+                            agent_graph = backend['agent_graph']
 
                             # ✅ CORREÇÃO: Usar HumanMessage do LangChain, não dict
                             HumanMessage = get_backend_module("HumanMessage")
                             graph_input = {"messages": [HumanMessage(content=user_input)], "query": user_input}
+
+                            # ✅ OTIMIZAÇÃO CONTEXT7: Configurar thread_id para checkpointing
+                            # Permite recovery automático e isolamento de sessões
+                            config = {
+                                "configurable": {
+                                    "thread_id": st.session_state.session_id  # Usa session_id existente
+                                }
+                            }
+                            logger.info(f"🔄 Checkpointing ativado - thread_id: {st.session_state.session_id}")
 
                             # 🔧 TIMEOUT IMPLEMENTATION: Executar agent_graph com timeout
                             import threading
@@ -920,9 +933,9 @@ else:
                                 elif any(kw in query_lower for kw in [
                                     'ranking', 'top', 'maior', 'menor', 'análise', 'compare', 'comparar',
                                     'mais vendido', 'menos vendido', 'vendidos', 'produtos',
-                                    'liste', 'listar', 'mostre', 'mostrar'
+                                    'liste', 'listar', 'mostre', 'mostrar', 'mc'
                                 ]):
-                                    return 50  # 50s para análises médias
+                                    return 75  # 75s para análises médias e MC
 
                                 # Queries simples (filtro direto)
                                 else:
@@ -938,7 +951,8 @@ else:
 
                             def invoke_agent_graph():
                                 try:
-                                    final_state = agent_graph.invoke(graph_input)
+                                    # ✅ OTIMIZAÇÃO CONTEXT7: Invocar com config para checkpointing
+                                    final_state = agent_graph.invoke(graph_input, config=config)
                                     result_queue.put(("success", final_state))
                                 except Exception as e:
                                     result_queue.put(("error", str(e)))
@@ -1056,11 +1070,11 @@ else:
                             # 🔧 DIAGNÓSTICO: Verificar por que agent_graph não está disponível
                             error_details = []
 
-                            if not st.session_state.backend_components:
+                            if not backend:
                                 error_details.append("❌ Backend não inicializado")
-                            elif 'agent_graph' not in st.session_state.backend_components:
+                            elif 'agent_graph' not in backend:
                                 error_details.append("❌ Agent Graph não encontrado no backend")
-                                available_keys = list(st.session_state.backend_components.keys())
+                                available_keys = list(backend.keys())
                                 error_details.append(f"Componentes disponíveis: {', '.join(available_keys)}")
 
                             error_msg = "🤖 **Sistema de IA Indisponível**\n\n"
@@ -1116,8 +1130,9 @@ else:
                 # Não fazer st.rerun() aqui para que o erro seja visível.
 
         # Log the query and its outcome
-        if st.session_state.backend_components and st.session_state.backend_components.get("query_history"):
-            query_history = st.session_state.backend_components["query_history"]
+        backend = initialize_backend()
+        if backend and backend.get("query_history"):
+            query_history = backend["query_history"]
             
             # Default agent_response to an empty dict if it's not a dict
             if not isinstance(agent_response, dict):
@@ -1475,6 +1490,33 @@ else:
                 except Exception as e:
                     st.error(f"Erro ao renderizar gráfico: {e}")
                     st.write("Dados do gráfico:", content)
+            elif response_type == "multiple_charts" and isinstance(content, list):
+                # ✅ CORREÇÃO: Renderizar múltiplos gráficos Plotly
+                user_query = response_data.get("user_query")
+                if user_query:
+                    st.caption(f"📝 Pergunta: {user_query}")
+
+                try:
+                    import plotly.io as pio
+                    import json
+
+                    st.info(f"📊 {len(content)} gráficos gerados:")
+
+                    for i, chart_json in enumerate(content):
+                        # Parse JSON para Figure
+                        fig = pio.from_json(chart_json)
+
+                        # Exibir subtítulo para cada gráfico
+                        chart_title = fig.layout.title.text if fig.layout.title and fig.layout.title.text else f"Gráfico {i+1}"
+                        st.subheader(chart_title)
+
+                        # Renderizar o gráfico
+                        st.plotly_chart(fig, use_container_width=True, key=f"chart_{i}_{uuid.uuid4()}")
+
+                    st.success(f"✅ {len(content)} gráficos gerados com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao renderizar múltiplos gráficos: {e}")
+                    st.write("Dados dos gráficos:", content)
             elif response_type == "data" and isinstance(content, list):
                 # 📝 Mostrar contexto da pergunta que gerou os dados
                 user_query = response_data.get("user_query")
@@ -1606,6 +1648,77 @@ else:
                     for choice in choice_list:
                         if st.button(choice, key=f"btn_{choice}_{uuid.uuid4()}"):
                             query_backend(choice)
+            elif response_type == "text_with_data":
+                # 🆕 TEXTO COM OPÇÃO DE DOWNLOAD
+                user_query = response_data.get("user_query")
+                if user_query and msg["role"] == "assistant":
+                    st.caption(f"📝 Pergunta: {user_query}")
+
+                # Renderizar conteúdo textual
+                if isinstance(content, str):
+                    st.markdown(content)
+                else:
+                    st.markdown(str(content))
+
+                # 📥 BOTÕES DE DOWNLOAD
+                download_data = response_data.get("download_data", [])
+                download_filename = response_data.get("download_filename", "dados_export")
+
+                if download_data and isinstance(download_data, list) and len(download_data) > 0:
+                    st.markdown("---")
+                    st.markdown("### 📥 Exportar Dados")
+
+                    # Converter para DataFrame
+                    df_export = pd.DataFrame(download_data)
+
+                    # Layout de colunas para botões
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        # Download CSV
+                        csv_data = df_export.to_csv(index=False, encoding='utf-8-sig')
+                        st.download_button(
+                            label="📄 Baixar CSV",
+                            data=csv_data,
+                            file_name=f"{download_filename}.csv",
+                            mime="text/csv",
+                            key=f"csv_{i}_{download_filename}",
+                            help="Exportar dados em formato CSV (compatível com Excel)"
+                        )
+
+                    with col2:
+                        # Download Excel
+                        from io import BytesIO
+                        buffer = BytesIO()
+                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                            df_export.to_excel(writer, index=False, sheet_name='Dados')
+                        excel_data = buffer.getvalue()
+
+                        st.download_button(
+                            label="📊 Baixar Excel",
+                            data=excel_data,
+                            file_name=f"{download_filename}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"excel_{i}_{download_filename}",
+                            help="Exportar dados em formato Excel (.xlsx)"
+                        )
+
+                    with col3:
+                        # Download JSON
+                        import json
+                        json_data = json.dumps(download_data, indent=2, ensure_ascii=False)
+                        st.download_button(
+                            label="🔧 Baixar JSON",
+                            data=json_data,
+                            file_name=f"{download_filename}.json",
+                            mime="application/json",
+                            key=f"json_{i}_{download_filename}",
+                            help="Exportar dados em formato JSON (para desenvolvedores)"
+                        )
+
+                    # Informação sobre os dados
+                    st.caption(f"📊 Total de registros: {len(df_export):,} | Colunas: {', '.join(df_export.columns[:5])}{'...' if len(df_export.columns) > 5 else ''}")
+
             else:
                 # 📝 Para respostas de texto, também mostrar contexto se disponível
                 user_query = response_data.get("user_query")

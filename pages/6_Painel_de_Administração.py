@@ -168,12 +168,10 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                             st.warning("⚠️ Modo Cloud: Edição de usuários não disponível. Use SQL Server para gerenciar usuários.")
 
                     if reset_password_submitted:
-                        if DB_AVAILABLE and user_id > 0:
-                            # Armazenar no session_state para mostrar formulário de reset
-                            st.session_state[f"reset_password_mode_{user_id}"] = True
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ Reset de senha não disponível no modo Cloud.")
+                        # ✅ CORREÇÃO: Permitir reset de senha em todos os modos
+                        # A função reset_user_password agora suporta modo cloud
+                        st.session_state[f"reset_password_mode_{user_id}"] = True
+                        st.rerun()
 
                     if delete_submitted:
                         if st.checkbox(f"Confirmar exclusão de {selected_username}?", key=f"confirm_delete_{user_id}"):
@@ -223,9 +221,17 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                                 if not is_valid:
                                     st.error(f"❌ {error_msg}")
                                 else:
-                                    success = auth_db.reset_user_password(user_id, new_temp_password)
+                                    # ✅ CORREÇÃO: Suporta reset em modo cloud e SQL Server
+                                    if DB_AVAILABLE:
+                                        success = auth_db.reset_user_password(user_id, new_temp_password)
+                                    else:
+                                        # Modo cloud - importar função correta
+                                        from core.database.sql_server_auth_db import reset_user_password
+                                        success = reset_user_password(user_id, new_temp_password)
+
                                     if success:
-                                        st.success(f"✅ Senha resetada para '{selected_username}'!")
+                                        mode_info = " (Modo Cloud)" if not DB_AVAILABLE else ""
+                                        st.success(f"✅ Senha resetada para '{selected_username}'!{mode_info}")
                                         audit_logger.info(f"Admin {st.session_state.get('username')} resetou senha de {selected_username}.")
                                         st.info("💡 Informe o usuário sobre a nova senha temporária.")
                                         del st.session_state[f"reset_password_mode_{user_id}"]
@@ -233,7 +239,7 @@ if st.session_state.get("authenticated") and st.session_state.get("role") == "ad
                                         time.sleep(2)
                                         st.rerun()
                                     else:
-                                        st.error("❌ Erro ao resetar senha.")
+                                        st.error("❌ Erro ao resetar senha. Verifique os logs.")
 
     else:
         st.info("Nenhum usuário cadastrado ainda.")

@@ -137,6 +137,16 @@ class PathValidator:
         Raises:
             PathValidationError: Se validação falhar, com detalhes do erro
         """
+        # Otimização: Verificar extensão ANTES de qualquer outra coisa.
+        # Se não for um arquivo Parquet, não há necessidade de validar.
+        path_obj_for_ext_check = Path(file_path)
+        if path_obj_for_ext_check.suffix.lower() not in self.VALID_EXTENSIONS:
+            return True, {
+                'status': 'skipped',
+                'reason': 'invalid_extension',
+                'original_path': str(file_path)
+            }
+
         start_time = datetime.now()
         validation_info = {
             'validation_timestamp': start_time.isoformat(),

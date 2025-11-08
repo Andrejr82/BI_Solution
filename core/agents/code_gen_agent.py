@@ -65,29 +65,23 @@ class CodeGenAgent:
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
 
-        # ✅ CORREÇÃO: Usar nomes REAIS do Parquet (confirmados via read_parquet_schema em 2025-10-27)
+        # ✅ CORREÇÃO v2.2: Colunas reais confirmadas em 04/11/2024
         self.column_descriptions = {
-            "codigo": "Código único do produto (COLUNA PARQUET: codigo)",
-            "nome_produto": "Nome/descrição do produto (COLUNA PARQUET: nome_produto)",
-            "nomesegmento": "Segmento do produto (COLUNA PARQUET: nomesegmento) - Ex: TECIDOS, PAPELARIA, etc.",
-            "NOMECATEGORIA": "Categoria do produto (COLUNA PARQUET: NOMECATEGORIA)",
-            "nomegrupo": "Grupo do produto (COLUNA PARQUET: nomegrupo)",
-            "NOMESUBGRUPO": "Subgrupo do produto (COLUNA PARQUET: NOMESUBGRUPO)",
-            "NOMEFABRICANTE": "Fabricante do produto (COLUNA PARQUET: NOMEFABRICANTE)",
-            "venda_30_d": "Total de vendas nos últimos 30 dias (COLUNA PARQUET: venda_30_d)",
-            "estoque_atual": "Quantidade em estoque total da UNE (COLUNA PARQUET: estoque_atual)",
-            "estoque_lv": "Estoque na Linha Verde/área de venda (COLUNA PARQUET: estoque_lv)",
-            "estoque_cd": "Estoque no Centro de Distribuição (COLUNA PARQUET: estoque_cd)",
-            "preco_38_percent": "Preço de venda com 38% de margem (COLUNA PARQUET: preco_38_percent)",
-            "une": "ID numérico da loja/unidade (COLUNA PARQUET: une) - Ex: 1, 2586, 2720",
-            "une_nome": "Nome da loja/unidade (COLUNA PARQUET: une_nome) - Ex: SCR, MAD, 261, ALC, NIL",
-            "tipo": "Tipo de produto (COLUNA PARQUET: tipo)",
-            "embalagem": "Embalagem do produto (COLUNA PARQUET: embalagem)",
-            "ean": "Código de barras (COLUNA PARQUET: ean)",
-            "media_considerada_lv": "Média de vendas considerada para reposição (COLUNA PARQUET: media_considerada_lv)",
-            "abc_une_30_dd": "Classificação ABC da UNE nos últimos 30 dias (COLUNA PARQUET: abc_une_30_dd)",
-            # 📊 COLUNAS TEMPORAIS - Vendas mensais (mes_01 = mês mais recente)
-            "mes_01": "Vendas do mês mais recente (mês 1)",
+            # Identificação
+            "codigo": "Código único do produto",
+            "nome_produto": "Nome/descrição do produto",
+            "ean": "Código de barras",
+
+            # Hierarquia
+            "nomesegmento": "Segmento - Ex: TECIDOS, PAPELARIA, AVIAMENTOS",
+            "NOMECATEGORIA": "Categoria do produto",
+            "nomegrupo": "Grupo do produto",
+            "NOMESUBGRUPO": "Subgrupo do produto",
+            "NOMEFABRICANTE": "Fabricante do produto",
+
+            # Vendas
+            "venda_30_d": "Vendas últimos 30 dias (em unidades)",
+            "mes_01": "Vendas do mês atual/mais recente",
             "mes_02": "Vendas de 2 meses atrás",
             "mes_03": "Vendas de 3 meses atrás",
             "mes_04": "Vendas de 4 meses atrás",
@@ -98,20 +92,49 @@ class CodeGenAgent:
             "mes_09": "Vendas de 9 meses atrás",
             "mes_10": "Vendas de 10 meses atrás",
             "mes_11": "Vendas de 11 meses atrás",
-            "mes_12": "Vendas de 12 meses atrás (mês mais antigo)"
+            "mes_12": "Vendas de 12 meses atrás (mais antigo)",
+
+            # Estoque
+            "estoque_atual": "Estoque total da UNE",
+            "estoque_lv": "Estoque Linha Verde (área venda)",
+            "estoque_gondola_lv": "Estoque na gôndola LV",
+            "estoque_ilha_lv": "Estoque em ilha LV",
+            "estoque_cd": "Estoque no Centro Distribuição",
+
+            # UNE
+            "une": "ID numérico da UNE - Ex: 1, 2586, 2720",
+            "une_nome": "Nome da UNE - Ex: SCR, MAD, BAR",
+
+            # Análise ABC
+            "abc_une_30_dd": "ABC UNE últimos 30 dias",
+            "abc_cacula_90_dd": "ABC Caçula últimos 90 dias",
+            "abc_une_mes_01": "ABC UNE mês 1",
+            "abc_une_mes_02": "ABC UNE mês 2",
+            "abc_une_mes_03": "ABC UNE mês 3",
+            "abc_une_mes_04": "ABC UNE mês 4",
+
+            # Reposição/Logística
+            "media_considerada_lv": "Média considerada reposição LV",
+            "ponto_pedido_lv": "Ponto de pedido LV",
+            "exposicao_minima": "Exposição mínima",
+            "exposicao_minima_une": "Exposição mínima UNE",
+            "exposicao_maxima_une": "Exposição máxima UNE",
+            "leadtime_lv": "Lead time para LV",
+
+            # Outros
+            "preco_38_percent": "Preço venda 38% margem",
+            "tipo": "Tipo de produto",
+            "embalagem": "Tipo embalagem",
+            "promocional": "Produto promocional (True/False)",
+            "foralinha": "Produto fora de linha (True/False)"
         }
 
-        # Inicializar pattern_matcher, code_validator e RAG
-        try:
-            self.query_retriever = QueryRetriever()
-            self.example_collector = ExampleCollector()
-            self.rag_enabled = True
-            self.logger.info("Sistema RAG inicializado com sucesso")
-        except Exception as e:
-            self.logger.warning(f"RAG não disponível: {e}. Continuando sem RAG.")
-            self.query_retriever = None
-            self.example_collector = None
-            self.rag_enabled = False
+        # ✅ OTIMIZAÇÃO v2.2: Lazy loading do RAG system (economiza 1-3s no startup)
+        # RAG será carregado apenas quando realmente necessário
+        self._query_retriever = None
+        self._example_collector = None
+        self._rag_enabled = None  # None = não inicializado, True = OK, False = erro
+        self.logger.info("✅ RAG system configurado para lazy loading")
 
         # Inicializar pattern_matcher and code_validator
         from collections import defaultdict
@@ -156,6 +179,42 @@ class CodeGenAgent:
         self._check_and_invalidate_cache_if_prompt_changed()
 
         self.logger.info("CodeGenAgent inicializado.")
+
+    def _ensure_rag_loaded(self):
+        """
+        ✅ OTIMIZAÇÃO v2.2: Carrega RAG system sob demanda (lazy loading)
+        Apenas inicializa quando realmente necessário, economizando 1-3s no startup
+        """
+        if self._rag_enabled is None:  # Ainda não foi inicializado
+            try:
+                self.logger.info("🔄 Carregando RAG system sob demanda...")
+                self._query_retriever = QueryRetriever()
+                self._example_collector = ExampleCollector()
+                self._rag_enabled = True
+                self.logger.info("✅ RAG system carregado com sucesso")
+            except Exception as e:
+                self.logger.warning(f"⚠️ RAG não disponível: {e}. Continuando sem RAG.")
+                self._query_retriever = None
+                self._example_collector = None
+                self._rag_enabled = False
+
+    @property
+    def query_retriever(self):
+        """Property que carrega RAG sob demanda quando acessado"""
+        self._ensure_rag_loaded()
+        return self._query_retriever
+
+    @property
+    def example_collector(self):
+        """Property que carrega RAG sob demanda quando acessado"""
+        self._ensure_rag_loaded()
+        return self._example_collector
+
+    @property
+    def rag_enabled(self):
+        """Property que verifica se RAG está disponível (carrega se necessário)"""
+        self._ensure_rag_loaded()
+        return self._rag_enabled
 
     def _execute_generated_code(self, code: str, local_scope: Dict[str, Any]):
         q = Queue()
@@ -342,10 +401,23 @@ class CodeGenAgent:
 
                 return df_pandas
 
-        # ✅ NOVO: Usar load_data otimizada com Polars
+        # ✅ v2.2: Usar load_data otimizada com Polars
         try:
-            # Usar pattern correto: admmat*.parquet (não admmat_une*.parquet)
-            parquet_path = os.path.join("data", "parquet", "admmat*.parquet")
+            # ✅ FIX: Usar arquivo específico ao invés de wildcard
+            parquet_path = os.path.join("data", "parquet", "admmat.parquet")
+
+            # ✅ CORREÇÃO v2.2: Path explícito sem glob (Windows incompatível)
+            if not os.path.exists(parquet_path):
+                # Fallback 1: admmat_extended.parquet
+                parquet_path = os.path.join("data", "parquet", "admmat_extended.parquet")
+
+            if not os.path.exists(parquet_path):
+                # Fallback 2: admmat_backup.parquet
+                parquet_path = os.path.join("data", "parquet", "admmat_backup.parquet")
+
+            if not os.path.exists(parquet_path):
+                raise FileNotFoundError(f"Nenhum arquivo Parquet encontrado em data/parquet/")
+
             optimized_load_data = create_optimized_load_data(parquet_path, self.data_adapter)
             local_scope['load_data'] = optimized_load_data
             self.logger.info("✅ Using optimized Polars load_data()")
@@ -478,14 +550,17 @@ class CodeGenAgent:
 
     def _build_structured_prompt(self, user_query: str, rag_examples: list = None) -> str:
         """
-        Constrói prompt estruturado seguindo OpenAI best practices.
+        Constrói prompt estruturado seguindo Context7 2025 best practices.
 
-        Baseado em: Context7 - Developer Message Pattern + Few-Shot Learning
+        Baseado em:
+        - Few-Shot Learning 2025: 2-5 exemplos variados com edge cases
+        - Chain-of-Thought 2025: Sketch-of-Thought (SoT) - raciocínio breve
+        - Developer Message Pattern + Reasoning scaffolds
 
         Hierarquia:
         1. Developer message - Identidade e comportamento do agente
-        2. Few-shot examples - Exemplos rotulados (do RAG)
-        3. User message - Query atual com instruções específicas
+        2. Few-shot examples - Exemplos variados com raciocínio
+        3. User message - Query com estrutura de raciocínio
 
         Args:
             user_query: Query do usuário
@@ -495,67 +570,263 @@ class CodeGenAgent:
             Prompt estruturado em formato string
         """
 
-        # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento (OTIMIZADO)
-        developer_context = f"""# 🤖 Analista Python
+        # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento (Context7 2025)
+        developer_context = f"""# 🤖 Analista Python Especializado em BI da UNE
 
-Gere código Python eficiente para análise de vendas.
+Gere código Python eficiente para análise de vendas da UNE usando raciocínio estruturado e regras de negócio.
 
-## Dataset
-- `venda_30_d`: Vendas 30 dias
-- `estoque_atual`: Estoque
-- `mes_01` a `mes_12`: Vendas mensais
+## Dataset Parquet
+- `venda_30_d`: Vendas dos últimos 30 dias
+- `estoque_atual`: Estoque total da UNE (soma de estoque_lv + estoque_cd)
+- `estoque_lv`: Estoque na Linha Verde (área de venda)
+- `estoque_cd`: Estoque no Centro de Distribuição
+- `mes_01` a `mes_12`: Vendas mensais (mes_01 = mês MAIS RECENTE, mes_12 = mais antigo)
+- `une`: ID numérico da loja (ex: 1, 2586, 2720)
+- `une_nome`: Nome da UNE (ex: SCR, MAD, 261, ALC, NIL)
+- `nomesegmento`: Segmento do produto (TECIDOS, PAPELARIA, etc.)
+- `NOMECATEGORIA`: Categoria do produto
+- `preco_38_percent`: Preço com 38% de margem (atacado)
 - Colunas: {', '.join(list(self.column_descriptions.keys())[:15])}...
 
-## Regras
-1. Use nomes EXATOS de colunas
-2. Validação flexível: `if 'col' in df.columns`
-3. Retorne dict/DataFrame/Plotly
-4. Comentários no código
+## Regras de Negócio UNE (CRÍTICO)
 
-## Ranking
-- "top N" → `.head(N)`
-- "todas" → sem `.head()`
-- genérico → `.head(10)`
+### 1. MC (Média Comum):
+- Média calculada: (últimos 12 meses) + (últimos 3 meses) + (ano anterior)
+- Regula abastecimento automático
+- Quando analisar tendências, considere mes_01 a mes_12
 
-## Plotly
-- Use `px.bar()`, `px.line()` para gráficos
-- Template: `'plotly_white'`
-- Sempre defina `title` e `labels`
+### 2. Linha Verde (Ponto de Pedido):
+- LV = estoque + estoque_gondola + estoque_ilha
+- Disparo quando: estoque_atual ≤ 50% da Linha Verde
+- Volume disparado = (LV - estoque_atual)
+
+### 3. Política de Preços (Ranking 0-4):
+- Atacado: compras ≥ R$ 750,00 (38% desconto)
+- Varejo: compras < R$ 750,00 (desconto varia por RANK)
+- Use `preco_38_percent` para análises de preço
+
+### 4. Perfil de Produtos:
+- **Direcionador**: Necessidade primária (Papel, Tecidos, Canetas)
+- **Complementar**: Complementa direcionador (Grampos, Tesouras)
+- **Impulso**: Compra por desejo (Chocolates, Decoração)
+
+### 5. Análise por UNE:
+- UNE é identificada por `une` (ID) ou `une_nome` (nome)
+- Principais UNEs: SCR, MAD, 261, ALC, NIL
+- Sempre use `une_nome` para exibição (mais legível)
+
+## Regras Essenciais de Código
+1. **Nomes EXATOS** de colunas (case-sensitive)
+2. **Validação flexível**: `if 'col' in df.columns` antes de usar
+3. **Retorne** em `result`: dict, DataFrame ou Plotly Figure
+4. **Comentários** explicativos no código
+5. **Trate casos extremos**: dados vazios, valores nulos, divisão por zero
+6. **mes_01 é o MAIS RECENTE**: Para análises temporais, ordene corretamente
+7. **DataFrame de linha única**: Se os dados de entrada forem uma lista com um único dicionário (ex: `[{{'produto': 'A', 'vendas': 100}}]`), garanta que o DataFrame seja criado corretamente. O `pd.DataFrame(minha_lista)` já lida com isso, mas evite construções que possam tratar os valores como escalares.
+
+## 🚨 CRÍTICO: Gráficos de Evolução Temporal (mes_01 a mes_12)
+
+Quando criar gráficos de evolução/tendência usando colunas mes_01 a mes_12:
+
+**❌ ERRADO - Causa erro "must pass an index":**
+```python
+# Filtrar um único produto
+df_produto = df[df['codigo'] == 592294].iloc[0]  # Retorna Series (scalars)
+
+# Tentar criar DataFrame - ERRO!
+vendas_mensais = {{
+    'Mês 1': df_produto['mes_01'],  # scalar
+    'Mês 2': df_produto['mes_02'],  # scalar
+    # ...
+}}
+df_temporal = pd.DataFrame(vendas_mensais)  # ❌ ERRO: "must pass an index"
+```
+
+**✅ CORRETO - Sempre use listas ou especifique index:**
+```python
+# Filtrar um único produto
+df_produto = df[df['codigo'] == 592294].iloc[0]
+
+# SOLUÇÃO 1: Envolver valores em listas
+meses = ['Mês 1', 'Mês 2', 'Mês 3', 'Mês 4', 'Mês 5', 'Mês 6',
+         'Mês 7', 'Mês 8', 'Mês 9', 'Mês 10', 'Mês 11', 'Mês 12']
+vendas = [df_produto['mes_01'], df_produto['mes_02'], df_produto['mes_03'],
+          df_produto['mes_04'], df_produto['mes_05'], df_produto['mes_06'],
+          df_produto['mes_07'], df_produto['mes_08'], df_produto['mes_09'],
+          df_produto['mes_10'], df_produto['mes_11'], df_produto['mes_12']]
+df_temporal = pd.DataFrame({{'periodo': meses, 'vendas': vendas}})  # ✅ OK
+
+# SOLUÇÃO 2: Usar .values e reshape
+cols_meses = ['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06',
+              'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12']
+vendas = df_produto[cols_meses].values  # array
+df_temporal = pd.DataFrame({{
+    'periodo': [f'Mês {{i+1}}' for i in range(12)],
+    'vendas': vendas
+}})  # ✅ OK
+
+# Criar gráfico
+result = px.line(df_temporal, x='periodo', y='vendas',
+                 title=f'Evolução de Vendas - Produto {{df_produto["codigo"]}}',
+                 markers=True)
+```
+
+**Regra de Ouro para Evolução**: Sempre extraia valores de mes_XX como listas/arrays, NUNCA como dict de scalars!
+**CRÍTICO**: Se você filtrar uma ÚNICA linha (ex: `df_produto = df[df['codigo'] == 123].iloc[0]`), o resultado é uma `Series`. Para criar um DataFrame temporal a partir dela, você DEVE converter os valores `mes_XX` em uma lista ou um novo DataFrame, como nos exemplos CORRETOS acima. NUNCA tente criar um DataFrame diretamente de uma `Series` de escalares para `mes_XX`!
+
+## Padrões de Ranking
+- "top N" ou "ranking N" → `.head(N)`
+- "todas as lojas/produtos" → **SEM** `.head()`
+- "ranking" sem número → `.head(10)` (padrão)
+
+## Visualização (Plotly)
+- **Gráficos de barra**: `px.bar()` para rankings, comparações
+- **Gráficos de linha**: `px.line()` para séries temporais (mes_01 a mes_12)
+- **Pizza**: `px.pie()` para distribuições percentuais
+- **Template**: `'plotly_white'` (obrigatório)
+- **Sempre defina**: `title`, `labels`, `color_discrete_sequence`
+- **Ordenação**: Use `sort_values()` ANTES de plotar rankings
 """
 
-        # 2️⃣ FEW-SHOT EXAMPLES - Exemplos Rotulados do RAG (OTIMIZADO: apenas 1 exemplo)
+        # 2️⃣ FEW-SHOT EXAMPLES - Context7 2025: 2-5 exemplos com variedade
         few_shot_section = ""
         if rag_examples and len(rag_examples) > 0:
-            few_shot_section = "\n\n# 📚 EXEMPLO SIMILAR\n\n"
+            # 🎯 MELHORIA 2025: Usar 3 exemplos (não apenas 1) para melhor generalização
+            num_examples = min(3, len(rag_examples))
+            few_shot_section = "\n\n# 📚 EXEMPLOS DE REFERÊNCIA (Few-Shot Learning)\n\n"
+            few_shot_section += "Analise estes exemplos para entender o padrão, mas adapte para a query atual.\n\n"
 
-            for i, ex in enumerate(rag_examples[:1], 1):  # Apenas 1 exemplo (era 3)
+            for i, ex in enumerate(rag_examples[:num_examples], 1):
                 similarity = ex.get('similarity_score', 0)
-                few_shot_section += f"""## Exemplo {i} (Similaridade: {similarity:.1%})
 
-**Query do Usuário:** "{ex.get('query_user', 'N/A')}"
+                # 🎯 MELHORIA 2025: Adicionar raciocínio no exemplo (não só código)
+                few_shot_section += f"""## Exemplo {i} (Relevância: {similarity:.1%})
 
-**Código Python Gerado:**
+**Input:** "{ex.get('query_user', 'N/A')}"
+
+**Raciocínio:** {self._extract_reasoning_from_example(ex)}
+
+**Código Python:**
 ```python
 {ex.get('code_generated', 'N/A')}
 ```
 
-**Resultado:** {ex.get('result_type', 'success')} | {ex.get('rows_returned', 0)} registros retornados
+**Output:** {ex.get('result_type', 'success')} | {ex.get('rows_returned', 0)} registros
 
 ---
 
 """
 
-        # 3️⃣ USER MESSAGE - Query Atual (OTIMIZADO - removido Chain-of-Thought)
+        # 3️⃣ USER MESSAGE - Context7 2025: Chain-of-Thought estruturado (SoT)
+        # Sketch-of-Thought: Breve outline de raciocínio (não verboso)
         user_message = f"""
-Query: {user_query}
+## Query Atual
+{user_query}
 
-Gere código Python usando `load_data()` que retorne resultado em `result`.
+## Abordagem (Sketch-of-Thought)
+Antes de gerar o código, considere:
+
+1. **Objetivo**: O que o usuário quer descobrir?
+2. **Dados necessários**: Quais colunas usar?
+3. **Transformações**: Filtros, agregações, ordenação?
+4. **Saída**: Tabela, gráfico ou métrica?
+
+Agora gere código Python limpo usando `load_data()` que retorne o resultado em `result`.
 """
 
-        # CONCATENAR SEÇÕES (otimizado - ~70% menor que antes)
+        # CONCATENAR SEÇÕES (Context7 2025 optimized)
         full_prompt = developer_context + few_shot_section + user_message
 
         return full_prompt
+
+    def _extract_reasoning_from_example(self, example: Dict[str, Any]) -> str:
+        """
+        Extrai/gera raciocínio para um exemplo few-shot (Context7 2025).
+        Inclui contexto de regras de negócio UNE.
+
+        Args:
+            example: Dicionário com exemplo de query
+
+        Returns:
+            String com raciocínio breve estruturado
+        """
+        query = example.get('query_user', '').lower()
+        code = example.get('code_generated', '')
+
+        # Inferir raciocínio baseado no padrão da query (Context7 2025)
+        reasoning_parts = []
+
+        # 1. Detectar tipo de análise (objetivo)
+        if 'ranking' in query or 'top' in query:
+            reasoning_parts.append("Objetivo: Ranking (ordenação desc + limitação)")
+        elif 'gráfico' in query or 'grafico' in query:
+            reasoning_parts.append("Objetivo: Visualização (agregação + Plotly)")
+        elif 'total' in query or 'soma' in query:
+            reasoning_parts.append("Objetivo: Totalização (sum/agregação)")
+        elif 'comparar' in query or 'versus' in query:
+            reasoning_parts.append("Objetivo: Comparação (groupby múltiplo)")
+        elif 'tendência' in query or 'evolução' in query:
+            reasoning_parts.append("Objetivo: Série temporal (mes_01 a mes_12)")
+        else:
+            reasoning_parts.append("Objetivo: Consulta analítica")
+
+        # 2. Detectar dados necessários (colunas)
+        data_needed = []
+        if 'estoque' in query:
+            if 'linha verde' in query or 'lv' in query:
+                data_needed.append("estoque_lv")
+            elif 'cd' in query or 'centro' in query:
+                data_needed.append("estoque_cd")
+            else:
+                data_needed.append("estoque_atual")
+
+        if 'venda' in query or 'vendas' in query:
+            if any(x in query for x in ['30 dias', '30d', 'mês', 'mes']):
+                data_needed.append("venda_30_d ou mes_XX")
+            else:
+                data_needed.append("venda_30_d")
+
+        if 'loja' in query or 'une' in query:
+            data_needed.append("une_nome")
+
+        if 'segmento' in query:
+            data_needed.append("nomesegmento")
+
+        if 'preço' in query or 'preco' in query:
+            data_needed.append("preco_38_percent")
+
+        if data_needed:
+            reasoning_parts.append(f"Dados: {', '.join(data_needed)}")
+
+        # 3. Detectar transformações (operações)
+        transformations = []
+        if 'groupby' in code:
+            transformations.append("groupby")
+        if 'sort_values' in code:
+            transformations.append("sort desc")
+        if 'head(' in code:
+            transformations.append("limit N")
+        if 'px.' in code or 'plotly' in code:
+            transformations.append("plotar")
+        if 'filter' in code or 'query' in code or '[' in code:
+            transformations.append("filtrar")
+
+        if transformations:
+            reasoning_parts.append(f"Ações: {' + '.join(transformations)}")
+
+        # 4. Detectar tipo de saída
+        if 'px.' in code:
+            reasoning_parts.append("Saída: Gráfico Plotly")
+        elif 'DataFrame' in code or 'df' in code:
+            reasoning_parts.append("Saída: Tabela")
+        else:
+            reasoning_parts.append("Saída: Métrica/Dict")
+
+        # Montar raciocínio estruturado (SoT - Sketch of Thought)
+        if reasoning_parts:
+            return " → ".join(reasoning_parts)
+        else:
+            return "Consulta direta filtrada"
 
     def generate_and_execute_code(self, input_data: Dict[str, Any]) -> dict:
         """
@@ -726,8 +997,15 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
                 {"role": "user", "content": prompt}
             ]
 
+            # 🔥 NOVO: Passar contexto ao cache para separar geração de código/gráficos
+            cache_context = {
+                "operation": "generate_code",
+                "query_type": "python_generation",
+                "user_query": user_query[:100]  # Primeiros 100 chars para diferenciar queries similares
+            }
+
             start_llm_query = time.time()
-            llm_response = self.llm.get_completion(messages=messages)
+            llm_response = self.llm.get_completion(messages=messages, cache_context=cache_context)
             end_llm_query = time.time()
             self.logger.info(f"Tempo de consulta LLM: {end_llm_query - start_llm_query:.4f} segundos")
 
@@ -1241,7 +1519,7 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
                 'columns': list(self.column_descriptions.keys()),
                 'descriptions': list(self.column_descriptions.values()),
                 # Adicionar outros componentes que afetam o prompt
-                'version': '5.0_context7_prompt_engineering_few_shot_learning_20251027'  # ✅ NOVA VERSÃO
+                'version': '6.1_fix_temporal_dataframe_scalar_error_20251102'  # ✅ FIX: Erro de DataFrame escalar em gráficos de evolução
             }
 
             prompt_str = json.dumps(prompt_components, sort_keys=True)

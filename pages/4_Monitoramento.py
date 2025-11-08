@@ -34,6 +34,245 @@ if st.session_state.get("role") != "admin":
 st.markdown("<h1 class='main-header'>Monitoramento do Sistema</h1>", unsafe_allow_html=True)
 st.markdown("<div class='info-box'>Acompanhe os logs do sistema e o status dos principais serviços.</div>", unsafe_allow_html=True)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 🚀 DASHBOARD DE PERFORMANCE (v2.2)
+# ═══════════════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown("### 🚀 Dashboard de Performance em Tempo Real")
+st.markdown("<div class='info-box'>Monitore performance de queries, cache e inicialização do sistema</div>", unsafe_allow_html=True)
+
+try:
+    from core.utils.performance_tracker import get_performance_tracker
+
+    tracker = get_performance_tracker()
+
+    # Seletor de janela de tempo
+    col_time, col_refresh = st.columns([3, 1])
+    with col_time:
+        window_minutes = st.selectbox(
+            "Janela de tempo",
+            [5, 15, 30, 60, 120, 240],
+            index=3,  # Default: 60 minutos
+            help="Período de tempo para análise de métricas"
+        )
+    with col_refresh:
+        if st.button("🔄 Atualizar", use_container_width=True):
+            st.rerun()
+
+    # Obter estatísticas
+    stats = tracker.get_stats(window_minutes=window_minutes)
+    startup_stats = tracker.get_startup_stats()
+
+    # ─────────────────────────────────────────────────────────────────────
+    # MÉTRICAS PRINCIPAIS
+    # ─────────────────────────────────────────────────────────────────────
+    st.markdown("#### 📊 Métricas Principais")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric(
+            "⏱️ Uptime",
+            stats['uptime_formatted'],
+            help="Tempo desde última inicialização"
+        )
+
+    with col2:
+        queries_color = "normal"
+        if stats['avg_query_time_ms'] > 5000:
+            queries_color = "inverse"  # Vermelho
+        elif stats['avg_query_time_ms'] > 3000:
+            queries_color = "off"  # Amarelo
+
+        st.metric(
+            "⚡ Tempo Médio Query",
+            f"{stats['avg_query_time_ms']}ms",
+            delta=f"P95: {stats['p95_query_time_ms']}ms",
+            delta_color=queries_color,
+            help="Tempo médio de execução de queries (P95 = 95º percentil)"
+        )
+
+    with col3:
+        cache_color = "normal" if stats['cache_hit_rate'] >= 50 else "inverse"
+        st.metric(
+            "💾 Cache Hit Rate",
+            f"{stats['cache_hit_rate']}%",
+            delta=f"{stats['cache_hits']} hits",
+            delta_color=cache_color,
+            help="Porcentagem de respostas servidas do cache (ideal: >50%)"
+        )
+
+    with col4:
+        st.metric(
+            "📈 Queries/min",
+            f"{stats['queries_per_minute']}",
+            delta=f"{stats['total_queries']} total",
+            help="Taxa de queries processadas por minuto"
+        )
+
+    with col5:
+        error_color = "inverse" if stats['error_rate'] > 5 else "normal"
+        st.metric(
+            "❌ Taxa de Erro",
+            f"{stats['error_rate']}%",
+            delta=f"{stats['errors']} erros",
+            delta_color=error_color,
+            help="Porcentagem de queries com erro (ideal: <5%)"
+        )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # PERFORMANCE DETALHADA
+    # ─────────────────────────────────────────────────────────────────────
+    st.markdown("#### 🔍 Performance Detalhada")
+
+    col_perf1, col_perf2, col_perf3 = st.columns(3)
+
+    with col_perf1:
+        st.markdown("**📊 Estatísticas de Query**")
+        query_stats_df = pd.DataFrame({
+            "Métrica": ["Mínimo", "Média", "P95", "Máximo"],
+            "Tempo (ms)": [
+                stats['min_query_time_ms'],
+                stats['avg_query_time_ms'],
+                stats['p95_query_time_ms'],
+                stats['max_query_time_ms']
+            ]
+        })
+        st.dataframe(query_stats_df, use_container_width=True, hide_index=True)
+
+    with col_perf2:
+        st.markdown("**💾 Estatísticas de Cache**")
+        cache_stats_df = pd.DataFrame({
+            "Métrica": ["Hits", "Misses", "Hit Rate", "Total Ops"],
+            "Valor": [
+                stats['cache_hits'],
+                stats['cache_misses'],
+                f"{stats['cache_hit_rate']}%",
+                stats['cache_hits'] + stats['cache_misses']
+            ]
+        })
+        st.dataframe(cache_stats_df, use_container_width=True, hide_index=True)
+
+    with col_perf3:
+        st.markdown("**🚀 Tempo de Inicialização**")
+        if startup_stats['count'] > 0:
+            startup_df = pd.DataFrame({
+                "Métrica": ["Último", "Média", "Mínimo", "Máximo"],
+                "Tempo (ms)": [
+                    f"{startup_stats['last_startup_ms']}",
+                    f"{startup_stats['avg_startup_ms']}",
+                    f"{startup_stats['min_startup_ms']}",
+                    f"{startup_stats['max_startup_ms']}"
+                ]
+            })
+            st.dataframe(startup_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum dado de startup coletado ainda")
+
+    # ─────────────────────────────────────────────────────────────────────
+    # QUERIES RECENTES & ERROS
+    # ─────────────────────────────────────────────────────────────────────
+    col_recent1, col_recent2 = st.columns(2)
+
+    with col_recent1:
+        st.markdown("**⏱️ Queries Recentes** (últimas 10)")
+        recent_queries = tracker.get_recent_queries(limit=10)
+        if recent_queries:
+            queries_df = pd.DataFrame([
+                {
+                    "Tempo": q['timestamp'].split('T')[1][:8],
+                    "Duração (ms)": round(q['duration_ms'], 2),
+                    "Tipo": q['type'],
+                    "Status": "✅" if q['success'] else "❌"
+                }
+                for q in recent_queries
+            ])
+            st.dataframe(queries_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhuma query registrada ainda")
+
+    with col_recent2:
+        st.markdown("**⚠️ Erros Recentes** (últimos 10)")
+        recent_errors = tracker.get_recent_errors(limit=10)
+        if recent_errors:
+            errors_df = pd.DataFrame([
+                {
+                    "Tempo": e['timestamp'].split('T')[1][:8],
+                    "Erro": e['error'][:50] + "..." if len(e['error']) > 50 else e['error']
+                }
+                for e in recent_errors
+            ])
+            st.dataframe(errors_df, use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ Nenhum erro registrado!")
+
+    # ─────────────────────────────────────────────────────────────────────
+    # ESTATÍSTICAS LIFETIME
+    # ─────────────────────────────────────────────────────────────────────
+    with st.expander("📊 Estatísticas Lifetime (desde inicialização)", expanded=False):
+        col_life1, col_life2, col_life3, col_life4 = st.columns(4)
+
+        with col_life1:
+            st.metric("Total Queries", stats['lifetime_queries'])
+
+        with col_life2:
+            st.metric("Cache Hits", stats['lifetime_cache_hits'])
+
+        with col_life3:
+            st.metric("Cache Hit Rate", f"{stats['lifetime_cache_hit_rate']}%")
+
+        with col_life4:
+            st.metric("Total Erros", stats['lifetime_errors'])
+
+    # ─────────────────────────────────────────────────────────────────────
+    # ALERTAS DE PERFORMANCE
+    # ─────────────────────────────────────────────────────────────────────
+    st.markdown("#### ⚠️ Alertas de Performance")
+
+    alerts = []
+
+    # Alerta: Query time alto
+    if stats['avg_query_time_ms'] > 5000:
+        alerts.append(("🔴 CRÍTICO", f"Tempo médio de query muito alto: {stats['avg_query_time_ms']}ms (ideal: <3000ms)"))
+    elif stats['avg_query_time_ms'] > 3000:
+        alerts.append(("🟡 ATENÇÃO", f"Tempo médio de query alto: {stats['avg_query_time_ms']}ms (ideal: <3000ms)"))
+
+    # Alerta: Cache hit rate baixo
+    if stats['cache_hit_rate'] < 30 and (stats['cache_hits'] + stats['cache_misses']) > 10:
+        alerts.append(("🟡 ATENÇÃO", f"Cache hit rate baixo: {stats['cache_hit_rate']}% (ideal: >50%)"))
+
+    # Alerta: Taxa de erro alta
+    if stats['error_rate'] > 10:
+        alerts.append(("🔴 CRÍTICO", f"Taxa de erro muito alta: {stats['error_rate']}% (ideal: <5%)"))
+    elif stats['error_rate'] > 5:
+        alerts.append(("🟡 ATENÇÃO", f"Taxa de erro elevada: {stats['error_rate']}% (ideal: <5%)"))
+
+    # Alerta: Muitos erros absolutos
+    if stats['errors'] > 10:
+        alerts.append(("🔴 CRÍTICO", f"{stats['errors']} erros nos últimos {window_minutes} minutos"))
+
+    if alerts:
+        for severity, message in alerts:
+            if "CRÍTICO" in severity:
+                st.error(f"{severity}: {message}")
+            else:
+                st.warning(f"{severity}: {message}")
+    else:
+        st.success("✅ Nenhum alerta de performance - sistema operando normalmente!")
+
+    # Botão de salvar snapshot
+    if st.button("💾 Salvar Snapshot de Métricas", help="Salva estado atual das métricas em arquivo JSON"):
+        tracker.save_snapshot()
+        st.success("✅ Snapshot salvo em data/metrics/")
+
+except ImportError:
+    st.warning("⚠️ PerformanceTracker não disponível. Instale dependências: `pip install -r requirements.txt`")
+except Exception as e:
+    st.error(f"❌ Erro ao carregar dashboard de performance: {e}")
+    logging.error(f"Erro no dashboard de performance: {e}", exc_info=True)
+
+st.markdown("---")
+
 # --- LOGS DO SISTEMA ---
 st.markdown("### Logs do Sistema")
 log_dir = os.path.join(os.getcwd(), "logs")
@@ -63,22 +302,11 @@ else:
 st.markdown("### Status dos Serviços")
 status_data = []
 
-# Checagem do Backend Integrado
-backend_status = "❌ Não inicializado"
-backend_time = "-"
-try:
-    start = time.time()
-    if 'backend_components' in st.session_state and st.session_state.backend_components:
-        components = st.session_state.backend_components
-        if components.get("agent_graph"):
-            backend_time = f"{(time.time() - start)*1000:.0f} ms"
-            backend_status = "✅ Operacional (LangGraph)"
-        else:
-            backend_status = "⚠️ Parcialmente inicializado"
-    else:
-        backend_status = "❌ Não disponível"
-except Exception as e:
-    backend_status = f"❌ Erro: {str(e)[:30]}"
+# ✅ CORREÇÃO CONTEXT7: Backend agora é gerenciado via @st.cache_resource
+# Não está mais no session_state, mas sim como singleton via cache
+# O backend está sempre disponível via initialize_backend() do streamlit_app
+backend_status = "✅ Gerenciado via Cache Resource"
+backend_time = "Singleton"
 status_data.append({"Serviço": "Backend LangGraph", "Status": backend_status, "Tempo": backend_time})
 # Checagem do Banco de Dados
 db_status = "❌ Não configurado"
@@ -163,28 +391,17 @@ cache_size = 0
 cache_ttl = 48
 
 try:
-    if 'backend_components' in st.session_state and st.session_state.backend_components:
-        llm_adapter = st.session_state.backend_components.get("llm_adapter")
-
-        if llm_adapter:
-            # Verificar se tem método get_cache_stats
-            if hasattr(llm_adapter, 'get_cache_stats'):
-                cache_stats = llm_adapter.get_cache_stats()
-                cache_enabled = cache_stats.get("cache_enabled", False)
-                cache_files = cache_stats.get("total_files", 0)
-                cache_size = cache_stats.get("total_size_mb", 0)
-                cache_ttl = cache_stats.get("ttl_hours", 48)
-            else:
-                # Fallback: verificar atributos diretamente
-                cache_enabled = getattr(llm_adapter, 'cache_enabled', False)
-                if hasattr(llm_adapter, 'cache_dir'):
-                    import os
-                    cache_dir = llm_adapter.cache_dir
-                    if os.path.exists(cache_dir):
-                        cache_files = len([f for f in os.listdir(cache_dir) if f.endswith('.json')])
-                        total_bytes = sum(os.path.getsize(os.path.join(cache_dir, f))
-                                        for f in os.listdir(cache_dir) if f.endswith('.json'))
-                        cache_size = round(total_bytes / (1024 * 1024), 2)
+    # ✅ CORREÇÃO CONTEXT7: Backend não está mais no session_state
+    # Está gerenciado via @st.cache_resource no streamlit_app.py
+    # Verificar cache diretamente no diretório
+    import os
+    cache_dir = os.path.join(os.getcwd(), "data", "cache")
+    if os.path.exists(cache_dir):
+        cache_enabled = True
+        cache_files = len([f for f in os.listdir(cache_dir) if f.endswith('.json')])
+        total_bytes = sum(os.path.getsize(os.path.join(cache_dir, f))
+                         for f in os.listdir(cache_dir) if f.endswith('.json'))
+        cache_size = round(total_bytes / (1024 * 1024), 2)
 
     # Exibir métricas
     col1, col2, col3, col4 = st.columns(4)

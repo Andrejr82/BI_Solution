@@ -1,0 +1,56 @@
+================================================================================
+DIAGNOSTICO DE AMBIENTE - STREAMLIT VS PYTHON
+================================================================================
+
+1. Interpretador Python:
+   C:\Program Files\Python311\python.exe
+
+2. Versao Python:
+   3.11.0 (main, Oct 24 2022, 18:26:48) [MSC v.1933 64 bit (AMD64)]
+
+3. sys.path (primeiros 10 itens):
+   [0] C:\Users\André\Documents\Agent_Solution_BI
+   [1] C:\Program Files\Python311\python311.zip
+   [2] C:\Program Files\Python311\Lib
+   [3] C:\Program Files\Python311\DLLs
+   [4] C:\Users\André\AppData\Roaming\Python\Python311\site-packages
+   [5] C:\Users\André\AppData\Roaming\Python\Python311\site-packages\win32
+   [6] C:\Users\André\AppData\Roaming\Python\Python311\site-packages\win32\lib
+   [7] C:\Users\André\AppData\Roaming\Python\Python311\site-packages\Pythonwin
+   [8] C:\Program Files\Python311
+   [9] C:\Program Files\Python311\Lib\site-packages
+
+4. Verificando onde langgraph esta instalado:
+   langgraph: None
+
+5. Verificando onde langgraph.checkpoint esta instalado:
+   langgraph.checkpoint: None
+
+6. Listando conteudo do diretorio langgraph.checkpoint:
+   Diretorio: C:\Users\André\AppData\Roaming\Python\Python311\site-packages\langgraph\checkpoint
+   Arquivos/diretorios encontrados:
+      [DIR]  base
+      [DIR]  memory
+      [DIR]  serde
+      [DIR]  sqlite
+
+7. Tentando importar langgraph.checkpoint.sqlite:
+   OK: Importacao bem-sucedida!
+   Localizacao: C:\Users\André\AppData\Roaming\Python\Python311\site-packages\langgraph\checkpoint\sqlite\__init__.py
+
+8. Verificando variavel de ambiente PYTHONPATH:
+   PYTHONPATH: (nao definida)
+
+9. Verificando se existe arquivo sqlite.py ou diretorio sqlite/:
+   sqlite.py existe? False
+   sqlite/ existe? True
+   Conteudo de sqlite/:
+      - aio.py
+      - py.typed
+      - utils.py
+      - __init__.py
+      - __pycache__
+
+================================================================================
+FIM DO DIAGNOSTICO
+================================================================================
