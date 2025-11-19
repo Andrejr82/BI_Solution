@@ -32,3 +32,6 @@ class AgentState(TypedDict):
     parquet_filters: Optional[Dict[str, Any]]
     final_response: Optional[Dict[str, Any]] # Adicionar esta linha # Adicionar esta linha
     intent: Optional[str]
+    # 🧠 Conversational Reasoning Fields (v3.0)
+    reasoning_mode: Optional[str]  # "conversational" ou "analytical"
+    reasoning_result: Optional[Dict[str, Any]]  # Resultado completo da análise de raciocínio

@@ -1,17 +1,15 @@
 """
 Core UI Components
+
+Módulo de componentes de interface conversacional.
 """
 
-from .custom_sidebar import (
-    load_css,
-    render_sidebar,
-    render_page_header,
-    get_page_info
+from .conversational_ui_components import (
+    ConversationalUI,
+    render_response_with_reasoning
 )
 
 __all__ = [
-    'load_css',
-    'render_sidebar',
-    'render_page_header',
-    'get_page_info'
+    "ConversationalUI",
+    "render_response_with_reasoning"
 ]
