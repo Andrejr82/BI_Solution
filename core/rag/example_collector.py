@@ -4,11 +4,19 @@ ExampleCollector - Coleta automática de queries bem-sucedidas
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any, List
-from sentence_transformers import SentenceTransformer
+from typing import Dict, Any, List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Lazy import
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    logger.warning("sentence-transformers not available - ExampleCollector will work in fallback mode")
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    SentenceTransformer = None
 
 
 class ExampleCollector:
@@ -19,9 +27,21 @@ class ExampleCollector:
         Args:
             model_name: Nome do modelo sentence-transformers
         """
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model: Optional[Any] = None  # Lazy loading
         self.examples_file = os.path.join(os.getcwd(), "data", "query_examples.json")
-        logger.info("ExampleCollector inicializado")
+        logger.info("ExampleCollector inicializado (lazy load)")
+
+    def _ensure_model_loaded(self):
+        """Carrega o modelo sob demanda"""
+        if self.model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                logger.info(f"Carregando modelo {self.model_name}...")
+                self.model = SentenceTransformer(self.model_name)
+                logger.info("Modelo carregado com sucesso")
+            except Exception as e:
+                logger.error(f"Erro ao carregar modelo: {e}")
+                self.model = None
 
     def collect_successful_query(
         self,
@@ -44,8 +64,15 @@ class ExampleCollector:
         Returns:
             Dicionário com o exemplo criado
         """
-        # Gerar embedding
-        embedding = self.model.encode([user_query])[0].tolist()
+        # Garantir modelo carregado
+        self._ensure_model_loaded()
+
+        # Gerar embedding (ou None se modelo indisponível)
+        embedding = None
+        if self.model is not None:
+            embedding = self.model.encode([user_query])[0].tolist()
+        else:
+            logger.warning("Modelo não disponível - salvando sem embedding")
 
         # Normalizar query (simplificar)
         normalized = self._normalize_query(user_query)

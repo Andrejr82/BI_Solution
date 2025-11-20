@@ -223,6 +223,12 @@ JSON:
             user_query = last_message.content
             logger.info(f"Agente de BI recebeu a consulta: {user_query}")
 
+            # Adiciona uma verificação simples para perguntas de identidade
+            if re.search(r"\b(seu nome|quem é você)\b", user_query, re.IGNORECASE):
+                return {"messages": state["messages"] + [AIMessage(content="Eu sou a Caculinha, sua assistente de BI. Como posso te ajudar com seus dados?")]}
+
+
+
             # LLM para decisão de ferramenta
             tool_selection_llm = CustomLangChainLLM(llm_adapter=llm_adapter)
 

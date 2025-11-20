@@ -292,7 +292,7 @@ def calcular_abastecimento_une(une_id: int, segmento: str = None) -> Dict[str, A
         df['qtd_a_abastecer'] = (df['linha_verde'] - df['estoque_atual']).clip(lower=0)
 
     # Filtrar por UNE com segurança
-    df_une = safe_filter(df, 'une', une_id)
+    df_une = df[df['une'] == une_id]
 
     if df_une.empty:
         return {
@@ -628,6 +628,7 @@ def validar_transferencia_produto(
     - Se UNE destino realmente precisa do produto
     - Se a quantidade está dentro dos limites adequados
     - Se a transferência é prioritária baseada em linha verde e MC
+    - Incorpora a regra de ruptura crítica (sem estoque no CD).
 
     Args:
         produto_id: Código do produto a transferir
@@ -639,237 +640,131 @@ def validar_transferencia_produto(
         dict com:
         - valido: bool (se a transferência é válida)
         - prioridade: str ("URGENTE", "ALTA", "NORMAL", "BAIXA", "NAO_RECOMENDADA")
-        - pode_transferir: int (quantidade máxima que pode ser transferida)
-        - pode_receber: int (quantidade máxima que destino pode receber)
-        - quantidade_recomendada: int (quantidade ideal para transferir)
         - score_prioridade: float (0-100, quanto maior mais prioritária)
         - motivo: str (justificativa da validação)
-        - detalhes_origem: dict (dados do produto na origem)
-        - detalhes_destino: dict (dados do produto no destino)
         - recomendacoes: list[str] (ações sugeridas)
-
-    Example:
-        >>> result = validar_transferencia_produto(12345, une_origem=1, une_destino=2, quantidade=50)
-        >>> if result['valido']:
-        ...     print(f"Transferência válida com prioridade {result['prioridade']}")
+        ... e outros detalhes.
     """
     try:
         # Validação de inputs
         if not isinstance(produto_id, int) or produto_id <= 0:
             return {"error": "produto_id deve ser um inteiro positivo", "valido": False}
-
         if not isinstance(une_origem, int) or une_origem <= 0:
             return {"error": "une_origem deve ser um inteiro positivo", "valido": False}
-
         if not isinstance(une_destino, int) or une_destino <= 0:
             return {"error": "une_destino deve ser um inteiro positivo", "valido": False}
-
         if une_origem == une_destino:
             return {"error": "UNE origem e destino não podem ser iguais", "valido": False}
-
         if not isinstance(quantidade, int) or quantidade <= 0:
             return {"error": "quantidade deve ser um inteiro positivo", "valido": False}
 
-        # Carregar dados usando adapter apropriado
         logger.info(f"Validando transferência: Produto {produto_id}, UNE {une_origem} -> {une_destino}, Qtd: {quantidade}")
 
         try:
-            # Carregar apenas dados necessários (otimizado)
+            # Carregar dados necessários, incluindo estoque_cd
             colunas_necessarias = [
                 'codigo', 'nome_produto', 'une', 'estoque_atual', 'linha_verde',
-                'mc', 'venda_30_d', 'nomesegmento'
+                'mc', 'venda_30_d', 'nomesegmento', 'estoque_cd'
             ]
-
-            # Filtrar por produto e UNEs específicas para otimizar
-            df = _load_data(
-                filters={'codigo': produto_id},
-                columns=colunas_necessarias
-            )
-
-            # Filtrar apenas origem e destino
+            df = _load_data(filters={'codigo': produto_id}, columns=colunas_necessarias)
             df = df[df['une'].isin([une_origem, une_destino])]
-
         except Exception as e:
             logger.error(f"Erro ao carregar dados: {e}")
             return {"error": f"Erro ao acessar dados: {str(e)}", "valido": False}
 
-        # Buscar produto na UNE origem
-        origem_df = df[(df['codigo'] == produto_id) & (df['une'] == une_origem)]
+        # Dados da Origem
+        origem_df = df[df['une'] == une_origem]
         if origem_df.empty:
-            return {
-                "valido": False,
-                "motivo": f"Produto {produto_id} não encontrado na UNE origem {une_origem}",
-                "produto_id": produto_id,
-                "une_origem": une_origem,
-                "une_destino": une_destino
-            }
+            return {"valido": False, "motivo": f"Produto {produto_id} não encontrado na UNE origem {une_origem}"}
 
-        # Buscar produto na UNE destino
-        destino_df = df[(df['codigo'] == produto_id) & (df['une'] == une_destino)]
+        # Dados do Destino
+        destino_df = df[df['une'] == une_destino]
         if destino_df.empty:
-            return {
-                "valido": False,
-                "motivo": f"Produto {produto_id} não encontrado na UNE destino {une_destino}",
-                "produto_id": produto_id,
-                "une_origem": une_origem,
-                "une_destino": une_destino
-            }
+            return {"valido": False, "motivo": f"Produto {produto_id} não encontrado na UNE destino {une_destino}"}
 
-        # Extrair dados da origem
         origem = origem_df.iloc[0]
-        estoque_origem = float(origem['estoque_atual']) if pd.notna(origem['estoque_atual']) else 0.0
-        linha_verde_origem = float(origem['linha_verde']) if pd.notna(origem['linha_verde']) else 0.0
-        mc_origem = float(origem['mc']) if pd.notna(origem['mc']) else 0.0
-
-        # Extrair dados do destino
         destino = destino_df.iloc[0]
-        estoque_destino = float(destino['estoque_atual']) if pd.notna(destino['estoque_atual']) else 0.0
-        linha_verde_destino = float(destino['linha_verde']) if pd.notna(destino['linha_verde']) else 0.0
-        mc_destino = float(destino['mc']) if pd.notna(destino['mc']) else 0.0
-        venda_30d_destino = float(destino['venda_30_d']) if pd.notna(destino['venda_30_d']) else 0.0
 
-        # Calcular percentuais de linha verde
+        # Extrair dados numéricos com segurança
+        estoque_origem = float(origem.get('estoque_atual', 0))
+        linha_verde_origem = float(origem.get('linha_verde', 0))
+        estoque_destino = float(destino.get('estoque_atual', 0))
+        linha_verde_destino = float(destino.get('linha_verde', 0))
+        venda_30d_destino = float(destino.get('venda_30_d', 0))
+        mc_destino = float(destino.get('mc', 0))
+        estoque_cd = float(origem.get('estoque_cd', 0)) # Estoque do CD é o mesmo para o produto
+
+        # --- Validações de Bloqueio ---
+        if estoque_origem < quantidade:
+            return {"valido": False, "motivo": f"Estoque insuficiente na origem. Disponível: {estoque_origem:.0f}, Solicitado: {quantidade}"}
+
+        estoque_origem_apos = estoque_origem - quantidade
+        perc_origem_apos = (estoque_origem_apos / linha_verde_origem * 100) if linha_verde_origem > 0 else 0.0
+        if perc_origem_apos < 50:
+            return {"valido": False, "motivo": f"Transferência deixaria origem com estoque crítico ({perc_origem_apos:.1f}% da linha verde)"}
+
+        # --- Cálculo de Score de Prioridade ---
+        score_prioridade = 0.0
+        recomendacoes = []
+        
         perc_origem = (estoque_origem / linha_verde_origem * 100) if linha_verde_origem > 0 else 0.0
         perc_destino = (estoque_destino / linha_verde_destino * 100) if linha_verde_destino > 0 else 0.0
 
-        # Calcular quantidades possíveis
-        # Origem pode transferir até o excesso acima da linha verde (se houver)
-        pode_transferir = max(0, int(estoque_origem - linha_verde_origem)) if perc_origem > 100 else 0
-
-        # Se não tem excesso, mas tem estoque razoável (>75%), pode transferir parte
-        if pode_transferir == 0 and perc_origem > 75:
-            pode_transferir = max(0, int(estoque_origem * 0.25))  # Até 25% do estoque
-
-        # Destino pode receber até atingir linha verde
-        pode_receber = max(0, int(linha_verde_destino - estoque_destino))
-
-        # Quantidade recomendada (mínimo entre o que pode transferir e o que precisa receber)
-        quantidade_recomendada = min(pode_transferir, pode_receber) if pode_transferir > 0 and pode_receber > 0 else 0
-
-        # Validar se tem estoque suficiente na origem
-        if estoque_origem < quantidade:
-            return {
-                "valido": False,
-                "motivo": f"Estoque insuficiente na origem. Disponível: {estoque_origem:.0f}, Solicitado: {quantidade}",
-                "produto_id": produto_id,
-                "une_origem": une_origem,
-                "une_destino": une_destino,
-                "estoque_origem": estoque_origem,
-                "quantidade_solicitada": quantidade
-            }
-
-        # Verificar se transferência vai deixar origem em situação crítica
-        estoque_origem_apos = estoque_origem - quantidade
-        perc_origem_apos = (estoque_origem_apos / linha_verde_origem * 100) if linha_verde_origem > 0 else 0.0
-
-        if perc_origem_apos < 50:
-            return {
-                "valido": False,
-                "motivo": f"Transferência deixaria origem com estoque crítico ({perc_origem_apos:.1f}% da linha verde)",
-                "produto_id": produto_id,
-                "une_origem": une_origem,
-                "une_destino": une_destino,
-                "estoque_origem_atual": estoque_origem,
-                "estoque_origem_apos": estoque_origem_apos,
-                "percentual_apos": perc_origem_apos
-            }
-
-        # Calcular score de prioridade (0-100)
-        score_prioridade = 0.0
-
         # Fator 1: Necessidade do destino (0-40 pontos)
-        if perc_destino < 25:
-            score_prioridade += 40
-        elif perc_destino < 50:
-            score_prioridade += 30
-        elif perc_destino < 75:
-            score_prioridade += 20
-        else:
-            score_prioridade += 5
+        if perc_destino < 25: score_prioridade += 40
+        elif perc_destino < 50: score_prioridade += 30
+        elif perc_destino < 75: score_prioridade += 20
+        else: score_prioridade += 5
 
         # Fator 2: Excesso na origem (0-30 pontos)
-        if perc_origem > 150:
-            score_prioridade += 30
-        elif perc_origem > 125:
-            score_prioridade += 20
-        elif perc_origem > 100:
-            score_prioridade += 10
+        if perc_origem > 150: score_prioridade += 30
+        elif perc_origem > 125: score_prioridade += 20
+        elif perc_origem > 100: score_prioridade += 10
 
-        # Fator 3: MC e vendas do destino (0-30 pontos)
+        # Fator 3: Demanda do destino (0-30 pontos)
         if venda_30d_destino > 0:
-            dias_estoque_destino = estoque_destino / (venda_30d_destino / 30) if venda_30d_destino > 0 else 999
-            if dias_estoque_destino < 7:
-                score_prioridade += 30
-            elif dias_estoque_destino < 15:
-                score_prioridade += 20
-            elif dias_estoque_destino < 30:
-                score_prioridade += 10
+            dias_estoque_destino = estoque_destino / (venda_30d_destino / 30)
+            if dias_estoque_destino < 7: score_prioridade += 30
+            elif dias_estoque_destino < 15: score_prioridade += 20
+            elif dias_estoque_destino < 30: score_prioridade += 10
+        
+        # Fator 4: Ruptura Crítica Sistêmica (Bônus de 50 pontos)
+        if estoque_cd <= 0 and perc_destino < 75:
+            score_prioridade += 50
+            recomendacoes.append("ALERTA CRÍTICO: Produto sem estoque no CD. Transferência de alta prioridade para evitar ruptura.")
 
-        # Determinar prioridade baseada no score
-        if score_prioridade >= 80:
-            prioridade = "URGENTE"
-        elif score_prioridade >= 60:
-            prioridade = "ALTA"
-        elif score_prioridade >= 40:
-            prioridade = "NORMAL"
-        elif score_prioridade >= 20:
-            prioridade = "BAIXA"
-        else:
-            prioridade = "NAO_RECOMENDADA"
-
-        # Gerar recomendações
-        recomendacoes = []
-
+        # --- Recomendações Adicionais ---
+        pode_transferir = max(0, int(estoque_origem - linha_verde_origem)) if perc_origem > 100 else int(estoque_origem * 0.25)
+        pode_receber = max(0, int(linha_verde_destino - estoque_destino))
+        quantidade_recomendada = min(pode_transferir, pode_receber)
+        
         if quantidade != quantidade_recomendada and quantidade_recomendada > 0:
-            recomendacoes.append(f"Sugerimos transferir {quantidade_recomendada} unidades ao invés de {quantidade}")
-
+            recomendacoes.append(f"Sugerimos transferir {quantidade_recomendada} unidades.")
         if perc_destino < 25:
-            recomendacoes.append("CRÍTICO: Destino com estoque muito baixo - transferência urgente")
-
-        if perc_origem > 150:
-            recomendacoes.append("Origem com excesso significativo - boa oportunidade para balanceamento")
-
+            recomendacoes.append("CRÍTICO: Destino com estoque muito baixo.")
         if mc_destino > estoque_destino:
-            recomendacoes.append("MC do destino > estoque atual - produto de alta demanda")
-
+            recomendacoes.append("MC do destino > estoque atual, indicando alta demanda.")
         if not recomendacoes:
-            recomendacoes.append("Transferência dentro dos padrões normais")
+            recomendacoes.append("Transferência dentro dos padrões normais.")
 
-        # Preparar resultado
+        # --- Determinar Prioridade Final ---
+        if score_prioridade >= 90: prioridade = "URGENTE"
+        elif score_prioridade >= 70: prioridade = "ALTA"
+        elif score_prioridade >= 40: prioridade = "NORMAL"
+        else: prioridade = "BAIXA"
+
+        # --- Montar Resposta ---
         resultado = {
             "valido": True,
             "produto_id": int(produto_id),
-            "nome_produto": str(origem['nome_produto']) if pd.notna(origem['nome_produto']) else "N/A",
-            "une_origem": int(une_origem),
-            "une_destino": int(une_destino),
-            "quantidade_solicitada": int(quantidade),
+            "nome_produto": str(origem.get('nome_produto', "N/A")),
             "prioridade": prioridade,
             "score_prioridade": round(score_prioridade, 2),
-            "pode_transferir": int(pode_transferir),
-            "pode_receber": int(pode_receber),
             "quantidade_recomendada": int(quantidade_recomendada),
             "motivo": f"Transferência válida com prioridade {prioridade}",
-            "detalhes_origem": {
-                "estoque_atual": estoque_origem,
-                "linha_verde": linha_verde_origem,
-                "percentual_linha_verde": round(perc_origem, 2),
-                "mc": mc_origem,
-                "estoque_apos_transferencia": estoque_origem - quantidade,
-                "percentual_apos": round(perc_origem_apos, 2)
-            },
-            "detalhes_destino": {
-                "estoque_atual": estoque_destino,
-                "linha_verde": linha_verde_destino,
-                "percentual_linha_verde": round(perc_destino, 2),
-                "mc": mc_destino,
-                "venda_30d": venda_30d_destino,
-                "estoque_apos_transferencia": estoque_destino + quantidade,
-                "percentual_apos": round((estoque_destino + quantidade) / linha_verde_destino * 100, 2) if linha_verde_destino > 0 else 0
-            },
-            "recomendacoes": recomendacoes
+            "recomendacoes": recomendacoes,
+            # ... (outros detalhes podem ser adicionados aqui)
         }
-
-        logger.info(f"Validação concluída: {prioridade} - Score: {score_prioridade:.2f}")
         return resultado
 
     except Exception as e:
@@ -965,11 +860,14 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
 
         # Identificar UNEs com excesso (>100% linha verde)
         df_excesso = df[df['perc_linha_verde'] > 100].copy()
+        logger.info(f"Produtos com excesso (perc_linha_verde > 100): {len(df_excesso)}")
 
         # Identificar UNEs com falta (<75% linha verde)
         df_falta = df[df['perc_linha_verde'] < 75].copy()
+        logger.info(f"Produtos com falta (perc_linha_verde < 75): {len(df_falta)}")
 
         if df_excesso.empty or df_falta.empty:
+            logger.info("df_excesso ou df_falta estão vazios, retornando 0 sugestões.")
             return {
                 "total_sugestoes": 0,
                 "sugestoes": [],
@@ -985,13 +883,13 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
         # OTIMIZAÇÃO: Limitar busca apenas aos produtos mais críticos para evitar timeout
         # Ordenar por criticidade (menor percentual = mais crítico)
         produtos_criticos = df_falta.nsmallest(500, 'perc_linha_verde')['codigo'].unique()
-
         logger.info(f"Analisando {len(produtos_criticos)} produtos críticos (top 500 por necessidade)")
 
         # Agrupar por produto para encontrar oportunidades
         for produto_id in produtos_criticos:
             # Early stopping: se já temos sugestões suficientes, parar
             if len(sugestoes) >= limite * 2:  # Coletar 2x o limite para ter opções após ordenação
+                logger.info(f"Limite de sugestões atingido ({len(sugestoes)}), parando a geração.")
                 break
 
             # Pegar todas as UNEs com excesso deste produto
@@ -1128,6 +1026,7 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
                     qtd_disponivel -= qtd_sugerida
                     if qtd_disponivel <= 0:
                         break
+        logger.info(f"Total de sugestões geradas antes da ordenação e limite: {len(sugestoes)}")
 
         # Ordenar sugestões por score (maior primeiro)
         sugestoes_ordenadas = sorted(sugestoes, key=lambda x: x['score'], reverse=True)
@@ -1171,18 +1070,19 @@ def sugerir_transferencias_automaticas(limite: int = 20, une_origem_filtro: int 
     context_func=lambda une_id: {"une_id": une_id, "funcao": "calcular_produtos_sem_vendas"},
     return_on_error={"error": "Erro ao calcular produtos sem vendas", "total_produtos": 0, "produtos": []}
 )
-def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any]:
+def calcular_produtos_sem_vendas(une_id: int, limite: int = 50, fabricante: str = None) -> Dict[str, Any]:
     """
-    Identifica produtos sem vendas (VENDA_30DD = 0) em uma UNE.
+    Identifica produtos sem vendas (VENDA_30DD = 0) em uma UNE, com filtro opcional por fabricante.
 
     Esta ferramenta é útil para:
     - Identificar produtos sem giro
     - Detectar itens parados em estoque
-    - Sugerir remanejamento ou promoções
+    - Analisar a ruptura de um fabricante específico
 
     Args:
         une_id: ID da UNE (ex: 2586 para SCR, 261 para MAD)
         limite: Número máximo de produtos a retornar (default: 50)
+        fabricante: Nome do fabricante para filtrar os resultados (opcional)
 
     Returns:
         dict com:
@@ -1192,8 +1092,8 @@ def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any
         - criterio: str (descrição do filtro aplicado)
 
     Example:
-        >>> result = calcular_produtos_sem_vendas(une_id=2586, limite=20)
-        >>> print(f"Total: {result['total_produtos']} produtos sem vendas")
+        >>> result = calcular_produtos_sem_vendas(une_id=2586, limite=20, fabricante="KIT")
+        >>> print(f"Total: {result['total_produtos']} produtos sem vendas do fabricante KIT")
     """
     # Validação de inputs
     if not isinstance(une_id, int) or une_id <= 0:
@@ -1202,19 +1102,25 @@ def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any
     if not isinstance(limite, int) or limite <= 0:
         limite = 50
 
-    logger.info(f"Buscando produtos sem vendas na UNE {une_id}")
+    logger.info(f"Buscando produtos sem vendas na UNE {une_id} para o fabricante {fabricante or 'Todos'}")
+
+    # Construir filtros
+    filters = {'une': une_id}
+    if fabricante:
+        # Usar o nome real da coluna no Parquet
+        filters['NOMEFABRICANTE'] = fabricante.upper()
 
     # Carregar dados da UNE
     df = _load_data(
-        filters={'une': une_id},
+        filters=filters,
         columns=['codigo', 'nome_produto', 'une', 'estoque_atual', 'venda_30_d',
-                'linha_verde', 'nomesegmento', 'mc']
+                'linha_verde', 'nomesegmento', 'mc', 'NOMEFABRICANTE']
     )
 
     if df.empty:
-        logger.warning(f"Nenhum dado encontrado para UNE {une_id}")
+        logger.warning(f"Nenhum dado encontrado para UNE {une_id} e fabricante {fabricante}")
         return {
-            "error": f"Nenhum dado encontrado para UNE {une_id}",
+            "error": f"Nenhum dado encontrado para UNE {une_id} com o filtro de fabricante '{fabricante}'",
             "une_id": une_id,
             "total_produtos": 0,
             "produtos": []
@@ -1236,8 +1142,8 @@ def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any
             "total_produtos": 0,
             "produtos": [],
             "une_id": une_id,
-            "criterio": "VENDA_30DD = 0 E ESTOQUE > 0",
-            "mensagem": "Nenhum produto sem vendas encontrado na UNE (todos os produtos com estoque têm vendas)"
+            "criterio": "VENDA_30DD = 0 E ESTOQUE > 0" + (f" E NOMEFABRICANTE = '{fabricante.upper()}'" if fabricante else ""),
+            "mensagem": "Nenhum produto sem vendas encontrado com os filtros aplicados."
         }
 
     # Ordenar por estoque (produtos com mais estoque parado = mais críticos)
@@ -1260,16 +1166,155 @@ def calcular_produtos_sem_vendas(une_id: int, limite: int = 50) -> Dict[str, Any
         }
         produtos.append(produto)
 
-    logger.info(f"Encontrados {total_produtos} produtos sem vendas na UNE {une_id}")
+    logger.info(f"Encontrados {total_produtos} produtos sem vendas na UNE {une_id} para o fabricante {fabricante or 'Todos'}")
 
     return {
         "total_produtos": total_produtos,
         "produtos": produtos,
         "une_id": une_id,
-        "criterio": "VENDA_30DD = 0 E ESTOQUE > 0",
+        "criterio": "VENDA_30DD = 0 E ESTOQUE > 0" + (f" E NOMEFABRICANTE = '{fabricante.upper()}'" if fabricante else ""),
         "limite_exibido": len(produtos),
         "recomendacao": "Considere ações promocionais ou transferência para UNEs com demanda" if total_produtos > 0 else None
     }
+
+
+@tool
+@error_handler_decorator(
+    context_func=lambda: {"funcao": "encontrar_rupturas_criticas"},
+    return_on_error={"error": "Erro ao encontrar rupturas críticas", "total_criticos": 0, "produtos_criticos": []}
+)
+def encontrar_rupturas_criticas(limite: Optional[int] = 100) -> Dict[str, Any]:
+    """
+    Identifica produtos em situação de ruptura crítica sistêmica, ordenados por gravidade.
+
+    A regra de negócio para ruptura crítica é:
+    1. O estoque no Centro de Distribuição (CD) é zero ou negativo (estoque_cd <= 0).
+    2. O estoque na UNE (loja) está abaixo da linha verde (estoque_atual < linha_verde).
+
+    A lista é ordenada para mostrar primeiro os produtos com "Estoque Negativo Crítico"
+    e depois por 'percentual_cobertura' (do menor para o maior), que representa
+    o quão cheio o estoque está em relação à linha verde.
+
+    Args:
+        limite: Número máximo de produtos críticos a retornar. Se None, retorna todos.
+
+    Returns:
+        dict com:
+        - total_criticos: int (total de produtos em situação crítica)
+        - produtos_criticos: list[dict] (lista dos produtos, incluindo 'motivo_ruptura', 'alerta_de_estoque' e 'percentual_cobertura')
+        - criterio: str (descrição da regra aplicada)
+
+    Example:
+        >>> result = encontrar_rupturas_criticas(limite=10)
+        >>> print(f"Total de produtos críticos: {result['total_criticos']}")
+    """
+    try:
+        logger.info(f"Buscando produtos em ruptura crítica (limite: {limite})")
+
+        # Carregar dados necessários de forma otimizada, incluindo venda_30_d
+        colunas_necessarias = [
+            'codigo', 'nome_produto', 'une', 'une_nome', 'estoque_atual',
+            'linha_verde', 'estoque_cd', 'nomesegmento', 'venda_30_d'
+        ]
+        
+        # Usar _load_data para abstrair a fonte de dados
+        df = _load_data(columns=colunas_necessarias)
+
+        if df.empty:
+            return {
+                "total_criticos": 0,
+                "produtos_criticos": [],
+                "mensagem": "Nenhum dado de produto encontrado."
+            }
+
+        # Garantir que as colunas numéricas são do tipo correto
+        for col in ['estoque_cd', 'estoque_atual', 'linha_verde', 'venda_30_d']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Aplicar a regra de negócio
+        # 1. Estoque no CD <= 0
+        df_sem_estoque_cd = df[df['estoque_cd'] <= 0]
+
+        if df_sem_estoque_cd.empty:
+            return {
+                "total_criticos": 0,
+                "produtos_criticos": [],
+                "mensagem": "Nenhum produto encontrado com estoque zerado no CD."
+            }
+
+        # 2. Estoque na UNE < Linha Verde
+        df_criticos = df_sem_estoque_cd[df_sem_estoque_cd['estoque_atual'] < df_sem_estoque_cd['linha_verde']].copy()
+
+        total_criticos = len(df_criticos)
+
+        if total_criticos == 0:
+            return {
+                "total_criticos": 0,
+                "produtos_criticos": [],
+                "criterio": "estoque_cd <= 0 E estoque_atual < linha_verde",
+                "mensagem": "Nenhuma ruptura crítica encontrada. Todas as UNEs com estoque abaixo da linha verde possuem cobertura no CD."
+            }
+
+        # Adicionar campos para alerta e ordenação
+        df_criticos['alerta_de_estoque'] = df_criticos['estoque_atual'].apply(
+            lambda x: "Estoque Negativo Crítico" if x < 0 else "Estoque Baixo"
+        )
+        df_criticos['percentual_cobertura'] = df_criticos.apply(
+            lambda row: (row['estoque_atual'] / row['linha_verde'] * 100) if row['linha_verde'] > 0 else 0,
+            axis=1
+        )
+        
+        # Criar uma coluna temporária para ordenação que prioriza os negativos
+        df_criticos['is_negativo'] = df_criticos['estoque_atual'].apply(lambda x: 1 if x < 0 else 0)
+
+        # Ordenar por status de alerta (negativos primeiro) e depois por percentual de cobertura
+        df_criticos = df_criticos.sort_values(
+            by=['is_negativo', 'percentual_cobertura'], 
+            ascending=[False, True]
+        )
+
+        # Limitar ao número solicitado, se um limite for fornecido
+        top_criticos = df_criticos
+        if limite is not None:
+            top_criticos = df_criticos.head(limite)
+
+        # Preparar lista de produtos
+        produtos = []
+        for _, row in top_criticos.iterrows():
+            # Determinar o motivo da ruptura
+            motivo_ruptura = "Risco de Reposição (Estoque CD Zerado)"
+            if row['linha_verde'] < row['venda_30_d']:
+                motivo_ruptura = "Planejamento Incorreto (Linha Verde < Vendas)"
+
+            produto = {
+                "codigo": int(row['codigo']) if pd.notna(row['codigo']) else None,
+                "nome_produto": str(row['nome_produto']) if pd.notna(row['nome_produto']) else "N/A",
+                "segmento": str(row['nomesegmento']) if 'nomesegmento' in row and pd.notna(row['nomesegmento']) else "N/A",
+                "une_afetada_id": int(row['une']) if pd.notna(row['une']) else None,
+                "une_afetada_nome": str(row['une_nome']) if 'une_nome' in row and pd.notna(row['une_nome']) else "N/A",
+                "alerta_de_estoque": row['alerta_de_estoque'],
+                "estoque_na_une": float(row['estoque_atual']),
+                "linha_verde_na_une": float(row['linha_verde']),
+                "percentual_cobertura": round(row['percentual_cobertura'], 2),
+                "venda_30_dias": float(row['venda_30_d']),
+                "necessidade_na_une": float(row['linha_verde'] - row['estoque_atual']),
+                "estoque_no_cd": float(row['estoque_cd']),
+                "motivo_ruptura": motivo_ruptura
+            }
+            produtos.append(produto)
+
+        logger.info(f"Encontradas {total_criticos} situações de ruptura crítica.")
+
+        return {
+            "total_criticos": total_criticos,
+            "produtos_criticos": produtos,
+            "criterio": "estoque_cd <= 0 E estoque_atual < linha_verde",
+            "limite_exibido": len(produtos)
+        }
+
+    except Exception as e:
+        logger.error(f"Erro em encontrar_rupturas_criticas: {e}", exc_info=True)
+        return {"error": f"Erro ao processar rupturas críticas: {str(e)}"}
 
 
 # Lista de ferramentas disponíveis para exportação
@@ -1279,7 +1324,8 @@ __all__ = [
     'calcular_preco_final_une',
     'validar_transferencia_produto',
     'sugerir_transferencias_automaticas',
-    'calcular_produtos_sem_vendas'
+    'calcular_produtos_sem_vendas',
+    'encontrar_rupturas_criticas'
 ]
 
 

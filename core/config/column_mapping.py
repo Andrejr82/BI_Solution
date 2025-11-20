@@ -196,8 +196,12 @@ ESSENTIAL_COLUMNS = [
     'une',              # UNE (código)
     'une_nome',         # UNE (nome) - ESSENCIAL para rankings
     'nomesegmento',     # Segmento
+    'NOMEFABRICANTE',   # Fabricante - ESSENCIAL para filtros de marca
     'venda_30_d',       # Vendas
     'estoque_atual',    # Estoque
+    'linha_verde',      # Linha Verde (Estoque Máximo)
+    'quantidade_embalagem_master', # Quantidade de embalagem master
+    'quantidade_multiplo', # Quantidade múltiplo
     'preco_38_percent', # Preço
     'nomegrupo'         # Grupo
 ]

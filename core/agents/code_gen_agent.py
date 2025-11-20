@@ -1,8 +1,3 @@
-"""
-Módulo para core/agents/code_gen_agent.py. Define a classe principal 'CodeGenAgent'. Fornece as funções: generate_and_execute_code, worker.
-"""
-
-# core/agents/code_gen_agent.py
 import logging
 import os
 import json
@@ -25,7 +20,16 @@ from queue import Queue
 import pickle
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+# Lazy import - só carrega quando necessário
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    logging.getLogger(__name__).warning("sentence-transformers not available - RAG features disabled")
+    SentenceTransformer = None
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 import io
 import sys
 import plotly.io as pio
@@ -64,6 +68,19 @@ class CodeGenAgent:
         self.llm = llm_adapter
         self.data_adapter = data_adapter  # Pode ser None (fallback para path padrão)
         self.code_cache = {}
+        self.catalog_data = {}
+
+        # Carregar o catálogo de dados para fornecer contexto ao LLM
+        try:
+            catalog_path = os.path.join(os.getcwd(), "data", "catalog_focused.json")
+            if os.path.exists(catalog_path):
+                with open(catalog_path, 'r', encoding='utf-8') as f:
+                    self.catalog_data = json.load(f)
+                self.logger.info("✅ Catálogo de dados (catalog_focused.json) carregado com sucesso.")
+            else:
+                self.logger.warning("⚠️  Arquivo de catálogo 'data/catalog_focused.json' não encontrado. O agente pode ter dificuldade em interpretar entidades.")
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar o arquivo de catálogo: {e}")
 
         # ✅ CORREÇÃO v2.2: Colunas reais confirmadas em 04/11/2024
         self.column_descriptions = {
@@ -250,7 +267,7 @@ class CodeGenAgent:
                 self.logger.info("=" * 80)
                 self.logger.info("🔍 PLANO A - LOAD_DATA() COM FILTROS")
                 self.logger.info(f"   Filtros aplicados: {filters}")
-                self.logger.info(f"   Adapter: PolarsDaskAdapter (predicate pushdown)")
+                self.logger.info("   Adapter: PolarsDaskAdapter (predicate pushdown)")
 
                 try:
                     # Delegar para adapter (usa Polars ou Dask automaticamente)
@@ -446,7 +463,7 @@ class CodeGenAgent:
 
                     # Tentar extrair nome da coluna do erro
                     import re
-                    col_match = re.search(r"['\"]([^'\"]+)['\"]", error_msg)
+                    col_match = re.search(r"['\"]([^'\"']+)['\"]", error_msg)
                     if col_match:
                         missing_col = col_match.group(1)
                         self.logger.error(f"   Coluna faltante: '{missing_col}'")
@@ -550,175 +567,59 @@ class CodeGenAgent:
 
     def _build_structured_prompt(self, user_query: str, rag_examples: list = None) -> str:
         """
-        Constrói prompt estruturado seguindo Context7 2025 best practices.
-
-        Baseado em:
-        - Few-Shot Learning 2025: 2-5 exemplos variados com edge cases
-        - Chain-of-Thought 2025: Sketch-of-Thought (SoT) - raciocínio breve
-        - Developer Message Pattern + Reasoning scaffolds
-
-        Hierarquia:
-        1. Developer message - Identidade e comportamento do agente
-        2. Few-shot examples - Exemplos variados com raciocínio
-        3. User message - Query com estrutura de raciocínio
-
-        Args:
-            user_query: Query do usuário
-            rag_examples: Lista de exemplos similares do RAG (opcional)
-
-        Returns:
-            Prompt estruturado em formato string
+        Constrói prompt estruturado, agora injetando contexto do catálogo.
         """
+        # Seção de Segmentos e Fabricantes gerada dinamicamente a partir do catálogo
+        catalog_context = "## Entidades de Negócio (Segmentos e Fabricantes)\n\n"
+        catalog_context += "Para interpretar a query, use o seguinte contexto:\n\n"
+
+        if "nomesegmento" in self.catalog_data:
+            catalog_context += f"### Segmentos (coluna 'nomesegmento')\n"
+            catalog_context += f"- **Descrição**: {self.catalog_data['nomesegmento']['description']}\n"
+            catalog_context += f"- **Exemplos**: {', '.join(self.catalog_data['nomesegmento']['examples'][:5])}...\n\n"
+        
+        if "NOMEFABRICANTE" in self.catalog_data:
+            catalog_context += f"### Fabricantes (coluna 'NOMEFABRICANTE')\n"
+            catalog_context += f"- **Descrição**: {self.catalog_data['NOMEFABRICANTE']['description']}\n"
+            catalog_context += f"- **Exemplos**: {', '.join(self.catalog_data['NOMEFABRICANTE']['examples'][:5])}...\n\n"
+
+        catalog_context += "**REGRA DE OURO PARA FILTROS:**\n"
+        catalog_context += "1. Se o usuário mencionar algo como 'tecidos', 'papelaria', 'artesanato', use a coluna `nomesegmento`.\n"
+        catalog_context += "2. Se o usuário mencionar uma marca ou fornecedor como 'KIT', 'EURO ROMA', 'LINEA', 'CÍRCULO', use a coluna `NOMEFABRICANTE`.\n"
+        catalog_context += "3. Na dúvida, verifique se o termo da query está na lista de exemplos de `NOMEFABRICANTE`.\n"
 
         # 1️⃣ DEVELOPER MESSAGE - Identidade e Comportamento (Context7 2025)
-        developer_context = f"""# 🤖 Analista Python Especializado em BI da UNE
+        developer_context = f"""
+# 🤖 Analista Python Especializado em BI da UNE
 
 Gere código Python eficiente para análise de vendas da UNE usando raciocínio estruturado e regras de negócio.
 
 ## Dataset Parquet
-- `venda_30_d`: Vendas dos últimos 30 dias
-- `estoque_atual`: Estoque total da UNE (soma de estoque_lv + estoque_cd)
-- `estoque_lv`: Estoque na Linha Verde (área de venda)
-- `estoque_cd`: Estoque no Centro de Distribuição
-- `mes_01` a `mes_12`: Vendas mensais (mes_01 = mês MAIS RECENTE, mes_12 = mais antigo)
-- `une`: ID numérico da loja (ex: 1, 2586, 2720)
-- `une_nome`: Nome da UNE (ex: SCR, MAD, 261, ALC, NIL)
-- `nomesegmento`: Segmento do produto (TECIDOS, PAPELARIA, etc.)
-- `NOMECATEGORIA`: Categoria do produto
-- `preco_38_percent`: Preço com 38% de margem (atacado)
+- Análise Temporal: Dataset possui colunas de vendas mensais (mes_01 a mes_12) e vendas dos últimos 30 dias (venda_30_d).
+- `estoque_atual`: Estoque total da UNE
+- `nomesegmento`: Segmento do produto (Ex: TECIDOS, PAPELARIA)
+- `NOMEFABRICANTE`: Fabricante/Fornecedor do produto (Ex: KIT, CÍRCULO)
 - Colunas: {', '.join(list(self.column_descriptions.keys())[:15])}...
 
-## Regras de Negócio UNE (CRÍTICO)
-
-### 1. MC (Média Comum):
-- Média calculada: (últimos 12 meses) + (últimos 3 meses) + (ano anterior)
-- Regula abastecimento automático
-- Quando analisar tendências, considere mes_01 a mes_12
-
-### 2. Linha Verde (Ponto de Pedido):
-- LV = estoque + estoque_gondola + estoque_ilha
-- Disparo quando: estoque_atual ≤ 50% da Linha Verde
-- Volume disparado = (LV - estoque_atual)
-
-### 3. Política de Preços (Ranking 0-4):
-- Atacado: compras ≥ R$ 750,00 (38% desconto)
-- Varejo: compras < R$ 750,00 (desconto varia por RANK)
-- Use `preco_38_percent` para análises de preço
-
-### 4. Perfil de Produtos:
-- **Direcionador**: Necessidade primária (Papel, Tecidos, Canetas)
-- **Complementar**: Complementa direcionador (Grampos, Tesouras)
-- **Impulso**: Compra por desejo (Chocolates, Decoração)
-
-### 5. Análise por UNE:
-- UNE é identificada por `une` (ID) ou `une_nome` (nome)
-- Principais UNEs: SCR, MAD, 261, ALC, NIL
-- Sempre use `une_nome` para exibição (mais legível)
+{catalog_context}
 
 ## Regras Essenciais de Código
-1. **Nomes EXATOS** de colunas (case-sensitive)
-2. **Validação flexível**: `if 'col' in df.columns` antes de usar
-3. **Retorne** em `result`: dict, DataFrame ou Plotly Figure
-4. **Comentários** explicativos no código
-5. **Trate casos extremos**: dados vazios, valores nulos, divisão por zero
-6. **mes_01 é o MAIS RECENTE**: Para análises temporais, ordene corretamente
-7. **DataFrame de linha única**: Se os dados de entrada forem uma lista com um único dicionário (ex: `[{{'produto': 'A', 'vendas': 100}}]`), garanta que o DataFrame seja criado corretamente. O `pd.DataFrame(minha_lista)` já lida com isso, mas evite construções que possam tratar os valores como escalares.
-
-## 🚨 CRÍTICO: Gráficos de Evolução Temporal (mes_01 a mes_12)
-
-Quando criar gráficos de evolução/tendência usando colunas mes_01 a mes_12:
-
-**❌ ERRADO - Causa erro "must pass an index":**
-```python
-# Filtrar um único produto
-df_produto = df[df['codigo'] == 592294].iloc[0]  # Retorna Series (scalars)
-
-# Tentar criar DataFrame - ERRO!
-vendas_mensais = {{
-    'Mês 1': df_produto['mes_01'],  # scalar
-    'Mês 2': df_produto['mes_02'],  # scalar
-    # ...
-}}
-df_temporal = pd.DataFrame(vendas_mensais)  # ❌ ERRO: "must pass an index"
-```
-
-**✅ CORRETO - Sempre use listas ou especifique index:**
-```python
-# Filtrar um único produto
-df_produto = df[df['codigo'] == 592294].iloc[0]
-
-# SOLUÇÃO 1: Envolver valores em listas
-meses = ['Mês 1', 'Mês 2', 'Mês 3', 'Mês 4', 'Mês 5', 'Mês 6',
-         'Mês 7', 'Mês 8', 'Mês 9', 'Mês 10', 'Mês 11', 'Mês 12']
-vendas = [df_produto['mes_01'], df_produto['mes_02'], df_produto['mes_03'],
-          df_produto['mes_04'], df_produto['mes_05'], df_produto['mes_06'],
-          df_produto['mes_07'], df_produto['mes_08'], df_produto['mes_09'],
-          df_produto['mes_10'], df_produto['mes_11'], df_produto['mes_12']]
-df_temporal = pd.DataFrame({{'periodo': meses, 'vendas': vendas}})  # ✅ OK
-
-# SOLUÇÃO 2: Usar .values e reshape
-cols_meses = ['mes_01', 'mes_02', 'mes_03', 'mes_04', 'mes_05', 'mes_06',
-              'mes_07', 'mes_08', 'mes_09', 'mes_10', 'mes_11', 'mes_12']
-vendas = df_produto[cols_meses].values  # array
-df_temporal = pd.DataFrame({{
-    'periodo': [f'Mês {{i+1}}' for i in range(12)],
-    'vendas': vendas
-}})  # ✅ OK
-
-# Criar gráfico
-result = px.line(df_temporal, x='periodo', y='vendas',
-                 title=f'Evolução de Vendas - Produto {{df_produto["codigo"]}}',
-                 markers=True)
-```
-
-**Regra de Ouro para Evolução**: Sempre extraia valores de mes_XX como listas/arrays, NUNCA como dict de scalars!
-**CRÍTICO**: Se você filtrar uma ÚNICA linha (ex: `df_produto = df[df['codigo'] == 123].iloc[0]`), o resultado é uma `Series`. Para criar um DataFrame temporal a partir dela, você DEVE converter os valores `mes_XX` em uma lista ou um novo DataFrame, como nos exemplos CORRETOS acima. NUNCA tente criar um DataFrame diretamente de uma `Series` de escalares para `mes_XX`!
-
-## Padrões de Ranking
-- "top N" ou "ranking N" → `.head(N)`
-- "todas as lojas/produtos" → **SEM** `.head()`
-- "ranking" sem número → `.head(10)` (padrão)
-
-## Visualização (Plotly)
-- **Gráficos de barra**: `px.bar()` para rankings, comparações
-- **Gráficos de linha**: `px.line()` para séries temporais (mes_01 a mes_12)
-- **Pizza**: `px.pie()` para distribuições percentuais
-- **Template**: `'plotly_white'` (obrigatório)
-- **Sempre defina**: `title`, `labels`, `color_discrete_sequence`
-- **Ordenação**: Use `sort_values()` ANTES de plotar rankings
+1. **Nomes EXATOS** de colunas (case-sensitive): `nomesegmento`, `NOMEFABRICANTE`.
+2. **Validação flexível**: `if 'col' in df.columns` antes de usar.
+3. **Retorne** em `result`: dict, DataFrame ou Plotly Figure.
+4. **Comentários** explicativos no código.
+5. **Trate casos extremos**: dados vazios, valores nulos.
 """
-
-        # 2️⃣ FEW-SHOT EXAMPLES - Context7 2025: 2-5 exemplos com variedade
+        # O resto do método continua como antes...
         few_shot_section = ""
         if rag_examples and len(rag_examples) > 0:
-            # 🎯 MELHORIA 2025: Usar 3 exemplos (não apenas 1) para melhor generalização
             num_examples = min(3, len(rag_examples))
             few_shot_section = "\n\n# 📚 EXEMPLOS DE REFERÊNCIA (Few-Shot Learning)\n\n"
             few_shot_section += "Analise estes exemplos para entender o padrão, mas adapte para a query atual.\n\n"
-
             for i, ex in enumerate(rag_examples[:num_examples], 1):
                 similarity = ex.get('similarity_score', 0)
-
-                # 🎯 MELHORIA 2025: Adicionar raciocínio no exemplo (não só código)
-                few_shot_section += f"""## Exemplo {i} (Relevância: {similarity:.1%})
-
-**Input:** "{ex.get('query_user', 'N/A')}"
-
-**Raciocínio:** {self._extract_reasoning_from_example(ex)}
-
-**Código Python:**
-```python
-{ex.get('code_generated', 'N/A')}
-```
-
-**Output:** {ex.get('result_type', 'success')} | {ex.get('rows_returned', 0)} registros
-
----
-
-"""
-
-        # 3️⃣ USER MESSAGE - Context7 2025: Chain-of-Thought estruturado (SoT)
-        # Sketch-of-Thought: Breve outline de raciocínio (não verboso)
+                few_shot_section += f"## Exemplo {i} (Relevância: {similarity:.1%})\n\n**Input:** \"{ex.get('query_user', 'N/A')}\"\n\n**Raciocínio:** {self._extract_reasoning_from_example(ex)}\n\n**Código Python:**\n```python\n{ex.get('code_generated', 'N/A')}\n```\n\n**Output:** {ex.get('result_type', 'success')} | {ex.get('rows_returned', 0)} registros\n\n---\n\n"
+        
         user_message = f"""
 ## Query Atual
 {user_query}
@@ -727,16 +628,14 @@ result = px.line(df_temporal, x='periodo', y='vendas',
 Antes de gerar o código, considere:
 
 1. **Objetivo**: O que o usuário quer descobrir?
-2. **Dados necessários**: Quais colunas usar?
+2. **Dados necessários**: Quais colunas usar? `nomesegmento` ou `NOMEFABRICANTE`?
 3. **Transformações**: Filtros, agregações, ordenação?
 4. **Saída**: Tabela, gráfico ou métrica?
 
-Agora gere código Python limpo usando `load_data()` que retorne o resultado em `result`.
+Agora gere código Python limpo usando `load_data()`.
+O script DEVE terminar atribuindo o resultado final à variável `result`.
 """
-
-        # CONCATENAR SEÇÕES (Context7 2025 optimized)
         full_prompt = developer_context + few_shot_section + user_message
-
         return full_prompt
 
     def _extract_reasoning_from_example(self, example: Dict[str, Any]) -> str:
@@ -850,8 +749,7 @@ Agora gere código Python limpo usando `load_data()` que retorne o resultado em 
             intent_markers.append('rank')
 
         # Detectar segmento específico (extrair para evitar cache cruzado)
-        import re as regex_module
-        segment_match = regex_module.search(r'(tecido|papelaria|armarinho|festas|artes|casa|decoração|higiene|beleza|esporte|lazer|bazar|elétrica|limpeza|sazonais|informática|embalagens)', query_lower)
+        segment_match = re.search(r'(tecido|papelaria|armarinho|festas|artes|casa|decoração|higiene|beleza|esporte|lazer|bazar|elétrica|limpeza|sazonais|informática|embalagens)', query_lower)
         if segment_match:
             intent_markers.append(f'seg_{segment_match.group(1)}')
 
@@ -1225,70 +1123,27 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
                         'schema_columns': schema_columns
                     }
 
-                    # Tentar curar (máximo 2 retries)
-                    success, corrected_code, explanation = self.self_healing.heal_after_error(
+                    # Validar e tentar curar
+                    is_valid, healed_code, feedback = self.self_healing.validate_and_heal(
                         code_to_execute,
-                        e,
-                        healing_context,
-                        max_retries=2
+                        healing_context
                     )
 
-                    if success and corrected_code != code_to_execute:
-                        self.logger.info(f"✅ Self-Healing: {explanation}")
-                        self.logger.info(f"🔄 Tentando novamente com código corrigido...")
+                    if feedback:
+                        for msg in feedback:
+                            self.logger.info(f"🔧 Self-Healing: {msg}")
 
-                        # Limpar cache e atualizar com código corrigido
-                        if cache_key in self.code_cache:
-                            del self.code_cache[cache_key]
+                    if healed_code != code_to_execute:
+                        self.logger.info("✅ Código auto-corrigido pelo SelfHealingSystem")
+                        code_to_execute = healed_code
 
-                        self.code_cache[cache_key] = corrected_code
+                    if not is_valid:
+                        self.logger.warning("⚠️ Self-Healing detectou problemas que podem causar erro")
 
-                        # Retry com código corrigido (máximo 1 vez)
-                        if self._healing_retry_count < 1:
-                            self._healing_retry_count += 1
-                            try:
-                                # Re-executar com código corrigido
-                                local_scope = {
-                                    "pd": pd,
-                                    "px": px,
-                                    "result": None,
-                                    "df_raw_data": pd.DataFrame(raw_data) if raw_data else None,
-                                }
-                                result = self._execute_generated_code(corrected_code, local_scope)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Erro no Self-Healing pré-execução: {e}")
 
-                                # Sucesso! Retornar resultado
-                                self.logger.info("✅ Self-Healing: Código corrigido executado com sucesso!")
-                                delattr(self, '_healing_retry_count')
-
-                                # Processar resultado normalmente
-                                if isinstance(result, pd.DataFrame):
-                                    self._log_successful_query(user_query, corrected_code, len(result))
-                                    return {"type": "dataframe", "output": result}
-                                elif isinstance(result, pd.Series):
-                                    result_df = result.reset_index()
-                                    self._log_successful_query(user_query, corrected_code, len(result_df))
-                                    return {"type": "dataframe", "output": result_df}
-                                elif 'plotly' in str(type(result)):
-                                    self._log_successful_query(user_query, corrected_code, 1)
-                                    return {"type": "chart", "output": pio.to_json(result)}
-                                else:
-                                    return {"type": "text", "output": str(result)}
-
-                            except Exception as retry_error:
-                                self.logger.warning(f"⚠️ Self-Healing retry falhou: {retry_error}")
-                                delattr(self, '_healing_retry_count')
-                        else:
-                            delattr(self, '_healing_retry_count')
-
-                    else:
-                        self.logger.warning(f"⚠️ Self-Healing não conseguiu corrigir automaticamente")
-
-                except Exception as healing_error:
-                    self.logger.warning(f"⚠️ Erro no Self-Healing pós-erro: {healing_error}")
-                    if hasattr(self, '_healing_retry_count'):
-                        delattr(self, '_healing_retry_count')
-
-            # 🔄 AUTO-RECOVERY: Detectar erros comuns e limpar cache (fallback)
+            # ⚠️ AUTO-RECOVERY: Detectar erros comuns e limpar cache (fallback)
             should_retry = False
 
             if "'DataFrame' object has no attribute 'compute'" in error_msg or \
@@ -1321,13 +1176,13 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
                 # Limpar apenas o cache desta query específica
                 if cache_key in self.code_cache:
                     del self.code_cache[cache_key]
-                    self.logger.info(f"✅ Cache da query removido: {cache_key[:50]}...")
+                    self.logger.info(f"✅ Cache da query removido: {str(cache_key)[:50]}...")
 
                 # Tentar novamente (recursivo) - APENAS UMA VEZ
                 if not hasattr(self, '_retry_flag'):
                     self._retry_flag = True
                     try:
-                        result = self.generate_and_execute_code(user_query, raw_data, **kwargs)
+                        result = self.generate_and_execute_code(input_data)
                         return result
                     finally:
                         delattr(self, '_retry_flag')
@@ -1620,5 +1475,4 @@ Se precisar do ID numérico, use a coluna 'une' (minúsculo).
 3. Aplique filtros (segmento, preço, etc.)
 4. Defina um período de tempo
 
-**💡 Sugestão:** Tente 'Top 10 produtos mais vendidos da UNE [código]'
-"""
+**💡 Sugestão:** Tente 'Top 10 produtos mais vendidos da UNE [código]'"""

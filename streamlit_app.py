@@ -490,8 +490,8 @@ if not st.session_state.authenticated or sessao_expirada():
     login()
 else:
     # --- Configuração da Página ---
-    st.set_page_config(page_title="Assistente de Negócios", page_icon="📊", layout="wide")
-    st.title("📊 Assistente de Negócios")
+    st.set_page_config(page_title="Analisador de Dados Caçulinha", page_icon="📊", layout="wide")
+    st.title("📊 Analisador de Dados Caçulinha")
 
     # --- Inicialização do Backend Integrado ---
     @st.cache_resource(show_spinner=False)
@@ -583,7 +583,7 @@ else:
             # Mostrar status da fonte de dados no sidebar APENAS para admins
             user_role = st.session_state.get('role', '')
             if user_role == 'admin':
-                with st.sidebar:
+                with st.sidebar.expander("📦 Detalhes da Fonte de Dados (Admin)", expanded=False):
                     fonte_icon = "🗄️" if adapter_status['current_source'] == 'sqlserver' else "📦"
                     fonte_nome = "SQL Server" if adapter_status['current_source'] == 'sqlserver' else "Parquet"
 
@@ -703,21 +703,6 @@ else:
     with st.sidebar:
         st.write(f"Bem-vindo, {st.session_state.get('username', '')}!")
         st.write(f"DEBUG: Role do usuário (sidebar): {st.session_state.get('role', '')}") # LINHA DE DEBUG
-        if st.button("Logout"):
-            st.session_state.authenticated = False
-            st.session_state.username = ""
-            st.session_state.role = ""
-            # Clear chat history on logout
-            st.session_state.messages = [
-                {
-                    "role": "assistant",
-                    "content": {
-                        "type": "text",
-                        "content": "Você foi desconectado. Faça login para continuar."
-                    }
-                }
-            ]
-            st.rerun()
 
     # --- Modo de Consulta: 100% IA ---
     with st.sidebar:
@@ -729,21 +714,21 @@ else:
         st.subheader("✨ Análise Inteligente com IA")
 
         st.info("""
-            **Sistema 100% IA Ativo**
-            - Análise inteligente de dados
-            - Qualquer tipo de pergunta
-            - Respostas precisas e confiáveis
-            - Processamento otimizado
+            **Converse com a Caçulinha!**
+            - Eu sou sua assistente de BI.
+            - Faça perguntas sobre seus dados.
+            - Peça análises e gráficos.
+            - Estou aqui para ajudar!
         """)
 
         st.caption("💡 Alimentado por IA avançada (Gemini 2.5)")
 
-    # --- Painel de Controle (Admin) ---
+    # --- Painel de Administração ---
     user_role = st.session_state.get('role', '')
     if user_role == 'admin':
         with st.sidebar:
             st.divider()
-            with st.expander("⚙️ Painel de Controle (Admin)", expanded=False):
+            with st.expander("⚙️ Administração", expanded=False):
                 st.subheader("💾 Gerenciamento de Cache")
 
                 # Estatísticas do cache
@@ -769,47 +754,43 @@ else:
                 except Exception as e:
                     st.error(f"Erro ao carregar estatísticas do cache: {e}")
 
-    # --- Quick Actions (Perguntas Rápidas) - Apenas para Admin ---
-    user_role = st.session_state.get('role', '')
-    if user_role == 'admin':
-        with st.sidebar:
-            st.divider()
-            # Perguntas Rápidas (Ocultas - pode ser reativado via checkbox)
-            if st.checkbox("⚡ Mostrar Perguntas Rápidas", value=False, key="show_quick_questions"):
-                st.subheader("⚡ Perguntas Rápidas")
+                st.divider()
+                # Perguntas Rápidas (Ocultas - pode ser reativado via checkbox)
+                if st.checkbox("⚡ Mostrar Perguntas Rápidas", value=False, key="show_quick_questions"):
+                    st.subheader("⚡ Perguntas Rápidas")
 
-                # Perguntas populares por categoria
-                quick_actions = {
-                    "🎯 Vendas": [
-                        "Produto mais vendido",
-                        "Top 10 produtos",
-                        "Ranking de vendas na une scr"
-                    ],
-                    "🏬 UNEs/Lojas": [
-                        "Ranking de vendas por UNE",
-                        "Top 5 produtos da une 261",
-                        "Vendas totais de cada une"
-                    ],
-                    "🏪 Segmentos": [
-                        "Qual segmento mais vendeu?",
-                        "Top 10 produtos do segmento TECIDOS",
-                        "Ranking dos segmentos"
-                    ],
-                    "📈 Análises": [
-                        "Evolução de vendas dos últimos 12 meses",
-                        "Produtos sem movimento",
-                        "Análise ABC de produtos"
-                    ]
-                }
+                    # Perguntas populares por categoria
+                    quick_actions = {
+                        "🎯 Vendas": [
+                            "Produto mais vendido",
+                            "Top 10 produtos",
+                            "Ranking de vendas na une scr"
+                        ],
+                        "🏬 UNEs/Lojas": [
+                            "Ranking de vendas por UNE",
+                            "Top 5 produtos da une 261",
+                            "Vendas totais de cada une"
+                        ],
+                        "🏪 Segmentos": [
+                            "Qual segmento mais vendeu?",
+                            "Top 10 produtos do segmento TECIDOS",
+                            "Ranking dos segmentos"
+                        ],
+                        "📈 Análises": [
+                            "Evolução de vendas dos últimos 12 meses",
+                            "Produtos sem movimento",
+                            "Análise ABC de produtos"
+                        ]
+                    }
 
-                for categoria, perguntas in quick_actions.items():
-                    with st.expander(categoria, expanded=False):
-                        for pergunta in perguntas:
-                            if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
-                                # Adicionar pergunta ao session state
-                                st.session_state['pergunta_selecionada'] = pergunta
+                    for categoria, perguntas in quick_actions.items():
+                        with st.expander(categoria, expanded=False):
+                            for pergunta in perguntas:
+                                if st.button(pergunta, key=f"qa_{pergunta}", use_container_width=True):
+                                    # Adicionar pergunta ao session state
+                                    st.session_state['pergunta_selecionada'] = pergunta
 
-                st.caption("💡 Clique para executar")
+                    st.caption("💡 Clique para executar")
 
     # --- Estado da Sessão ---
 
@@ -821,7 +802,7 @@ else:
                 "role": "assistant",
                 "content": {
                     "type": "text",
-                    "content": "Olá! Como posso te ajudar?"
+                    "content": "Olá! Eu sou a Caçulinha, sua assistente de BI. O que vamos analisar hoje?"
                 }
             }
         ]
@@ -1586,7 +1567,8 @@ else:
                             column_config=column_config,  # Formatação personalizada por coluna
                             row_height=35,  # Altura compacta para melhor densidade visual
                             on_select="rerun",  # Recarregar app quando linhas forem selecionadas
-                            selection_mode="multi-row"  # Permitir seleção de múltiplas linhas
+                            selection_mode="multi-row",  # Permitir seleção de múltiplas linhas
+                            key=f"dataframe_main_{i}"  # ✅ FIX: Key único para evitar erro de ID duplicado
                         )
 
                         # Mostrar linhas selecionadas (se houver)
@@ -1603,7 +1585,8 @@ else:
                                         selected_data,
                                         use_container_width=True,
                                         hide_index=True,
-                                        column_config=column_config
+                                        column_config=column_config,
+                                        key=f"dataframe_selected_{i}"  # ✅ FIX: Key único
                                     )
 
                                     # Botão para exportar apenas selecionados
@@ -1636,7 +1619,8 @@ else:
                             hide_index=True,
                             row_height=35,  # Mesma densidade visual
                             on_select="rerun",
-                            selection_mode="multi-row"
+                            selection_mode="multi-row",
+                            key=f"dataframe_fallback_{i}"  # ✅ FIX: Key único
                         )
                         st.info(f"📊 {len(content)} registros encontrados")
                 else:
@@ -1656,9 +1640,9 @@ else:
 
                 # Renderizar conteúdo textual
                 if isinstance(content, str):
-                    st.markdown(content)
+                    st.markdown(content, unsafe_allow_html=True)
                 else:
-                    st.markdown(str(content))
+                    st.markdown(str(content), unsafe_allow_html=True)
 
                 # 📥 BOTÕES DE DOWNLOAD
                 download_data = response_data.get("download_data", [])
@@ -1789,6 +1773,24 @@ else:
         st.session_state.pergunta_selecionada = None  # Limpar para não processar novamente
         query_backend(pergunta)
         st.rerun()
+
+    with st.sidebar:
+        st.divider()
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.session_state.username = ""
+            st.session_state.role = ""
+            # Clear chat history on logout
+            st.session_state.messages = [
+                {
+                    "role": "assistant",
+                    "content": {
+                        "type": "text",
+                        "content": "Você foi desconectado. Faça login para continuar."
+                    }
+                }
+            ]
+            st.rerun()
 
     if prompt := st.chat_input("Faça sua pergunta..."):
         query_backend(prompt)

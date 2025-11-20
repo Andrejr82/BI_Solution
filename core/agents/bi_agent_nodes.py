@@ -340,6 +340,12 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
             "confidence": 0.92,
             "reasoning": "Cálculo de preço - regra de negócio UNE"
         },
+        {
+            "query": "quais segmentos estão com ruptura na une scr?",
+            "intent": "une_operation",
+            "confidence": 0.98,
+            "reasoning": "Análise de 'ruptura' (estoque <= 0) por segmento, requer script Python"
+        },
         # python_analysis
         {
             "query": "qual produto mais vende no segmento tecidos?",
@@ -707,12 +713,14 @@ def execute_query(state: AgentState, parquet_adapter: ParquetAdapter, required_c
 
     # ✅ LOG DETALHADO DOS RESULTADOS
     if isinstance(retrieved_data, list):
-        if retrieved_data and "error" in retrieved_data[0]:
+        if retrieved_data and isinstance(retrieved_data[0], dict) and "error" in retrieved_data[0]:
             logger.error(f"❌ QUERY ERROR: {retrieved_data[0]}")
         else:
             logger.info(f"✅ QUERY SUCCESS: Retrieved {len(retrieved_data)} rows")
-            if retrieved_data:
-                logger.info(f"📋 SAMPLE DATA COLUMNS: {list(retrieved_data[0].keys()) if retrieved_data else 'No data'}")
+            if retrieved_data and isinstance(retrieved_data[0], dict):
+                logger.info(f"📋 SAMPLE DATA COLUMNS: {list(retrieved_data[0].keys())}")
+            elif retrieved_data:
+                logger.warning(f"⚠️ First item is not dict: {type(retrieved_data[0])}")
     else:
         logger.warning(f"⚠️ UNEXPECTED DATA TYPE: {type(retrieved_data)}")
 
@@ -736,14 +744,44 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
     logger.info(f"🐍 Python CodeGen - Data available: {len(raw_data) if raw_data else 'No pre-loaded data'}")
 
     # Verifica se o estado de erro já foi definido por um nó anterior
-    if raw_data and isinstance(raw_data, list) and raw_data and "error" in raw_data[0]:
+    if raw_data and isinstance(raw_data, list) and len(raw_data) > 0 and isinstance(raw_data[0], dict) and "error" in raw_data[0]:
         return {"final_response": {"type": "text", "content": raw_data[0]["error"]}}
 
     try:
+        # Carregar o catálogo de dados para fornecer contexto ao LLM
+        catalog_context = ""
+        try:
+            catalog_path = os.path.join(os.getcwd(), "data", "catalog_focused.json")
+            if os.path.exists(catalog_path):
+                with open(catalog_path, 'r', encoding='utf-8') as f:
+                    catalog_data = json.load(f)
+                
+                catalog_context = "## Entidades de Negócio (Segmentos e Fabricantes)\n\n"
+                catalog_context += "Para interpretar a query, use o seguinte contexto:\n\n"
+
+                if "nomesegmento" in catalog_data:
+                    catalog_context += f"### Segmentos (coluna 'nomesegmento')\n"
+                    catalog_context += f"- **Descrição**: {catalog_data['nomesegmento']['description']}\n"
+                    catalog_context += f"- **Exemplos**: {', '.join(catalog_data['nomesegmento']['examples'][:5])}...\n\n"
+                
+                if "NOMEFABRICANTE" in catalog_data:
+                    catalog_context += f"### Fabricantes (coluna 'NOMEFABRICANTE')\n"
+                    catalog_context += f"- **Descrição**: {catalog_data['NOMEFABRICANTE']['description']}\n"
+                    catalog_context += f"- **Exemplos**: {', '.join(catalog_data['NOMEFABRICANTE']['examples'][:5])}...\n\n"
+
+                catalog_context += "**REGRA DE OURO PARA FILTROS:**\n"
+                catalog_context += "1. Se o usuário mencionar algo como 'tecidos', 'papelaria', 'artesanato', use a coluna `nomesegmento`.\n"
+                catalog_context += "2. Se o usuário mencionar uma marca ou fornecedor como 'KIT', 'EURO ROMA', 'LINEA', 'CÍRCULO', use a coluna `NOMEFABRICANTE`.\n"
+                catalog_context += "3. Na dúvida, verifique se o termo da query está na lista de exemplos de `NOMEFABRICANTE`.\n"
+        except Exception as e:
+            logger.error(f"❌ Erro ao carregar o arquivo de catálogo: {e}")
+
+
         # Cenário 1: Análise complexa, sem dados pré-carregados.
         # O CodeGenAgent deve fazer o trabalho completo.
         if not raw_data:
             prompt_for_code_gen = f"""
+            {catalog_context}
             **TAREFA:** Você deve escrever um script Python para responder à pergunta do usuário.
 
             **INSTRUÇÕES OBRIGATÓRIAS:**
@@ -754,24 +792,41 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
             **REGRAS OBRIGATÓRIAS:**
             1. **SEMPRE defina variáveis antes de usar:** Se usar `produto_id`, defina antes (ex: `produto_id = 369947`)
             2. **Produtos em Excesso:** Filtre `estoque_atual > linha_verde`
-            3. **"em todas as UNEs":** Use merge para incluir UNEs com venda = 0
-            4. **Evite variáveis não definidas:** NÃO use `produto_id`, `une_id`, etc. sem definir primeiro
+            3. **"linha verde" NÃO é segmento:** É uma COLUNA (linha_verde) que indica meta de estoque
+            4. **Produtos que precisam ajuste na linha verde:** Filtre onde `estoque_atual != linha_verde`
+            5. **UNE:** Filtre por `une_nome` (ex: 'BON', 'TAQ', 'TIJ'), NÃO por código numérico
+            6. **Análise Temporal:** Dataset só tem venda_30_d (últimos 30 dias). NÃO há colunas de mês/trimestre
+            7. **"em todas as UNEs":** Use merge para incluir UNEs com venda = 0
+            8. **Top N:** Use `.head(N)` após ordenar, ou `.nlargest(N, coluna)`
 
-            **Exemplo 1 - Gráfico simples por segmento:**
+            **Exemplo 1 - Top 10 produtos por UNE:**
             ```python
             df = load_data()
+            # Filtrar UNE (use nome em maiúsculas)
+            df_une = df[df['une_nome'].str.upper() == 'TIJ']
+            # Top 10 por vendas
+            top10 = df_une.nlargest(10, 'venda_30_d')[['nome_produto', 'venda_30_d']]
+            result = top10
+            ```
 
-            # Filtrar segmento
-            df_tecidos = df[df['nomesegmento'].str.upper() == 'TECIDOS']
+            **Exemplo 2 - Produtos precisando ajuste na linha verde:**
+            ```python
+            df = load_data()
+            # Filtrar UNE
+            df_une = df[df['une_nome'].str.upper() == 'BON']
+            # linha_verde é COLUNA, não segmento!
+            df_ajuste = df_une[df_une['estoque_atual'] != df_une['linha_verde']]
+            result = df_ajuste[['nome_produto', 'estoque_atual', 'linha_verde']]
+            ```
 
-            # Agrupar por UNE
-            vendas_une = df_tecidos.groupby('une_nome')['venda_30_d'].sum().reset_index()
-            vendas_une = vendas_une.sort_values('venda_30_d', ascending=False)
-
-            # Gráfico
-            import plotly.express as px
-            result = px.bar(vendas_une, x='une_nome', y='venda_30_d',
-                           title='Vendas Tecidos por UNE')
+            **Exemplo 3 - Segmentos por vendas (NÃO há dados temporais):**
+            ```python
+            df = load_data()
+            # Filtrar UNE
+            df_une = df[df['une_nome'].str.upper() == 'TAQ']
+            # Agrupar por segmento (só temos venda_30_d, sem histórico mensal!)
+            segmentos = df_une.groupby('nomesegmento')['venda_30_d'].sum().sort_values(ascending=False)
+            result = segmentos.reset_index()
             ```
 
 
@@ -848,14 +903,24 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
             # ✅ CORREÇÃO: Converter DataFrame para lista de dicionários
             df_result = code_gen_response.get("output")
 
-            # Garantir que seja DataFrame
+            # Garantir que seja DataFrame ou lista
             if isinstance(df_result, pd.DataFrame):
                 data_list = df_result.to_dict(orient='records')
-            else:
+            elif isinstance(df_result, list):
                 data_list = df_result
+            else:
+                # Se não for DataFrame nem lista, tratar como erro
+                logger.error(f"❌ Expected DataFrame or list, got {type(df_result)}: {df_result}")
+                return {
+                    "final_response": {
+                        "type": "text",
+                        "content": f"Erro: resultado inesperado do tipo {type(df_result).__name__}",
+                        "user_query": user_query
+                    }
+                }
 
             logger.info(f"📊 Converted DataFrame to {len(data_list)} records")
-            logger.info(f"📊 Sample record keys: {list(data_list[0].keys()) if data_list else 'Empty'}")
+            logger.info(f"📊 Sample record keys: {list(data_list[0].keys()) if (isinstance(data_list, list) and len(data_list) > 0) else 'Empty'}")
             return {"retrieved_data": data_list}
 
         elif code_gen_response.get("type") == "text":
@@ -919,8 +984,10 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
         data = state.get("retrieved_data")
         logger.info(f"📊 retrieved_data type: {type(data)}")
         logger.info(f"📊 retrieved_data length: {len(data) if isinstance(data, list) else 'N/A'}")
-        if isinstance(data, list) and len(data) > 0:
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
             logger.info(f"📊 retrieved_data sample keys: {list(data[0].keys())}")
+        elif isinstance(data, list) and len(data) > 0:
+            logger.warning(f"⚠️ First item is not dict: {type(data[0])}")
 
     # 📝 Construir resposta baseada no estado
     response = {}
@@ -1028,27 +1095,32 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
     **Exemplo 7 - Produtos sem vendas (variação):**
     Query: "quantos produtos estão sem vendas na une 261"
     Output: {{"tool": "calcular_produtos_sem_vendas", "params": {{"une_input": "261", "limite": 50}}, "confidence": 0.93}}
+    
+    **Exemplo 8 - Ruptura (mapear para produtos sem vendas):**
+    Query: "quais produtos do fabricante kit esta com ruptura na une 261"
+    Output: {{"tool": "calcular_produtos_sem_vendas", "params": {{"une_input": "261", "fabricante": "kit", "limite": 50}}, "confidence": 0.98}}
 
-    ## 🎯 FERRAMENTAS E PARÂMETROS
 
-    1. **calcular_mc_produto** (MC, média, estoque)
-       - Params: {{"produto_id": <int>, "une": "<sigla>"}}
+    ## 🎯 FERRAMENTAS DISPONÍVEIS E SEUS PARÂMETROS
 
-    2. **calcular_abastecimento_une** (abastecimento, reposição)
-       - Params: {{"une_input": "<sigla>", "segmento": "<nome ou null>"}}
+    1. **calcular_mc_produto** (Para queries sobre MC, média, estoque de um produto específico)
+       - Parâmetros: {{"produto_id": <int>, "une": "<sigla_une>"}}
 
-    3. **calcular_preco_final_une** (preço, desconto)
-       - Params: {{"valor_compra": <float>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}
+    2. **calcular_abastecimento_une** (Para queries sobre abastecimento ou reposição)
+       - Parâmetros: {{"une_input": "<sigla_une>", "segmento": "<nome_segmento ou null>"}}
 
-    4. **calcular_produtos_sem_vendas** (produtos sem giro, sem vendas, parados)
-       - Params: {{"une_input": "<sigla>", "limite": <int, default 50>}}
+    3. **calcular_preco_final_une** (Para queries sobre cálculo de preço, desconto)
+       - Parâmetros: {{"valor_compra": <float>, "ranking": <0-4>, "forma_pagamento": "<vista|30d|90d|120d>"}}
+
+    4. **calcular_produtos_sem_vendas** (Para queries sobre produtos sem giro, sem vendas, parados, ou **ruptura**)
+       - Parâmetros: {{"une_input": "<sigla_une>", "limite": <int, default 50>, "fabricante": "<nome_fabricante ou null>"}}
 
     ## 🎯 QUERY ATUAL: "{user_query}"
 
     ## 📤 RETORNE JSON:
     ```json
     {{
-      "tool": "nome_da_ferramenta",
+      "tool": "nome_da_ferramenta_escolhida",
       "params": {{...}},
       "confidence": 0.95
     }}

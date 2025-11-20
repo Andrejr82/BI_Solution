@@ -32,5 +32,15 @@
         "code": "df = load_data()\ndf_filtered = df[df['une_nome'] == '261']\nranking = df_filtered.groupby('nome_produto')['vendas_total'].sum().sort_values(ascending=False).reset_index()\nresult = ranking.head(10)"
       }
     ]
+  },
+  "ruptura_por_segmento_e_une": {
+    "description": "Identifica segmentos em ruptura (sem estoque) para uma UNE específica.",
+    "keywords": ["ruptura", "sem estoque", "faltando", "segmento", "une"],
+    "examples": [
+      {
+        "user_query": "quais segmentos estão com ruptura na une scr",
+        "code": "df = load_data()\ndf_filtered = df[df['une_nome'].str.upper() == 'SCR']\ndf_ruptura = df_filtered[df_filtered['estoque_atual'] <= 0]\nsegmentos_ruptura = df_ruptura['nomesegmento'].unique().to_list()\nresult = segmentos_ruptura"
+      }
+    ]
   }
 }

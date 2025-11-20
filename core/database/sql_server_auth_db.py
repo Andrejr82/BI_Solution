@@ -26,7 +26,8 @@ _local_users = {
         "ativo": True,
         "tentativas_invalidas": 0,
         "bloqueado_ate": None,
-        "ultimo_login": None
+        "ultimo_login": None,
+        "segmento": "ARMARINHO E CONFECÇÃO"
     },
     "user": {
         "password": "user123",
@@ -34,7 +35,8 @@ _local_users = {
         "ativo": True,
         "tentativas_invalidas": 0,
         "bloqueado_ate": None,
-        "ultimo_login": None
+        "ultimo_login": None,
+        "segmento": "ARMARINHO E CONFECÇÃO"
     },
     "cacula": {
         "password": "cacula123",
@@ -42,7 +44,8 @@ _local_users = {
         "ativo": True,
         "tentativas_invalidas": 0,
         "bloqueado_ate": None,
-        "ultimo_login": None
+        "ultimo_login": None,
+        "segmento": "ARTESANATO"
     },
     "renan": {
         "password": "renan123",
@@ -50,7 +53,8 @@ _local_users = {
         "ativo": True,
         "tentativas_invalidas": 0,
         "bloqueado_ate": None,
-        "ultimo_login": None
+        "ultimo_login": None,
+        "segmento": "ARTESANATO"
     }
 }
 
@@ -90,13 +94,20 @@ def init_db():
                         ultimo_login DATETIME,
                         redefinir_solicitado BIT DEFAULT 0,
                         redefinir_aprovado BIT DEFAULT 0,
-                        cloud_enabled BIT DEFAULT 0
+                        cloud_enabled BIT DEFAULT 0,
+                        segmento NVARCHAR(255) NULL
                     );
 
                     -- Adicionar coluna cloud_enabled se não existir (migração)
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('usuarios') AND name = 'cloud_enabled')
                     BEGIN
                         ALTER TABLE usuarios ADD cloud_enabled BIT DEFAULT 0;
+                    END;
+
+                    -- Adicionar coluna segmento se não existir (migração)
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('usuarios') AND name = 'segmento')
+                    BEGIN
+                        ALTER TABLE usuarios ADD segmento NVARCHAR(255) NULL;
                     END;
 
                     -- Criar tabela de permissões de usuário
@@ -137,22 +148,22 @@ def autenticar_usuario(username, password):
 
         with conn:
             result = conn.execute(
-                text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role FROM usuarios WHERE username=:username"),
+                text("SELECT id, password_hash, ativo, tentativas_invalidas, bloqueado_ate, role, segmento FROM usuarios WHERE username=:username"),
                 {"username": username}
             ).fetchone()
 
             if not result:
                 logger.warning(f"Usuário '{username}' não encontrado no banco.")
-                return None, "Usuário não encontrado"
+                return None, None, "Usuário não encontrado"
 
-            user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role = result
+            user_id, db_password_hash, ativo, tentativas, bloqueado_ate, role, segmento = result
             now = datetime.now()
 
             if not ativo:
-                return None, "Usuário inativo"
+                return None, None, "Usuário inativo"
 
             if bloqueado_ate and now < bloqueado_ate:
-                return None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
+                return None, None, f"Usuário bloqueado até {bloqueado_ate.strftime('%Y-%m-%d %H:%M:%S')}"
 
             # ✅ CORREÇÃO: Truncar senha para bcrypt (máx 72 bytes)
             password_truncated = password[:72] if len(password.encode('utf-8')) > 72 else password
@@ -174,14 +185,14 @@ def autenticar_usuario(username, password):
                         {"tentativas": tentativas, "bloqueado_ate": bloqueado_ate, "id": user_id}
                     )
                     conn.commit()
-                    return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
+                    return None, None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
                 else:
                     conn.execute(
                         text("UPDATE usuarios SET tentativas_invalidas=:tentativas WHERE id=:id"),
                         {"tentativas": tentativas, "id": user_id}
                     )
                     conn.commit()
-                    return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
+                    return None, None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - tentativas}"
 
             # Sucesso
             conn.execute(
@@ -189,8 +200,8 @@ def autenticar_usuario(username, password):
                 {"now": now, "id": user_id}
             )
             conn.commit()
-            logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}")
-            return role, None
+            logger.info(f"✅ Usuário '{username}' autenticado (SQL Server). Papel: {role}. Segmento: {segmento}")
+            return role, segmento, None
 
     except Exception as e:
         logger.error(f"Erro SQL Server: {e}")
@@ -202,16 +213,16 @@ def _autenticar_local(username, password):
 
     users = _get_local_users()
     if username not in users:
-        return None, "Usuário não encontrado"
+        return None, None, "Usuário não encontrado"
 
     user = users[username]
     now = datetime.now()
 
     if not user["ativo"]:
-        return None, "Usuário inativo"
+        return None, None, "Usuário inativo"
 
     if user["bloqueado_ate"] and now < user["bloqueado_ate"]:
-        return None, f"Usuário bloqueado até {user['bloqueado_ate'].strftime('%Y-%m-%d %H:%M:%S')}"
+        return None, None, f"Usuário bloqueado até {user['bloqueado_ate'].strftime('%Y-%m-%d %H:%M:%S')}"
 
     # MODO DEV: Comparação direta de senha (sem bcrypt)
     # Em produção, usar verify_password com hash
@@ -219,19 +230,19 @@ def _autenticar_local(username, password):
         user["tentativas_invalidas"] += 1
         if user["tentativas_invalidas"] >= MAX_TENTATIVAS:
             user["bloqueado_ate"] = now + timedelta(minutes=BLOQUEIO_MINUTOS)
-            return None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
+            return None, None, f"Usuário bloqueado por {BLOQUEIO_MINUTOS} minutos"
         else:
-            return None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - user['tentativas_invalidas']}"
+            return None, None, f"Senha incorreta. Tentativas restantes: {MAX_TENTATIVAS - user['tentativas_invalidas']}"
 
     # Sucesso
     user["tentativas_invalidas"] = 0
     user["bloqueado_ate"] = None
     user["ultimo_login"] = now
-    logger.info(f"✅ Usuário '{username}' autenticado localmente. Papel: {user['role']}")
-    return user["role"], None
+    logger.info(f"✅ Usuário '{username}' autenticado localmente. Papel: {user['role']}. Segmento: {user['segmento']}")
+    return user["role"], user["segmento"], None
 
 # --- Funções administrativas (apenas SQL Server) ---
-def criar_usuario(username, password, role="user", cloud_enabled=False):
+def criar_usuario(username, password, role="user", cloud_enabled=False, segmento=None):
     if not is_database_configured():
         logger.warning("⚠️ Criação de usuário não disponível em modo cloud")
         return
@@ -245,11 +256,11 @@ def criar_usuario(username, password, role="user", cloud_enabled=False):
 
         with conn:
             conn.execute(
-                text("INSERT INTO usuarios (username, password_hash, role, cloud_enabled) VALUES (:username, :password_hash, :role, :cloud_enabled)"),
-                {"username": username, "password_hash": password_hash, "role": role, "cloud_enabled": cloud_enabled},
+                text("INSERT INTO usuarios (username, password_hash, role, cloud_enabled, segmento) VALUES (:username, :password_hash, :role, :cloud_enabled, :segmento)"),
+                {"username": username, "password_hash": password_hash, "role": role, "cloud_enabled": cloud_enabled, "segmento": segmento},
             )
             conn.commit()
-        logger.info(f"Usuário '{username}' criado. Cloud: {cloud_enabled}")
+        logger.info(f"Usuário '{username}' criado. Cloud: {cloud_enabled}. Segmento: {segmento}")
     except pyodbc.IntegrityError:
         raise ValueError("Usuário já existe")
     except Exception as e:

@@ -47,6 +47,15 @@ DEFAULT_PERMISSIONS = {
         "8_📊_Relatório_de_Transferências.py",
         "10_🤖_Gemini_Playground.py",
         "11_🔐_Alterar_Senha.py",
+    ],
+    "gerente_segmento": [  # Gerente de segmento tem as mesmas permissões que um usuário
+        "3_Graficos_Salvos.py",
+        "5_📚_Exemplos_Perguntas.py",
+        "6_❓_Ajuda.py",
+        "7_📦_Transferências.py",
+        "8_📊_Relatório_de_Transferências.py",
+        "10_🤖_Gemini_Playground.py",
+        "11_🔐_Alterar_Senha.py",
     ]
 }
 
