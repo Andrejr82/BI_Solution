@@ -86,45 +86,51 @@ def create_optimized_load_data(parquet_path: str, data_adapter=None):
 
         if not POLARS_AVAILABLE:
             logger.error("❌ Polars não disponível! Usando fallback Pandas (LENTO)")
+            # parquet_path vem do closure (parametro de create_optimized_load_data)
             return _load_data_pandas_fallback(parquet_path, filters)
 
         try:
             logger.info(f"🚀 load_data() usando POLARS - Lazy evaluation")
+            # parquet_path vem do closure (parametro de create_optimized_load_data)
             logger.info(f"📂 Parquet path: {parquet_path}")
 
+            # ✅ Usar variável local para evitar UnboundLocalError
+            file_path = parquet_path
+
             # ✅ CORREÇÃO v2.2.2: Suporte completo a múltiplos arquivos com wildcard
-            if '*' in parquet_path:
-                # Expandir wildcard SEMPRE (mesmo se diretório existe)
+            if '*' in file_path:
+                # Expandir wildcard SEMPRE (mesmo se diretório exists)
                 import glob
-                matching_files = glob.glob(parquet_path)
+                matching_files = glob.glob(file_path)
 
                 if not matching_files:
-                    logger.error(f"❌ Nenhum arquivo encontrado com padrão: {parquet_path}")
+                    logger.error(f"❌ Nenhum arquivo encontrado com padrão: {file_path}")
                     raise FileNotFoundError(
-                        f"Nenhum arquivo Parquet encontrado com padrão: {parquet_path}\n"
+                        f"Nenhum arquivo Parquet encontrado com padrão: {file_path}\n"
                         f"Verifique se os arquivos existem no diretório."
                     )
 
                 # ✅ FIX CRÍTICO: Usar TODOS os arquivos (não só o primeiro!)
                 # Polars scan_parquet aceita lista de arquivos
-                parquet_path = matching_files
+                file_path = matching_files
                 logger.info(f"✅ Wildcard expandido para {len(matching_files)} arquivo(s)")
-            elif not os.path.exists(parquet_path):
-                logger.error(f"❌ Arquivo não encontrado: {parquet_path}")
-                raise FileNotFoundError(f"Arquivo Parquet não encontrado: {parquet_path}")
+            elif not os.path.exists(file_path):
+                logger.error(f"❌ Arquivo não encontrado: {file_path}")
+                raise FileNotFoundError(f"Arquivo Parquet não encontrado: {file_path}")
 
             # 1. SCAN PARQUET (lazy - 0 memória até collect)
             try:
                 lf = pl.scan_parquet(
-                    parquet_path,
+                    file_path,
                     low_memory=True,
                     rechunk=False
                 )
                 logger.info(f"✅ Arquivo Parquet carregado (lazy mode)")
             except Exception as scan_error:
                 logger.error(f"❌ Erro ao fazer scan do Parquet: {scan_error}", exc_info=True)
+                file_name = os.path.basename(file_path) if isinstance(file_path, str) else f"{len(file_path)} files"
                 raise RuntimeError(
-                    f"Falha ao escanear arquivo Parquet: {os.path.basename(parquet_path)}\n"
+                    f"Falha ao escanear arquivo Parquet: {file_name}\n"
                     f"Erro: {str(scan_error)}\n"
                     f"Sugestão: Verifique se o arquivo não está corrompido"
                 )

@@ -57,17 +57,18 @@ def init_auth_system():
 
 # Usuários para modo cloud (quando SQL Server não estiver disponível)
 CLOUD_USERS = {
-    "admin": {"password": "admin", "role": "admin"},
-    "user": {"password": "user123", "role": "user"},
-    "cacula": {"password": "cacula123", "role": "admin"},  # Usuário específico do projeto
-    "renan": {"password": "renan", "role": "user"}  # Sincronizado do SQL Server local
+    "admin": {"password": "admin", "role": "admin", "segmento": "ARMARINHO E CONFECÇÃO"},
+    "user": {"password": "user123", "role": "user", "segmento": "ARMARINHO E CONFECÇÃO"},
+    "cacula": {"password": "cacula123", "role": "admin", "segmento": "ARTESANATO"},  # Usuário específico do projeto
+    "renan": {"password": "renan", "role": "user", "segmento": "ARTESANATO"}  # Sincronizado do SQL Server local
 }
 
 def verify_cloud_user(username, password):
     """Verifica usuário em modo cloud"""
     if username in CLOUD_USERS:
-        return CLOUD_USERS[username]["password"] == password, CLOUD_USERS[username]["role"]
-    return False, ""
+        user_data = CLOUD_USERS[username]
+        return user_data["password"] == password, user_data["role"], user_data["segmento"]
+    return False, "", None
 
 # --- Login adaptativo (SQL Server ou Cloud) ---
 def login():
@@ -187,6 +188,7 @@ def login():
                         st.session_state["username"] = "admin"
                         st.session_state["role"] = "admin"
                         st.session_state["ultimo_login"] = time.time()
+                        st.session_state["segmento"] = "ARMARINHO E CONFECÇÃO" # Default segment for bypass
                         audit_logger.warning(f"⚠️ DEV BYPASS USADO - Usuário admin (DESENVOLVIMENTO APENAS)")
                         st.warning("⚠️ Modo de Desenvolvimento - Bypass Ativo")
                         st.success(f"Bem-vindo, admin! Acesso de desenvolvedor concedido.")
@@ -205,9 +207,9 @@ def login():
                         st.write("📊 Conectando ao SQL Server...")
                         current_auth_db = get_auth_db()
                         if current_auth_db:
-                            role, erro = current_auth_db.autenticar_usuario(username, password)
+                            role, segmento, erro = current_auth_db.autenticar_usuario(username, password)
                         else:
-                            role, erro = None, "Banco de dados não disponível"
+                            role, segmento, erro = None, None, "Banco de dados não disponível"
 
                         if role:
                             # Login bem-sucedido
@@ -220,8 +222,9 @@ def login():
                             st.session_state["authenticated"] = True
                             st.session_state["username"] = username
                             st.session_state["role"] = role
+                            st.session_state["segmento"] = segmento
                             st.session_state["ultimo_login"] = time.time()
-                            audit_logger.info(f"Usuário {username} logado com sucesso (SQL Server). Papel: {role}")
+                            audit_logger.info(f"Usuário {username} logado com sucesso (SQL Server). Papel: {role}. Segmento: {segmento}")
                             st.success(f"🎉 Bem-vindo, {username}! Redirecionando...")
                             time.sleep(1)
                             st.rerun()
@@ -229,7 +232,7 @@ def login():
                             # Se SQL Server falhar, tentar cloud fallback
                             st.write("⚠️ SQL Server indisponível, tentando fallback...")
                             audit_logger.warning(f"SQL Server falhou para {username}, tentando cloud fallback...")
-                            is_valid, cloud_role = verify_cloud_user(username, password)
+                            is_valid, cloud_role, cloud_segmento = verify_cloud_user(username, password)
                             if is_valid:
                                 st.write(f"✅ Autenticado via Cloud como {cloud_role}!")
                                 status.update(label="🎉 Login completo (Cloud)!", state="complete", expanded=False)
@@ -238,8 +241,9 @@ def login():
                                 st.session_state["authenticated"] = True
                                 st.session_state["username"] = username
                                 st.session_state["role"] = cloud_role
+                                st.session_state["segmento"] = cloud_segmento
                                 st.session_state["ultimo_login"] = time.time()
-                                audit_logger.info(f"Usuário {username} logado com sucesso (Cloud Fallback). Papel: {cloud_role}")
+                                audit_logger.info(f"Usuário {username} logado com sucesso (Cloud Fallback). Papel: {cloud_role}. Segmento: {cloud_segmento}")
                                 st.success(f"🎉 Bem-vindo, {username}! (Modo Cloud)")
                                 time.sleep(1)
                                 st.rerun()
@@ -256,7 +260,7 @@ def login():
                     else:
                         # Usar autenticação cloud fallback
                         st.write("☁️ Usando autenticação Cloud...")
-                        is_valid, role = verify_cloud_user(username, password)
+                        is_valid, role, segmento = verify_cloud_user(username, password)
                         if is_valid:
                             # Login bem-sucedido
                             st.write(f"✅ Autenticação bem-sucedida como {role}!")
@@ -268,8 +272,9 @@ def login():
                             st.session_state["authenticated"] = True
                             st.session_state["username"] = username
                             st.session_state["role"] = role
+                            st.session_state["segmento"] = segmento
                             st.session_state["ultimo_login"] = time.time()
-                            audit_logger.info(f"Usuário {username} logado com sucesso (Cloud). Papel: {role}")
+                            audit_logger.info(f"Usuário {username} logado com sucesso (Cloud). Papel: {role}. Segmento: {segmento}")
                             st.success(f"🎉 Bem-vindo, {username}! (Modo Cloud)")
                             time.sleep(1)
                             st.rerun()

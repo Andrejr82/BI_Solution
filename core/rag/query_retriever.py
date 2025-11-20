@@ -4,12 +4,20 @@ QueryRetriever - Sistema RAG para busca semântica de queries similares
 import json
 import os
 import numpy as np
-from typing import List, Dict, Any
-from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any, Optional
 import faiss
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Lazy import - só carrega quando necessário
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    logger.warning("sentence-transformers not available - QueryRetriever will work in fallback mode")
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    SentenceTransformer = None
 
 
 class QueryRetriever:
@@ -24,20 +32,31 @@ class QueryRetriever:
         self.examples_file = examples_file or os.path.join(
             os.getcwd(), "data", "query_examples.json"
         )
-
-        logger.info(f"Inicializando QueryRetriever com modelo {model_name}")
-
-        # Carregar modelo de embeddings
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model: Optional[Any] = None  # Lazy loading
         self.dimension = 384  # Dimensão do modelo MiniLM
+
+        logger.info(f"Inicializando QueryRetriever (lazy load)")
 
         # Carregar exemplos
         self.examples = self._load_examples()
 
-        # Criar índice FAISS
-        self.index = self._build_faiss_index()
+        # Criar índice FAISS (será recriado ao carregar modelo)
+        self.index = None
 
         logger.info(f"QueryRetriever inicializado com {len(self.examples)} exemplos")
+
+    def _ensure_model_loaded(self):
+        """Carrega o modelo sob demanda"""
+        if self.model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                logger.info(f"Carregando modelo {self.model_name}...")
+                self.model = SentenceTransformer(self.model_name)
+                self.index = self._build_faiss_index()
+                logger.info(f"Modelo carregado com sucesso")
+            except Exception as e:
+                logger.error(f"Erro ao carregar modelo: {e}")
+                self.model = None
 
     def _load_examples(self) -> List[Dict]:
         """Carrega exemplos do arquivo JSON"""
@@ -108,8 +127,11 @@ class QueryRetriever:
         Returns:
             Lista de dicionários com exemplos similares e scores
         """
-        if not self.examples:
-            logger.warning("Nenhum exemplo disponível para busca")
+        # Garantir modelo carregado
+        self._ensure_model_loaded()
+
+        if self.model is None or not self.examples:
+            logger.warning("Modelo não disponível ou sem exemplos - retornando lista vazia")
             return []
 
         # Gerar embedding da query
