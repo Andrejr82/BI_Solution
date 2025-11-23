@@ -188,6 +188,21 @@ class ProcessManager:
         self.log("INICIANDO FRONTEND REACT (Prioridade Média)", "HEADER")
         self.log("=" * 60, "HEADER")
 
+        # Verifica se Node.js está instalado
+        if not self._check_node_installed():
+            self.log("Node.js não encontrado no sistema!", "ERROR")
+            self.log("Instale Node.js 20+ em: https://nodejs.org/", "ERROR")
+            return None
+
+        # Verifica se npm ou pnpm está disponível
+        has_npm = self._check_npm_installed()
+        has_pnpm = self._has_pnpm()
+
+        if not has_npm and not has_pnpm:
+            self.log("npm/pnpm não encontrado no sistema!", "ERROR")
+            self.log("Reinstale Node.js ou execute: npm install -g pnpm", "ERROR")
+            return None
+
         frontend_dir = ROOT_DIR / "frontend-react"
 
         if not frontend_dir.exists():
@@ -198,10 +213,10 @@ class ProcessManager:
         node_modules = frontend_dir / "node_modules"
         if not node_modules.exists():
             self.log("node_modules não encontrado. Executando npm install...", "WARNING")
-            install_cmd = ['pnpm', 'install'] if self._has_pnpm() else ['npm', 'install']
+            install_cmd = ['pnpm', 'install'] if has_pnpm else ['npm', 'install']
 
             try:
-                subprocess.run(install_cmd, cwd=frontend_dir, check=True)
+                subprocess.run(install_cmd, cwd=frontend_dir, check=True, shell=True)
                 self.log("Dependências instaladas com sucesso", "SUCCESS")
             except subprocess.CalledProcessError:
                 self.log("Erro ao instalar dependências do frontend", "ERROR")
@@ -213,7 +228,7 @@ class ProcessManager:
             return None
 
         # Comando para iniciar frontend
-        cmd = ['pnpm', 'dev'] if self._has_pnpm() else ['npm', 'run', 'dev']
+        cmd = ['pnpm', 'dev'] if has_pnpm else ['npm', 'run', 'dev']
 
         self.log(f"Executando: {' '.join(cmd)}", "INFO")
         self.log(f"Diretório: {frontend_dir}", "INFO")
@@ -226,7 +241,8 @@ class ProcessManager:
                 stderr=subprocess.PIPE if not self.dev_mode else None,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                shell=True  # Necessário no Windows para encontrar npm/pnpm no PATH
             )
 
             self.processes.append(process)
@@ -262,7 +278,32 @@ class ProcessManager:
             subprocess.run(['pnpm', '--version'],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL,
-                         check=True)
+                         check=True,
+                         shell=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def _check_node_installed(self) -> bool:
+        """Verifica se Node.js está instalado"""
+        try:
+            subprocess.run(['node', '--version'],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,
+                         check=True,
+                         shell=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def _check_npm_installed(self) -> bool:
+        """Verifica se npm está instalado"""
+        try:
+            subprocess.run(['npm', '--version'],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,
+                         check=True,
+                         shell=True)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
