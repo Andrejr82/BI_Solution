@@ -39,12 +39,13 @@ enableWebsocketCompression = true
 gatherUsageStats = false
 
 # ==============================================================================
-# THEME CONFIGURATION (Consistência visual)
+# THEME CONFIGURATION - LIGHT THEME (Design 1 Minimalista Clean)
 # ==============================================================================
 [theme]
-# Tema escuro consistente (alinhado com CSS customizado)
-primaryColor = "#10a37f"
-backgroundColor = "#343541"
-secondaryBackgroundColor = "#444654"
-textColor = "#ececf1"
+# Base: light theme
+base = "light"
+primaryColor = "#3B82F6"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8F9FA"
+textColor = "#111827"
 font = "sans serif"

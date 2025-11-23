@@ -8,8 +8,9 @@ Version: 2.2.1
 from __future__ import annotations
 
 # Standard library
+import re
 from functools import partial
-from typing import Any, Protocol, Union, cast
+from typing import Any, Protocol, Union, cast, Optional
 
 from core.config.logging_config import get_logger
 
@@ -27,6 +28,50 @@ from core.connectivity.parquet_adapter import ParquetAdapter
 from core.llm_base import BaseLLMAdapter
 
 logger = get_logger(__name__)
+
+
+def detect_fast_path_query(query: str) -> Optional[str]:
+    """
+    ⚡ OTIMIZAÇÃO: Detecta queries técnicas que podem pular reasoning.
+
+    Retorna o nó de destino direto ou None se precisar de reasoning completo.
+
+    Ganho estimado: 3-5s em ~40% das queries (padrões técnicos claros)
+    """
+    if not query:
+        return None
+
+    query_lower = query.lower()
+
+    # Padrão 1: UNE Operations diretas (MC, estoque, abastecimento + produto ID + UNE)
+    # Exemplos: "mc do produto 123 na une scr", "estoque produto 456 une mad"
+    une_patterns = [
+        r'(mc|média comum|media comum).*produto.*\d+.*une',
+        r'estoque.*produto.*\d+.*une',
+        r'abastecimento.*produto.*\d+.*une',
+        r'preço.*produto.*\d+.*une',
+        r'produto.*\d+.*(mc|estoque|abastecimento|preço).*une'
+    ]
+
+    for pattern in une_patterns:
+        if re.search(pattern, query_lower):
+            logger.info("FAST-PATH: Query UNE direta detectada - pulando reasoning")
+            return "execute_une_tool"
+
+    # Padrão 2: Queries de lista simples com segmento/categoria
+    # Exemplos: "liste produtos do segmento tecidos", "mostre produtos categoria aviamentos"
+    list_patterns = [
+        r'^(liste|mostre|quais|listar).*produtos.*(segmento|categoria)',
+        r'^produtos.*(segmento|categoria)'
+    ]
+
+    for pattern in list_patterns:
+        if re.search(pattern, query_lower):
+            logger.info("FAST-PATH: Query de lista simples detectada - pulando reasoning")
+            return "classify_intent"  # Pula reasoning, vai direto para classify
+
+    # Nenhum padrão fast-path detectado - seguir fluxo normal
+    return None
 
 
 class DataAdapter(Protocol):
@@ -69,13 +114,13 @@ class GraphBuilder:
             )
             return "conversational_response"
         else:
-            # Modo analítico: segue para classificação de intent tradicional
+            # Modo analítico: gera feedback inicial antes de processar
             logger.info(
                 "routing.decided",
                 reasoning_mode=reasoning_mode,
-                route="classify_intent",
+                route="generate_initial_feedback",
             )
-            return "classify_intent"
+            return "generate_initial_feedback"
 
     def _decide_after_intent_classification(self, state: AgentState) -> str:
         intent = state.get("intent")
@@ -152,15 +197,14 @@ class GraphBuilder:
                 }
             }
 
+        # 🎯 Feedback inicial para modo analítico (v3.1)
+        generate_initial_feedback_node = partial(bi_nodes.generate_initial_feedback)
+
         # Analytical Nodes (existing)
-        classify_intent_node = partial(
-            bi_nodes.classify_intent,
-            llm_adapter=self.llm_adapter,
-        )
+        classify_intent_node = partial(bi_nodes.classify_intent)
 
         generate_parquet_query_node = partial(
             bi_nodes.generate_parquet_query,
-            llm_adapter=self.llm_adapter,
             parquet_adapter=self.parquet_adapter,
         )
 
@@ -171,7 +215,6 @@ class GraphBuilder:
 
         generate_plotly_spec_node = partial(
             bi_nodes.generate_plotly_spec,
-            llm_adapter=self.llm_adapter,
             code_gen_agent=self.code_gen_agent,
         )
 
@@ -183,6 +226,9 @@ class GraphBuilder:
         # 🧠 Conversational Reasoning Nodes (NEW)
         workflow.add_node("reasoning", reasoning_node)
         workflow.add_node("conversational_response", conversational_response_node)
+
+        # 🎯 Feedback inicial (v3.1)
+        workflow.add_node("generate_initial_feedback", generate_initial_feedback_node)
 
         # Analytical Nodes (existing)
         workflow.add_node("classify_intent", classify_intent_node)
@@ -217,13 +263,15 @@ class GraphBuilder:
             # 🧠 Conversational Reasoning Nodes (v3.0)
             "reasoning": reasoning_node,
             "conversational_response": conversational_response_node,
+            # 🎯 Feedback inicial (v3.1)
+            "generate_initial_feedback": generate_initial_feedback_node,
             # Analytical Nodes (existing)
             "classify_intent": classify_intent_node,
             "generate_parquet_query": generate_parquet_query_node,
             "execute_query": execute_query_node,
             "generate_plotly_spec": generate_plotly_spec_node,
             "format_final_response": format_final_response_node,
-            "execute_une_tool": partial(bi_nodes.execute_une_tool, llm_adapter=self.llm_adapter),
+            "execute_une_tool": partial(bi_nodes.execute_une_tool),
         }
 
         class _SimpleExecutor:
@@ -237,8 +285,22 @@ class GraphBuilder:
                 # Ensure messages exist
                 state.setdefault("messages", [])
 
-                # 🧠 Start at reasoning node (v3.0 - Conversational AI)
-                current = "reasoning"
+                # ⚡ OTIMIZAÇÃO: Fast-path detection para queries técnicas
+                user_query = ""
+                if state.get("messages"):
+                    last_msg = state["messages"][-1]
+                    user_query = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                elif "query" in state:
+                    user_query = state["query"]
+
+                fast_path_node = detect_fast_path_query(user_query)
+                if fast_path_node:
+                    current = fast_path_node
+                    logger.info(f"FAST-PATH ATIVADO: Pulando para '{current}' | Query: '{user_query[:50]}...'")
+                else:
+                    # 🧠 Start at reasoning node (v3.0 - Conversational AI)
+                    current = "reasoning"
+
                 max_steps = 20
                 steps = 0
 
@@ -261,6 +323,11 @@ class GraphBuilder:
                     if current == "reasoning":
                         # 🧠 NEW: Route based on reasoning_mode
                         current = self._builder._decide_after_reasoning(state)
+                        continue
+
+                    if current == "generate_initial_feedback":
+                        # 🎯 Após feedback inicial, segue para classificação de intent
+                        current = "classify_intent"
                         continue
 
                     if current == "conversational_response":
@@ -295,5 +362,95 @@ class GraphBuilder:
 
                 # Fallback: return whatever state we have
                 return state
+
+            def stream(self, initial_state: dict, config: dict = None):
+                """
+                Simula streaming para compatibilidade com interface do Streamlit.
+                Retorna eventos intermediários durante execução.
+                """
+                # Make a shallow copy to avoid mutating caller's dict
+                state = dict(initial_state)
+                state.setdefault("messages", [])
+
+                # ⚡ OTIMIZAÇÃO: Fast-path detection para queries técnicas
+                user_query = ""
+                if state.get("messages"):
+                    last_msg = state["messages"][-1]
+                    user_query = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                elif "query" in state:
+                    user_query = state["query"]
+
+                fast_path_node = detect_fast_path_query(user_query)
+                if fast_path_node:
+                    current = fast_path_node
+                    logger.info(f"FAST-PATH ATIVADO (streaming): Pulando para '{current}' | Query: '{user_query[:50]}...'")
+                else:
+                    current = "reasoning"
+
+                max_steps = 20
+                steps = 0
+
+                while steps < max_steps:
+                    steps += 1
+                    node_fn = self._nodes.get(current)
+                    if node_fn is None:
+                        break
+
+                    try:
+                        # Executar nó
+                        result = node_fn(state)
+                        if isinstance(result, dict):
+                            state.update(result)
+
+                        # Yield evento de progresso
+                        yield {current: state}
+
+                    except Exception as e:
+                        logger.error(f"Error in node {current}: {e}", exc_info=True)
+                        error_state = state.copy()
+                        error_state["final_response"] = {"type": "error", "content": str(e)}
+                        yield {current: error_state}
+                        return
+
+                    # Decide next step
+                    if current == "reasoning":
+                        current = self._builder._decide_after_reasoning(state)
+                        continue
+
+                    if current == "generate_initial_feedback":
+                        # 🎯 Após feedback inicial, segue para classificação de intent
+                        current = "classify_intent"
+                        continue
+
+                    if current == "conversational_response":
+                        if state.get("final_response"):
+                            yield {"conversational_response": state}
+                            return
+                        break
+
+                    if current == "classify_intent":
+                        current = self._builder._decide_after_intent_classification(state)
+                        continue
+
+                    if current == "generate_parquet_query":
+                        current = self._builder._decide_after_clarification(state)
+                        continue
+
+                    if current == "execute_query":
+                        current = self._builder._decide_after_query_execution(state)
+                        continue
+
+                    if current == "generate_plotly_spec":
+                        current = "format_final_response"
+                        continue
+
+                    if current in ("format_final_response", "execute_une_tool"):
+                        if state.get("final_response"):
+                            yield {current: state}
+                            return
+                        break
+
+                # Final yield com estado completo
+                yield {"__end__": state}
 
         return _SimpleExecutor(nodes, self)
