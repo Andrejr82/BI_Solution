@@ -1,0 +1,34 @@
+================================================================================
+ANTES (str direto - truncado):
+================================================================================
+{'resumo': 'Analise de Vendas e Estoque para produtos TNT:', 'Vendas (30 dias)': '19,967.04 unidades', 'Estoque Atual': '19,071.44 unidades', 'detalhes_por_produto':                                  nome_produto  Vendas_30_Dias  Estoque_Atual
+0          TNT 40GRS 100%O LG 1.40 035 BRANCO         4173.27        1655.19
+1           TNT 40GRS 100%O LG 1.40 034 PRETO         3192.87        3553.70
+2      TNT 40GRS 100%O LG 1.40 029 AZUL ROYAL         2608.60         715.15
+3        TNT 40GRS 100%O L
+... (truncado)
+
+================================================================================
+DEPOIS (formatado):
+================================================================================
+📊 Analise de Vendas e Estoque para produtos TNT:
+
+**Vendas (30 dias):** 19,967.04 unidades
+**Estoque Atual:** 19,071.44 unidades
+**Detalhes por Produto:**
+
+                              nome_produto  Vendas_30_Dias  Estoque_Atual
+        TNT 40GRS 100%O LG 1.40 035 BRANCO         4173.27        1655.19
+         TNT 40GRS 100%O LG 1.40 034 PRETO         3192.87        3553.70
+    TNT 40GRS 100%O LG 1.40 029 AZUL ROYAL         2608.60         715.15
+      TNT 40GRS 100%O LG 1.40 065 VERMELHO         2417.25        2121.96
+  TNT 40GRS 100%O LG 1.40 044 AMARELO OURO         1852.99        2818.41
+    TNT 40GRS 100%O LG 1.40 028 AZUL CLARO          959.79         731.09
+          TNT 40GRS 100%O LG 1.40 066 ROSA          856.42        1205.67
+TNT 40GRS 100%O LG 1.40 033 VERDE BANDEIRA          750.33         998.22
+         TNT 40GRS 100%O LG 1.40 067 LILAS          642.18         876.45
+       TNT 40GRS 100%O LG 1.40 030 LARANJA          513.34        1395.60
+
+================================================================================
+TESTE PASSOU! Formatacao legivel funcionando.
+================================================================================

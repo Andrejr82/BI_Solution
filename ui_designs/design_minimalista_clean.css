@@ -1,0 +1,58 @@
+/* 🤍 DESIGN MINIMALISTA CLEAN */
+
+:root {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8F9FA;
+    --bg-input: #FFFFFF;
+    --border: #E5E7EB;
+    --border-focus: #3B82F6;
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --accent: #3B82F6;
+}
+
+/* GLOBAL */
+.main {
+    background: var(--bg-primary) !important;
+}
+
+/* INPUT AREA - Ultra Clean */
+.stChatInput {
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    padding: 12px 16px !important;
+    transition: all 150ms ease !important;
+}
+
+.stChatInput:focus-within {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1),
+                0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* CHAT MESSAGES */
+.stChatMessage {
+    background: transparent !important;
+    border: none !important;
+    padding: 16px 0 !important;
+}
+
+.stChatMessage[data-testid="user"] {
+    background: var(--bg-secondary) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+}
+
+/* REMOVE MENSAGENS REDUNDANTES */
+.element-container:has(.stSpinner) p {
+    display: none !important;
+}
+
+/* SPINNER MÍNIMO */
+.stSpinner > div {
+    border-color: var(--accent) transparent transparent transparent !important;
+    width: 16px !important;
+    height: 16px !important;
+}
