@@ -1,0 +1,78 @@
+INFO:core.config.safe_settings:[INFO] Carregando configuraþ§es simples...
+2025-11-20 00:50:11.383 
+Warning: the config option 'server.enableCORS=false' is not compatible with
+'server.enableXsrfProtection=true'.
+As a result, 'server.enableCORS' is being overridden to 'true'.
+
+More information:
+In order to protect against CSRF attacks, we send a cookie with each request.
+To do so, we must specify allowable origins, which places a restriction on
+cross-origin resource sharing.
+
+If cross origin resource sharing is required, please disable server.enableXsrfProtection.
+            
+INFO:core.config.safe_settings:[OK] Configuraþ§es carregadas com sucesso
+INFO:ComponentFactory:Criando nova instÔncia do GeminiLLMAdapter para o modelo: models/gemini-2.5-flash (Temp: 0.0)
+INFO:core.utils.response_cache:\u2705 Cache inicializado: data/cache, TTL: 6h, VersÒo: v2.1.4
+INFO:core.llm_adapter:\u2705 Cache de respostas ativado para Gemini - ECONOMIA DE CR╔DITOS (TTL: 6h)
+INFO:core.llm_adapter:Adaptador do GeminiLLMAdapter inicializado com sucesso.
+INFO:core.agents.conversational_reasoning_node:\U0001f9e0 ConversationalReasoningEngine inicializado
+INFO:core.agents.conversational_reasoning_node:\U0001f9e0 Analisando intent: 'Ola, tudo bem? Sou o Andre....'
+INFO:core.llm_adapter:[API] Chamada API Gemini: models/gemini-2.5-flash - tokens: 2000
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 400 Bad Request"
+ERROR:core.llm_adapter:Erro ao chamar a API do Gemini: Error code: 400 - [{'error': {'code': 400, 'message': 'API key expired. Please renew the API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]}}]
+Traceback (most recent call last):
+  File "C:\Users\AndrÚ\Documents\Agent_Solution_BI\core\llm_adapter.py", line 83, in get_completion
+    response = self.client.chat.completions.create(**params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_utils\_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\resources\chat\completions\completions.py", line 1150, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_base_client.py", line 1047, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'API key expired. Please renew the API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]}}]
+INFO:core.agents.conversational_reasoning_node:\U0001f3af Mode: conversational | Emotion: neutro | Confidence: 0.50
+INFO:core.agents.conversational_reasoning_node:\U0001f4ad Reasoning: Anßlise automßtica da intenþÒo...
+INFO:core.agents.conversational_reasoning_node:\U0001f4ac Gerando resposta conversacional (tom: neutro)
+INFO:core.llm_adapter:[API] Chamada API Gemini: models/gemini-2.5-flash - tokens: 800
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 400 Bad Request"
+ERROR:core.llm_adapter:Erro ao chamar a API do Gemini: Error code: 400 - [{'error': {'code': 400, 'message': 'API key expired. Please renew the API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]}}]
+Traceback (most recent call last):
+  File "C:\Users\AndrÚ\Documents\Agent_Solution_BI\core\llm_adapter.py", line 83, in get_completion
+    response = self.client.chat.completions.create(**params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_utils\_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\resources\chat\completions\completions.py", line 1150, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\openai\_base_client.py", line 1047, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'API key expired. Please renew the API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]}}]
+INFO:core.agents.conversational_reasoning_node:\u2705 Resposta conversacional gerada: 0 chars
+
+[TEST] Testing Conversational Reasoning Engine V2...
+[INFO] LLM Adapter obtained: GeminiLLMAdapter
+[INFO] Model: models/gemini-2.5-flash
+[INFO] Temperature: 0.0
+[INFO] Engine initialized
+
+[INPUT] 'Ola, tudo bem? Sou o Andre.'
+[INFO] Calling reason_about_user_intent...
+[RESULT] Mode: conversational
+[RESULT] Reasoning: Anßlise automßtica da intenþÒo
+[RESULT] Emotion: neutro
+[INFO] Generating conversational response...
+
+[RESPONSE]:
+
