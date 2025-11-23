@@ -1,0 +1,131 @@
+"""
+FastAPI Main Application
+Entry point for the backend API
+"""
+
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from app.api.v1.router import api_router
+from app.config.database import engine
+from app.config.settings import get_settings
+from app.infrastructure.database.models import Base
+from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
+)
+
+logger = structlog.get_logger()
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events
+    """
+    # Startup
+    logger.info("application_startup", environment=settings.ENVIRONMENT)
+    
+    # Create database tables (in production, use Alembic migrations)
+    if settings.DEBUG:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("database_tables_created")
+
+    # Initialize HybridDataAdapter
+    logger.info("initializing_data_adapter")
+    app.state.data_adapter = HybridDataAdapter()
+    await app.state.data_adapter.connect()
+    logger.info("data_adapter_initialized", source=app.state.data_adapter.current_source)
+    
+    yield
+    
+    # Shutdown
+    logger.info("application_shutdown")
+    if hasattr(app.state, "data_adapter"):
+        await app.state.data_adapter.disconnect()
+    await engine.dispose()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+    }
+
+
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler for unhandled errors"""
+    logger.error(
+        "unhandled_exception",
+        error=str(exc),
+        path=request.url.path,
+        method=request.method,
+    )
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error" if not settings.DEBUG else str(exc)
+        },
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower(),
+    )
