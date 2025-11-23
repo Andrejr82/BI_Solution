@@ -12,8 +12,8 @@ dist/
 .env
 .venv/
 .venv_new/
-venv/
-env/
+.venv_new/
+.env/
 
 # Editors
 .vscode/
