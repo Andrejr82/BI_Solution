@@ -4,17 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Agent Solution BI is a conversational Business Intelligence platform with three interfaces (React, Streamlit, FastAPI) sharing a unified Python backend. The system uses LangGraph for AI workflow orchestration and supports multiple data sources (Parquet, SQL Server) with intelligent fallback.
+Agent Solution BI is a conversational Business Intelligence platform with a modern React frontend and FastAPI backend sharing a unified Python core. The system uses LangGraph for AI workflow orchestration and supports multiple data sources (Parquet, SQL Server) with intelligent fallback.
 
 ## Architecture
 
-### Multi-Interface Design
+### Architecture Design
 - **Frontend React** (`frontend-react/`): Next.js 16 production UI at port 3000
 - **Backend FastAPI** (`backend/`): Modern async API at port 8000
-- **Streamlit App** (`streamlit_app.py`): Development/demo UI at port 8501
 - **Core Backend** (`core/`): Shared business logic and LangGraph agents
 
-All interfaces consume the same `core/` modules. The backend is interface-agnostic.
+The React frontend communicates with the FastAPI backend, which consumes the `core/` modules for AI/BI processing.
 
 ### Core Components Architecture
 ```
@@ -63,11 +62,7 @@ pip install -r requirements.txt
 
 **Running Services:**
 ```bash
-# Streamlit (development/prototyping)
-streamlit run streamlit_app.py
-# → http://localhost:8501
-
-# FastAPI Backend (production)
+# FastAPI Backend
 cd backend
 python main.py
 # or
@@ -219,7 +214,7 @@ Example nodes: `core/agents/bi_agent_nodes.py`
    - `execute_query` → Data retrieval via adapters
    - `generate_plotly_spec` → Visualization spec
    - Format final response
-4. Response → Frontend (Streamlit/React/API)
+4. Response → Frontend (React via FastAPI)
 
 ### Data Sources
 - **Primary**: Parquet files in `data/*.parquet` (read via Polars/Dask)
@@ -306,8 +301,7 @@ Templates are in:
 
 ### Cache Management
 ```bash
-# Auto-cleanup runs on Streamlit startup (configurable)
-# Manual cleanup:
+# Manual cache cleanup:
 python -c "from core.utils.cache_cleaner import run_cache_cleanup; run_cache_cleanup()"
 ```
 
@@ -336,9 +330,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 ```
 
-### Streamlit cache issues
-Force cache clear: Delete `.streamlit/cache/` or use cache_cleaner utility
-
 ### LLM quota exceeded
 Check `logs/` for fallback events. System auto-switches to DeepSeek.
 
@@ -353,8 +344,8 @@ pnpm run build
 ## Documentation References
 
 Key documentation files in `docs/`:
-- `MIGRATION_PLAN.md` - Streamlit to FastAPI migration strategy
-- `INTEGRATION_SETUP.md` - Multi-interface integration guide
+- `MIGRATION_PLAN.md` - FastAPI + React architecture guide
+- `INTEGRATION_SETUP.md` - Frontend-Backend integration guide
 - `README.md` - Comprehensive project overview (Portuguese)
 - `FASE_1_COMPLETA.md` / `FASE_2_COMPLETA.md` - Implementation phases
 
@@ -382,9 +373,9 @@ Recent commits show:
 
 ## Performance Considerations
 
-1. **Startup time**: Current optimizations reduced Streamlit startup from 8s → 6s
-   - Cache cleanup moved to post-login (v2.2.3)
+1. **Backend startup**: Optimizations applied
    - Lazy imports for heavy libraries (Plotly, transformers)
+   - Async initialization for FastAPI lifespan
 
 2. **Query performance**:
    - Parquet + Polars is faster than SQL for analytical queries

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python test_interface_flow.py:*)"
+      "Bash(python test_interface_flow.py:*)",
+      "Bash(rm:*)",
+      "Bash(timeout 10 python:*)"
     ],
     "deny": [],
     "ask": []
