@@ -25,7 +25,7 @@ class ConversationalReasoningEngine:
     🧠 Motor de Raciocínio Conversacional
 
     Implementa Extended Thinking para análise profunda da intenção do usuário,
-    detectando contexto emocional, necessidades implícitas e escolhendo o modo
+detectando contexto emocional, necessidades implícitas e escolhendo o modo
     de resposta adequado (conversacional vs analítico).
     """
 
@@ -38,8 +38,59 @@ class ConversationalReasoningEngine:
         """
         self.llm_adapter = llm_adapter
         self.conversation_memory: List[Dict[str, str]] = []
-
         logger.info("🧠 ConversationalReasoningEngine inicializado")
+
+    def _get_full_conversation_context(self, messages: List, max_messages: int = 8) -> str:
+        """
+        Formata o histórico completo da conversa em uma única string legível.
+
+        Args:
+            messages: Lista de mensagens
+            max_messages: Número máximo de mensagens recentes a incluir (padrão: 8)
+        """
+        if not messages:
+            return "(Nenhuma mensagem na conversa)"
+
+        # 🔧 OTIMIZAÇÃO: Usar apenas as últimas N mensagens para evitar prompts gigantes
+        recent_messages = messages[-max_messages:] if len(messages) > max_messages else messages
+
+        history = []
+        for msg in recent_messages:
+            try:
+                role = "Usuário"
+                content = ""
+                # Lidar com objetos de mensagem Langchain e dicionários do Streamlit
+                if hasattr(msg, 'type'): # Langchain BaseMessage
+                    if msg.type == 'ai':
+                        role = "Caculinha"
+                    content = str(getattr(msg, 'content', ''))
+                elif isinstance(msg, dict): # Streamlit session_state message
+                    if msg.get('role') == 'assistant':
+                        role = "Caculinha"
+
+                    msg_content = msg.get('content', '')
+                    if isinstance(msg_content, dict):
+                        # Tentar extrair conteúdo de um dicionário aninhado
+                        content = msg_content.get('content', str(msg_content))
+                    else:
+                        content = str(msg_content)
+                else: # Fallback
+                    content = str(msg)
+
+                # Truncar mensagens muito longas para manter o prompt focado
+                content_preview = content.replace('\n', ' ')
+                content_preview = content_preview[:200] + "..." if len(content_preview) > 200 else content_preview
+                history.append(f"{role}: {content_preview}")
+            except Exception as e:
+                logger.warning(f"Erro ao formatar mensagem do histórico: {e}")
+                continue
+
+        # 📊 LOG: Indicar se histórico foi truncado
+        if len(messages) > max_messages:
+            logger.info(f"📝 Histórico truncado: {len(messages)} msgs → {len(recent_messages)} msgs recentes")
+            history.insert(0, f"(... {len(messages) - max_messages} mensagens anteriores omitidas ...)")
+
+        return "\n".join(history)
 
     def reason_about_user_intent(self, state: AgentState) -> Tuple[str, Dict[str, Any]]:
         """
@@ -64,23 +115,62 @@ class ConversationalReasoningEngine:
             logger.warning("⚠️ Nenhuma mensagem no estado")
             return "conversational", self._create_fallback_reasoning()
 
-        user_query = self._extract_user_message(messages[-1])
-        conversation_history = self._format_conversation_history(messages)
+        # 🔧 PROTEÇÃO ANTI-LOOP: Se conversa tem > 4 mensagens e ainda não executou, forçar analítico
+        if len(messages) > 4:
+            # Contar quantas mensagens do assistente são perguntas
+            assistant_questions = 0
+            for msg in messages:
+                if hasattr(msg, 'type') and msg.type == 'ai':
+                    content = str(getattr(msg, 'content', ''))
+                    if '?' in content:
+                        assistant_questions += 1
+                elif isinstance(msg, dict) and msg.get('role') == 'assistant':
+                    content = str(msg.get('content', ''))
+                    if '?' in content:
+                        assistant_questions += 1
+
+            # Se já fez 2+ perguntas, FORÇAR modo analítico
+            if assistant_questions >= 2:
+                logger.warning(f"🚨 ANTI-LOOP ATIVADO: {assistant_questions} perguntas feitas, forçando modo analítico")
+                return "analytical", {
+                    "mode": "analytical",
+                    "reasoning": "Conversa muito longa sem execução. Forçando análise com defaults.",
+                    "emotional_tone": "neutro",
+                    "confidence": 0.8,
+                    "needs_clarification": False,
+                    "next_action": {
+                        "type": "use_tool",
+                        "response_style": "technical"
+                    }
+                }
+
+        # ✅ CORREÇÃO: Usar o contexto completo da conversa
+        full_conversation_context = self._get_full_conversation_context(messages)
+        log_context = full_conversation_context.replace('\n', ' ')
+        logger.info(f"🧠 Analisando intent (contexto completo): '{log_context[-150:]}...'")
 
         # 🧠 PROMPT DE RACIOCÍNIO PROFUNDO
-        reasoning_prompt = self._build_reasoning_prompt(user_query, conversation_history)
+        reasoning_prompt = self._build_reasoning_prompt(full_conversation_context)
 
-        logger.info(f"🧠 Analisando intent: '{user_query[:80]}...'")
+        # 📊 LOG: Tamanho do prompt de raciocínio
+        prompt_size = len(reasoning_prompt)
+        logger.info(f"📏 Tamanho do prompt de reasoning: {prompt_size} chars (~{prompt_size//4} tokens estimados)")
 
         try:
-            # 🔥 CHAMADA COM TEMPERATURA ALTA para raciocínio criativo
+            # 🔥 CORREÇÃO: Temperatura BAIXA para decisões consistentes
             response = self.llm_adapter.get_completion(
                 messages=[{"role": "user", "content": reasoning_prompt}],
                 json_mode=True,
-                temperature=0.8,  # Alta criatividade no raciocínio
-                max_tokens=2000,
+                temperature=0.3,  # 🔧 FIX: Baixa temp para decisões consistentes (era 0.8)
+                max_tokens=1500,  # 🔧 OTIMIZADO: de 2000 para 1500 (suficiente para JSON de raciocínio)
                 cache_context={"operation": "conversational_reasoning", "stage": "intent_analysis"}
             )
+
+            # ✅ VERIFICAR ERRO NA RESPOSTA
+            if response.get("error"):
+                error_msg = response.get('error', 'Erro desconhecido')
+                logger.error(f"❌ Erro na API ao gerar raciocínio: {error_msg}")
+                return "conversational", self._create_fallback_reasoning()
 
             reasoning_result = self._parse_reasoning(response.get("content", "{}"))
 
@@ -120,29 +210,49 @@ class ConversationalReasoningEngine:
             Resposta conversacional natural em português
         """
         messages = state.get("messages", [])
-        user_query = self._extract_user_message(messages[-1])
+        full_conversation_context = self._get_full_conversation_context(messages)
         emotional_tone = reasoning.get("emotional_tone", "neutro")
-        needs_clarification = reasoning.get("needs_clarification", False)
-
+        
         # 🎨 PROMPT CONVERSACIONAL com temperatura máxima
         conversational_prompt = self._build_conversational_prompt(
-            user_query,
+            full_conversation_context,
             emotional_tone,
-            reasoning,
-            self._format_conversation_history(messages[-5:])  # Últimas 5 mensagens
+            reasoning
         )
 
         logger.info(f"💬 Gerando resposta conversacional (tom: {emotional_tone})")
+
+        # 📊 LOG: Tamanho do prompt
+        prompt_size = len(conversational_prompt)
+        logger.info(f"📏 Tamanho do prompt conversacional: {prompt_size} chars (~{prompt_size//4} tokens estimados)")
 
         try:
             response = self.llm_adapter.get_completion(
                 messages=[{"role": "user", "content": conversational_prompt}],
                 temperature=1.0,  # 🔥 TEMPERATURA MÁXIMA = respostas mais humanas
-                max_tokens=800,
+                max_tokens=1500,  # 🔧 AUMENTADO: de 800 para 1500 (mais espaço para resposta)
                 cache_context={"operation": "conversational_response", "tone": emotional_tone}
             )
 
+            # ✅ TRATAMENTO: Verificar se há mensagem de erro do LLM
+            if response.get("error"):
+                error_msg = response.get('error', 'Erro desconhecido')
+                logger.error(f"❌ Erro na API ao gerar resposta conversacional: {error_msg}")
+
+                # Se houver user_message, usar ela
+                if response.get("user_message"):
+                    logger.warning(f"⚠️ Usando mensagem de fallback da API")
+                    return response.get("user_message")
+
+                # Senão, usar fallback baseado no tom
+                return self._get_fallback_response(emotional_tone)
+
             response_text = response.get("content", "")
+
+            # Verificar se resposta está vazia
+            if not response_text or len(response_text.strip()) == 0:
+                logger.warning(f"⚠️ Resposta vazia recebida do LLM. Usando fallback.")
+                return self._get_fallback_response(emotional_tone)
 
             # Remover possíveis tags JSON se houver
             response_text = self._clean_response(response_text)
@@ -154,51 +264,59 @@ class ConversationalReasoningEngine:
             logger.error(f"❌ Erro ao gerar resposta conversacional: {e}", exc_info=True)
             return self._get_fallback_response(emotional_tone)
 
-    def _build_reasoning_prompt(self, user_query: str, conversation_history: str) -> str:
+    def _build_reasoning_prompt(self, full_conversation: str) -> str:
         """Constrói o prompt de raciocínio profundo"""
 
         return f"""# 🧠 ANÁLISE DE INTENÇÃO CONVERSACIONAL
 
 Você é a Caculinha, uma assistente de BI conversacional. Você NÃO é um robô executor de queries.
 
-## 📚 CONTEXTO DA CONVERSA
-
-Histórico recente:
-{conversation_history}
-
-**Mensagem atual:** "{user_query}"
+## 📚 CONTEXTO DA CONVERSA COMPLETA
+{full_conversation}
 
 ## 🤔 TAREFA: PENSAR PROFUNDAMENTE
 
-Analise a mensagem e responda estas perguntas em seu raciocínio:
+Analise a **conversa completa** e responda estas perguntas em seu raciocínio:
 
-1. **Intenção Real**: O que o usuário REALMENTE quer? (além das palavras literais)
+1. **Intenção Real**: O que o usuário REALMENTE quer? Considere o histórico para resolver ambiguidades na última mensagem.
 2. **Tom Emocional**: Como ele está se sentindo? (frustrado/curioso/casual/urgente/neutro/confuso)
-3. **Contexto**: É continuação da conversa anterior ou novo tópico?
-4. **Clareza**: Ele tem informação suficiente ou está confuso sobre algo?
-5. **Tipo de Resposta**: Preciso conversar ou executar análise técnica?
+3. **Contexto**: A última mensagem é uma continuação da conversa anterior ou um novo tópico?
+4. **Clareza**: O usuário já forneceu todas as informações necessárias ou ainda faltam detalhes?
+5. **Tipo de Resposta**: Com base em tudo, devo conversar ou executar uma análise técnica?
 
 ## 🎯 CATEGORIZAÇÃO
 
 **MODO CONVERSACIONAL** - Use quando:
-- Saudações/agradecimentos/despedidas
-- Perguntas sobre capacidades ("o que você faz?", "pode me ajudar com...")
-- Feedback emocional ("não entendi", "está confuso", "muito obrigado")
-- Informação INSUFICIENTE (falta UNE, produto, período, etc.)
-- Tom frustrado (precisa de empatia)
-- Pedidos vagos sem detalhes técnicos
+- Saudações/agradecimentos/despedidas/conversa casual.
+- Perguntas sobre suas capacidades ("o que você faz?", "pode me ajudar com...").
+- Feedback emocional ("não entendi", "está confuso", "muito obrigado").
+- Informação está GENUINAMENTE INSUFICIENTE (falta UNE, período, produto específico, etc).
 
 **MODO ANALÍTICO** - Use quando:
-- Pedido CLARO de dados/análise com todas informações
-- Query técnica bem definida (ex: "MC do produto 123 na UNE SCR")
-- Solicitação de gráfico/relatório com contexto completo
+- O pedido para dados/análise está CLARO e COMPLETO, considerando todo o histórico.
+- O usuário forneceu a última informação que faltava para uma análise.
+- A query é técnica e bem definida (ex: "MC do produto 123 na UNE SCR").
+- O usuário já respondeu a uma pergunta de clarificação sua.
+- Pedidos como "gráfico de TODOS os segmentos" são CLAROS (use métrica padrão: vendas).
+
+## ⚠️ REGRAS ANTI-LOOP (CRÍTICO)
+
+🔴 **NUNCA faça perguntas repetidas!**
+- Se você JÁ PERGUNTOU algo no histórico e o usuário respondeu → vá para MODO ANALÍTICO
+- Se o usuário disse "todos" (ex: "todos os segmentos") → NÃO pergunte qual! Use TODOS mesmo.
+- Se a conversa tem > 3 mensagens e ainda não executou → FORCE modo analítico com defaults razoáveis
+
+🔴 **Defaults Inteligentes:**
+- "gráfico de segmentos" → assumir métrica de vendas (padrão)
+- "todos os produtos" → assumir top 10 ou 20
+- Falta detalhes menores → assumir defaults e EXECUTAR
 
 ## 📤 RESPOSTA (JSON)
 
 ```json
 {{
   "mode": "conversational" ou "analytical",
-  "reasoning": "Seu raciocínio em 2-3 frases explicando POR QUE escolheu este modo",
+  "reasoning": "Seu raciocínio em 2-3 frases explicando POR QUE escolheu este modo, com base no histórico.",
   "emotional_tone": "frustrado/curioso/casual/urgente/neutro/confuso",
   "confidence": 0.0-1.0,
   "needs_clarification": true/false,
@@ -212,17 +330,15 @@ Analise a mensagem e responda estas perguntas em seu raciocínio:
 ```
 
 **IMPORTANTE**:
-- Seja genuíno e humano no raciocínio
-- Se FALTAR informação (UNE, produto, etc.), escolha "conversational" e peça clarificação
-- Prefira "conversational" na dúvida - melhor conversar do que errar a query
+- Se a última mensagem do usuário for uma resposta a uma pergunta sua, use o histórico para decidir se agora você tem informação suficiente para o **MODO ANALÍTICO**.
+- 🔧 **NOVO:** Prefira "analytical" quando houver informação SUFICIENTE, mesmo que não seja PERFEITA. Use defaults inteligentes em vez de perguntar tudo.
 """
 
     def _build_conversational_prompt(
         self,
-        user_query: str,
+        full_conversation: str,
         emotional_tone: str,
-        reasoning: Dict[str, Any],
-        conversation_history: str
+        reasoning: Dict[str, Any]
     ) -> str:
         """Constrói o prompt para resposta conversacional"""
 
@@ -276,7 +392,7 @@ Analise a mensagem e responda estas perguntas em seu raciocínio:
         if clarification_question:
             task_section = f"## 🎯 CLARIFICAÇÃO NECESSÁRIA\n\n{clarification_question}\n\nResponda de forma natural fazendo esta pergunta, mas reformule com suas palavras!"
         else:
-            task_section = "## 🎯 RESPONDA À MENSAGEM\n\nResponda naturalmente à mensagem do usuário no tom apropriado."
+            task_section = "## 🎯 RESPONDA À MENSAGEM\n\nResponda naturalmente à última mensagem do usuário no tom apropriado, considerando todo o contexto."
 
         return f'''# 💬 RESPOSTA CONVERSACIONAL DA CACULINHA
 
@@ -286,11 +402,8 @@ Você é a Caculinha. Responda de forma COMPLETAMENTE NATURAL e HUMANA.
 Usuário está: **{emotional_tone}**
 Estilo de resposta: **{response_style}**
 
-## 📜 CONVERSA RECENTE
-{conversation_history}
-
-## 💬 MENSAGEM ATUAL
-"{user_query}"
+## 📜 CONVERSA COMPLETA
+{full_conversation}
 
 ## 🧠 SEU RACIOCÍNIO
 {reasoning.get('reasoning', '')}
@@ -320,44 +433,16 @@ Estilo de resposta: **{response_style}**
 **RESPONDA APENAS O TEXTO (sem JSON, sem tags):**
 '''
 
-    def _extract_user_message(self, message: Any) -> str:
-        """Extrai conteúdo da mensagem do usuário"""
-        if hasattr(message, 'content'):
-            return str(message.content)
-        elif isinstance(message, dict):
-            return str(message.get('content', ''))
-        return str(message)
-
-    def _format_conversation_history(self, messages: List) -> str:
-        """Formata histórico de conversa de forma legível"""
-        if not messages or len(messages) <= 1:
-            return "(Primeira mensagem da conversa)"
-
-        history = []
-        for msg in messages[:-1]:  # Todas exceto a última
-            try:
-                role = "Usuário" if (hasattr(msg, 'type') and msg.type == 'human') or \
-                                    (hasattr(msg, 'role') and msg.role == 'user') else "Caculinha"
-                content = self._extract_user_message(msg)
-                # Truncar mensagens muito longas
-                content_preview = content[:150] + "..." if len(content) > 150 else content
-                history.append(f"{role}: {content_preview}")
-            except Exception as e:
-                logger.warning(f"Erro ao formatar mensagem do histórico: {e}")
-                continue
-
-        return "\n".join(history[-5:]) if history else "(Sem histórico)"  # Últimas 5
-
     def _parse_reasoning(self, content: str) -> Dict[str, Any]:
         """Parse do resultado de raciocínio com validação robusta"""
 
         # Limpar markdown se presente
         if "```json" in content:
-            match = re.search(r"```json\n(.*?)```", content, re.DOTALL)
+            match = re.search(r"```json\n(.*?)""", content, re.DOTALL)
             if match:
                 content = match.group(1).strip()
         elif "```" in content:
-            match = re.search(r"```\n(.*?)```", content, re.DOTALL)
+            match = re.search(r"```\n(.*?)""", content, re.DOTALL)
             if match:
                 content = match.group(1).strip()
 

@@ -22,6 +22,8 @@ from datetime import datetime
 # Usa sistema centralizado de logs (logs/app_activity/, logs/errors/, etc.)
 # ============================================================================
 from core.config.logging_config import setup_logging
+from core.security import mask_pii, get_pii_summary
+from core.llm_service import get_llm_service
 
 # Inicializar sistema de logs estruturado
 setup_logging()
@@ -57,217 +59,271 @@ from core.config.settings import get_settings
 # Reduz tempo de startup de 8s → 6s
 
 # ============================================================================
-# CSS CUSTOMIZADO - TEMA CHATGPT
-# Baseado em: prototipo_multipaginas_completo.html
-# Data: 20/10/2025
+# ============================================================================
+# CSS CUSTOMIZADO - DESIGN MINIMALISTA CLEAN (v3.0)
+# Otimizado para performance máxima
+# Data: 20/11/2025
 # ============================================================================
 
-st.markdown("""
-<style>
-/* ==================== GLOBAL ==================== */
+@st.cache_data
+def load_optimized_css():
+    """Carrega CSS otimizado (cached para performance)"""
+    css = """
+/* 🤍 DESIGN MINIMALISTA CLEAN - Performance Optimized */
 :root {
-    --bg-primary: #343541;
-    --bg-secondary: #444654;
-    --bg-sidebar: #202123;
-    --bg-card: #2a2b32;
-    --bg-input: #40414f;
-    --border-color: #444654;
-    --text-primary: #ececf1;
-    --text-secondary: #8e8ea0;
-    --color-primary: #10a37f;
-    --color-secondary: #5436DA;
-    --color-danger: #ef4444;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8F9FA;
+    --bg-card: #FFFFFF;
+    --bg-input: #FFFFFF;
+    --bg-sidebar: #F8F9FA;
+    --border: #E5E7EB;
+    --border-focus: #3B82F6;
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --text-tertiary: #9CA3AF;
+    --accent: #3B82F6;
+    --success: #10B981;
+    --error: #EF4444;
+}
+
+/* ==================== GLOBAL - FORÇAR LIGHT THEME ==================== */
+/* Forçar fundo branco em TODOS os containers principais */
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stApp"],
+body,
+html,
+.main,
+#root {
+    background: var(--bg-primary) !important;
+    background-color: var(--bg-primary) !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* Header e Footer também brancos */
+[data-testid="stHeader"],
+header,
+footer {
+    background: var(--bg-primary) !important;
+    background-color: var(--bg-primary) !important;
+}
+
+/* Garantir que textos e spinners sejam sempre horizontais */
+.stSpinner,
+.stSpinner > div,
+.stMarkdown,
+.stText,
+p, h1, h2, h3, h4, h5, h6,
+span, div, label, button,
+[data-testid="stMarkdownContainer"],
+[data-testid="stText"] {
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+}
+
+/* Forçar spinner horizontal */
+.stSpinner > div {
+    display: inline-block !important;
+    vertical-align: middle !important;
 }
 
 /* ==================== SIDEBAR ==================== */
 section[data-testid="stSidebar"] {
-    background-color: var(--bg-sidebar) !important;
+    background: var(--bg-sidebar) !important;
+    border-right: 1px solid var(--border) !important;
 }
 
-section[data-testid="stSidebar"] > div {
-    background-color: var(--bg-sidebar) !important;
-    border-right: 1px solid var(--border-color) !important;
-}
-
-/* User Info no Sidebar */
-section[data-testid="stSidebar"] .element-container {
-    color: var(--text-primary) !important;
-}
-
-/* Botões no Sidebar */
 section[data-testid="stSidebar"] button {
-    background-color: var(--bg-input) !important;
-    border: 1px solid var(--border-color) !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
     color: var(--text-primary) !important;
     border-radius: 6px !important;
-    transition: all 0.2s !important;
+    transition: border-color 150ms ease !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background-color: var(--bg-secondary) !important;
-    border-color: var(--color-primary) !important;
+    border-color: var(--accent) !important;
 }
 
 /* ==================== CHAT MESSAGES ==================== */
-/* Mensagem do Usuário */
-.stChatMessage[data-testid="user-message"] {
-    background-color: transparent !important;
+.stChatMessage {
+    background: transparent !important;
+    border: none !important;
+    padding: 16px 0 !important;
+    margin: 8px 0 !important;
 }
 
-/* Mensagem do Assistente */
-.stChatMessage[data-testid="assistant-message"] {
-    background-color: var(--bg-secondary) !important;
+.stChatMessage[data-testid="user"] {
+    background: var(--bg-secondary) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    border: 1px solid var(--border) !important;
 }
 
-/* Avatares */
-.stChatMessage .stAvatar {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 50% !important;
-}
-
-/* Avatar do Usuário */
-[data-testid="user-message"] .stAvatar {
-    background-color: var(--color-primary) !important;
-}
-
-/* Avatar do Assistente */
-[data-testid="assistant-message"] .stAvatar {
-    background-color: var(--color-secondary) !important;
+.stChatMessage[data-testid="assistant"] {
+    background: var(--bg-card) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    border: 1px solid var(--border) !important;
 }
 
 /* ==================== INPUT AREA ==================== */
-textarea[data-testid="stChatInputTextArea"] {
-    background-color: white !important;
-    border: 1px solid var(--border-color) !important;
+.stChatInput {
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 12px !important;
-    color: #333 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    padding: 12px 16px !important;
+    transition: all 150ms ease !important;
+}
+
+.stChatInput:focus-within {
+    border-color: var(--accent) !important;
+    outline: 3px solid rgba(59, 130, 246, 0.1) !important;
+    outline-offset: 0px !important;
+}
+
+textarea[data-testid="stChatInputTextArea"] {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-primary) !important;
+}
+
+/* ==================== PLOTLY CHARTS ==================== */
+.js-plotly-plot {
+    background: var(--bg-card) !important;
+    border-radius: 12px !important;
     padding: 16px !important;
+    border: 1px solid var(--border) !important;
 }
 
-.stChatInput textarea:focus {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1) !important;
-}
-
-/* Text Inputs gerais */
-.stTextInput > div > div > input,
-.stNumberInput > div > div > input {
-    background-color: var(--bg-input) !important;
-    color: var(--text-primary) !important;
-    border: 1px solid var(--border-color) !important;
+/* ==================== DATAFRAMES ==================== */
+.stDataFrame {
+    background: var(--bg-card) !important;
     border-radius: 8px !important;
+    border: 1px solid var(--border) !important;
 }
 
-.stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus,
-.stNumberInput > div > div > input:focus {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1) !important;
+.stDataFrame thead tr {
+    background: var(--bg-secondary) !important;
+    border-bottom: 2px solid var(--border) !important;
 }
 
-/* Labels dos inputs */
-.stTextInput > label,
-.stTextArea > label,
-.stNumberInput > label {
-    color: var(--text-primary) !important;
-    font-weight: 500 !important;
+.stDataFrame tbody tr {
+    border-bottom: 1px solid var(--border) !important;
+}
+
+.stDataFrame tbody tr:hover {
+    background: var(--bg-secondary) !important;
 }
 
 /* ==================== BOTÕES ==================== */
 .stButton button {
-    background-color: var(--color-primary) !important;
+    background: var(--accent) !important;
     color: white !important;
-    border-radius: 8px !important;
     border: none !important;
+    border-radius: 8px !important;
     padding: 8px 16px !important;
-    transition: all 0.2s !important;
+    font-weight: 500 !important;
+    transition: all 150ms ease !important;
 }
 
 .stButton button:hover {
-    background-color: #0d8a6a !important;
+    background: #2563EB !important;
+    transform: translateY(-1px) !important;
 }
 
-/* Botão Secundário */
-.stButton[data-baseweb="button"][kind="secondary"] button {
-    background-color: transparent !important;
-    border: 1px solid var(--border-color) !important;
+/* Botões secundários (feedback, etc) */
+button[kind="secondary"],
+button[kind="tertiary"] {
+    background: var(--bg-secondary) !important;
     color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
 }
 
-/* ==================== CARDS E CONTAINERS ==================== */
-div[data-testid="stVerticalBlock"] > div {
-    background-color: transparent !important;
+button[kind="secondary"]:hover,
+button[kind="tertiary"]:hover {
+    background: var(--bg-card) !important;
+    border-color: var(--accent) !important;
 }
 
-.element-container {
-    color: var(--text-primary) !important;
-}
-
-/* Info boxes */
-div[data-testid="stNotification"] {
-    background-color: var(--bg-card) !important;
-    border-left: 3px solid var(--color-primary) !important;
-    border-radius: 6px !important;
-}
-
-/* ==================== GRÁFICOS PLOTLY ==================== */
-.js-plotly-plot {
-    background-color: var(--bg-card) !important;
-    border-radius: 12px !important;
-    padding: 20px !important;
-}
-
-/* ==================== TABELAS ==================== */
-.stDataFrame {
-    background-color: var(--bg-card) !important;
+/* ==================== EXPANDER ==================== */
+.streamlit-expanderHeader {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
-}
-
-.stDataFrame table {
     color: var(--text-primary) !important;
+    padding: 12px 16px !important;
+    transition: all 150ms ease !important;
 }
 
-.stDataFrame thead tr {
-    background-color: var(--bg-sidebar) !important;
-    border-bottom: 2px solid var(--color-primary) !important;
+.streamlit-expanderHeader:hover {
+    background: var(--bg-secondary) !important;
+    border-color: var(--accent) !important;
 }
 
-.stDataFrame tbody tr {
-    border-bottom: 1px solid var(--border-color) !important;
+.streamlit-expanderContent {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+    padding: 16px !important;
 }
 
-.stDataFrame tbody tr:hover {
-    background-color: rgba(16, 163, 127, 0.05) !important;
+/* ==================== SPINNER (SEM TEXTO) ==================== */
+.stSpinner > div {
+    border-color: var(--accent) transparent transparent transparent !important;
+    width: 20px !important;
+    height: 20px !important;
 }
 
-/* ==================== INPUTS ==================== */
-input, textarea, select {
-    background-color: var(--bg-input) !important;
-    border: 1px solid var(--border-color) !important;
-    color: var(--text-primary) !important;
-    border-radius: 6px !important;
+/* Remover TODO o texto do spinner */
+.stSpinner p,
+.stSpinner span,
+.stSpinner div[data-testid="stMarkdownContainer"],
+.element-container:has(.stSpinner) p,
+.element-container:has(.stSpinner) span {
+    display: none !important;
+    font-size: 0 !important;
+    visibility: hidden !important;
 }
 
-input:focus, textarea:focus, select:focus {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1) !important;
+/* Garantir que apenas o ícone apareça */
+.stSpinner {
+    text-align: center !important;
 }
 
 /* ==================== MÉTRICAS ==================== */
 div[data-testid="stMetricValue"] {
-    font-size: 32px !important;
-    font-weight: 700 !important;
+    font-size: 28px !important;
+    font-weight: 600 !important;
     color: var(--text-primary) !important;
 }
 
 div[data-testid="stMetricLabel"] {
     font-size: 13px !important;
     color: var(--text-secondary) !important;
+    font-weight: 500 !important;
 }
 
-div[data-testid="stMetricDelta"] {
-    font-size: 14px !important;
+/* ==================== INPUTS GERAIS ==================== */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stTextArea > div > div > textarea {
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    padding: 8px 12px !important;
+    transition: border-color 150ms ease !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: var(--accent) !important;
+    outline: 3px solid rgba(59, 130, 246, 0.1) !important;
+    outline-offset: 0px !important;
 }
 
 /* ==================== SCROLLBAR ==================== */
@@ -277,68 +333,28 @@ div[data-testid="stMetricDelta"] {
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--bg-primary) !important;
+    background: var(--bg-secondary) !important;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #565869 !important;
+    background: var(--border) !important;
     border-radius: 4px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #6e6e80 !important;
+    background: var(--text-tertiary) !important;
 }
 
-/* ==================== TABS ==================== */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px !important;
+/* ==================== OTIMIZAÇÕES DE PERFORMANCE ==================== */
+*:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 2px !important;
 }
+    """
+    return f"<style>{css}</style>"
 
-.stTabs [data-baseweb="tab"] {
-    background-color: var(--bg-input) !important;
-    border: 1px solid var(--border-color) !important;
-    color: var(--text-primary) !important;
-    border-radius: 6px 6px 0 0 !important;
-}
-
-.stTabs [aria-selected="true"] {
-    background-color: var(--color-primary) !important;
-    border-color: var(--color-primary) !important;
-}
-
-/* ==================== EXPANDER ==================== */
-.streamlit-expanderHeader {
-    background-color: var(--bg-card) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: 6px !important;
-    color: var(--text-primary) !important;
-}
-
-.streamlit-expanderContent {
-    background-color: var(--bg-card) !important;
-    border: 1px solid var(--border-color) !important;
-    border-top: none !important;
-    border-radius: 0 0 6px 6px !important;
-}
-
-/* ==================== HEADER ==================== */
-header[data-testid="stHeader"] {
-    background-color: var(--bg-primary) !important;
-}
-
-/* ==================== RESPONSIVO ==================== */
-@media (max-width: 768px) {
-    section[data-testid="stSidebar"] {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-    }
-
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        transform: translateX(0);
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+# Carregar CSS com cache (performance boost)
+st.markdown(load_optimized_css(), unsafe_allow_html=True)
 
 # ============================================================================
 # ✅ OTIMIZAÇÃO v2.2: Cache automático com versionamento
@@ -488,6 +504,7 @@ if "authenticated" not in st.session_state:
 if not st.session_state.authenticated or sessao_expirada():
     st.session_state.authenticated = False
     login()
+    st.stop()  # ✅ Parar execução - evita tela de login fantasma
 else:
     # --- Configuração da Página ---
     st.set_page_config(page_title="Analisador de Dados Caçulinha", page_icon="📊", layout="wide")
@@ -820,295 +837,245 @@ else:
         user_message = {"role": "user", "content": {"type": "text", "content": user_input}}
         st.session_state.messages.append(user_message)
 
-        with st.spinner("🤖 Processando com IA..."):
+        # ✅ PROCESSAMENTO DIRETO (sem spinners - mais rápido)
+        try:
+            # Inicializar agent_response
+            agent_response = None
+            start_time = datetime.now()
+
+            # 💾 CACHE: Verificar cache antes de processar (com normalização)
             try:
-                # Inicializar agent_response
-                agent_response = None
-                start_time = datetime.now()
+                from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
+                cache = get_agent_graph_cache()
 
-                # ✅ Sistema 100% baseado em IA (GraphBuilder + CodeGenAgent)
-                if True:  # Simplificado para sempre processar com IA
-                    # 💾 CACHE: Verificar cache antes de processar (com normalização)
-                    try:
-                        from core.business_intelligence.agent_graph_cache import get_agent_graph_cache
-                        cache = get_agent_graph_cache()
+                # ✅ OTIMIZAÇÃO: Normalizar query para melhorar cache hit rate
+                normalized_query = normalize_query_for_cache(user_input)
 
-                        # ✅ OTIMIZAÇÃO: Normalizar query para melhorar cache hit rate
-                        normalized_query = normalize_query_for_cache(user_input)
+                # Tentar com query normalizada primeiro
+                cached_result = cache.get(normalized_query)
 
-                        # Tentar com query normalizada primeiro
-                        cached_result = cache.get(normalized_query)
+                # Fallback: tentar com query original se não encontrar
+                if not cached_result:
+                    cached_result = cache.get(user_input)
 
-                        # Fallback: tentar com query original se não encontrar
-                        if not cached_result:
-                            cached_result = cache.get(user_input)
-
-                        if cached_result:
-                            logger.info(f"✅ Cache HIT! Query normalizada: '{normalized_query}'")
-                        else:
-                            logger.info(f"❌ Cache MISS. Query normalizada: '{normalized_query}'")
-
-                    except Exception as cache_error:
-                        logger.warning(f"Erro ao acessar cache: {cache_error}")
-                        cached_result = None
-
-                    if cached_result:
-                        # ✅ CACHE HIT!
-                        agent_response = cached_result
-                        agent_response["method"] = "agent_graph_cached"
-                        agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
-
-                        # Debug para admins
-                        user_role = st.session_state.get('role', '')
-                        if user_role == 'admin':
-                            with st.expander("💾 Cache Hit!"):
-                                st.success(f"✅ Resposta recuperada do cache")
-                                st.write(f"**Fonte:** {cached_result.get('cache_source', 'unknown')}")
-                    else:
-                        # ❌ CACHE MISS: Processar com agent_graph
-                        logger.info("Cache miss. Processando com agent_graph...")
-                        # ✅ CORREÇÃO CONTEXT7: Acessar backend via cache_resource (não session_state)
-                        backend = initialize_backend()
-                        if backend and 'agent_graph' in backend:
-                            agent_graph = backend['agent_graph']
-
-                            # ✅ CORREÇÃO: Usar HumanMessage do LangChain, não dict
-                            HumanMessage = get_backend_module("HumanMessage")
-                            graph_input = {"messages": [HumanMessage(content=user_input)], "query": user_input}
-
-                            # ✅ OTIMIZAÇÃO CONTEXT7: Configurar thread_id para checkpointing
-                            # Permite recovery automático e isolamento de sessões
-                            config = {
-                                "configurable": {
-                                    "thread_id": st.session_state.session_id  # Usa session_id existente
-                                }
-                            }
-                            logger.info(f"🔄 Checkpointing ativado - thread_id: {st.session_state.session_id}")
-
-                            # 🔧 TIMEOUT IMPLEMENTATION: Executar agent_graph com timeout
-                            import threading
-                            import queue
-
-                            result_queue = queue.Queue()
-                            # 🚀 OTIMIZAÇÃO: Timeout adaptativo baseado no tipo de query
-                            def calcular_timeout_dinamico(query: str) -> int:
-                                """
-                                Calcula timeout baseado na complexidade da query
-                                Ajustado em 31/10/2025 com base em Context7 (performance optimization)
-                                """
-                                query_lower = query.lower()
-
-                                # Queries muito complexas (análises multi-dimensionais)
-                                if any(kw in query_lower for kw in ['análise abc', 'distribuição', 'alertas', 'sazonalidade']):
-                                    return 90  # 90s para análises complexas
-
-                                # Queries com filtros UNE + condições (precisa scannear dataset completo)
-                                elif any(kw in query_lower for kw in ['sem vendas', 'sem venda', 'estoque zero', 'parados']):
-                                    return 75  # 75s para queries de filtro negativo (scan completo)
-
-                                # Queries gráficas/evolutivas
-                                elif any(kw in query_lower for kw in ['gráfico', 'chart', 'evolução', 'tendência', 'histórico']):
-                                    return 60  # 60s para gráficos (média 26s + margem)
-
-                                # Análises médias (ranking, top, agregações)
-                                elif any(kw in query_lower for kw in [
-                                    'ranking', 'top', 'maior', 'menor', 'análise', 'compare', 'comparar',
-                                    'mais vendido', 'menos vendido', 'vendidos', 'produtos',
-                                    'liste', 'listar', 'mostre', 'mostrar', 'mc'
-                                ]):
-                                    return 75  # 75s para análises médias e MC
-
-                                # Queries simples (filtro direto)
-                                else:
-                                    return 45  # 45s para queries simples
-
-                            timeout_seconds = calcular_timeout_dinamico(user_input)
-                            logger.info(f"⏱️ Timeout adaptativo: {timeout_seconds}s para query: '{user_input[:50]}...'")
-
-                            # 🚀 OTIMIZAÇÃO: Progress feedback visual com spinner
-                            progress_placeholder = st.empty()
-                            elapsed_time = 0
-                            update_interval = 2  # Atualizar a cada 2s
-
-                            def invoke_agent_graph():
-                                try:
-                                    # ✅ OTIMIZAÇÃO CONTEXT7: Invocar com config para checkpointing
-                                    final_state = agent_graph.invoke(graph_input, config=config)
-                                    result_queue.put(("success", final_state))
-                                except Exception as e:
-                                    result_queue.put(("error", str(e)))
-
-                            # Executar em thread separada com spinner visual (Context7 best practice)
-                            with st.spinner(
-                                text="🤖 Processando sua consulta com IA...",
-                                show_time=True  # ✅ Mostra tempo decorrido (Context7)
-                            ):
-                                thread = threading.Thread(target=invoke_agent_graph, daemon=True)
-                                thread.start()
-
-                                # 🚀 Loop de progress feedback com mensagens contextuais
-                                # Mensagens de progresso baseadas em tempo decorrido
-                                progress_messages = [
-                                    (0, "🔍 Analisando sua pergunta..."),
-                                    (5, "🤖 Classificando intenção..."),
-                                    (10, "📝 Gerando código Python..."),
-                                    (15, "📊 Carregando dados do Parquet..."),
-                                    (20, "⚙️ Executando análise de dados..."),
-                                    (30, "📈 Processando visualização..."),
-                                    (35, "✨ Finalizando resposta...")
-                                ]
-
-                                while thread.is_alive() and elapsed_time < timeout_seconds:
-                                    time.sleep(update_interval)
-                                    elapsed_time += update_interval
-
-                                    # Determinar mensagem apropriada baseada no tempo
-                                    current_message = "⏳ Processando..."
-                                    for time_threshold, message in progress_messages:
-                                        if elapsed_time >= time_threshold:
-                                            current_message = message
-
-                                    # Atualizar progress bar com mensagem contextual
-                                    progress = min(elapsed_time / timeout_seconds, 0.95)  # Máximo 95% durante execução
-                                    progress_placeholder.progress(
-                                        progress,
-                                        text=f"{current_message} ({elapsed_time}s)"
-                                    )
-
-                                    if elapsed_time >= timeout_seconds:
-                                        break
-
-                            # Limpar progress bar
-                            progress_placeholder.empty()
-
-                            # Verificar se thread ainda está viva (timeout)
-                            if thread.is_alive():
-                                thread.join(timeout=0.1)  # Dar mais 0.1s para finalizar
-
-                            # Verificar resultado
-                            if thread.is_alive():
-                                # ⏰ TIMEOUT: Agent graph não respondeu a tempo
-                                agent_response = {
-                                    "type": "error",
-                                    "content": f"⏰ **Tempo Limite Excedido**\n\n"
-                                               f"O processamento da sua consulta demorou muito tempo (>{timeout_seconds}s).\n\n"
-                                               f"**Sugestões:**\n"
-                                               f"- Tente uma consulta mais específica\n"
-                                               f"- Simplifique a pergunta\n"
-                                               f"- Verifique sua conexão de internet",
-                                    "user_query": user_input,
-                                    "method": "agent_graph_timeout"
-                                }
-                                logger.warning(f"Agent graph timeout após {timeout_seconds}s para query: {user_input}")
-                            else:
-                                # ✅ SUCESSO ou ERRO: Obter resultado da thread
-                                try:
-                                    result_type, result = result_queue.get_nowait()
-
-                                    if result_type == "success":
-                                        final_state = result
-                                        agent_response = final_state.get("final_response", {})
-                                        agent_response["method"] = "agent_graph"
-                                        agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
-
-                                        # 💾 Salvar no cache para futuras queries similares (com normalização)
-                                        try:
-                                            # Salvar com query normalizada para melhor reuso
-                                            normalized_query = normalize_query_for_cache(user_input)
-                                            cache.set(normalized_query, agent_response, metadata={
-                                                "timestamp": datetime.now().isoformat(),
-                                                "original_query": user_input
-                                            })
-                                            logger.info(f"💾 Cache SAVE: '{normalized_query}'")
-                                        except Exception as cache_save_error:
-                                            logger.warning(f"Erro ao salvar no cache: {cache_save_error}")
-
-                                        # Debug para admins
-                                        user_role = st.session_state.get('role', '')
-                                        if user_role == 'admin':
-                                            with st.expander("🔍 Debug: agent_graph"):
-                                                st.write(f"**Tempo de processamento:** {agent_response['processing_time']:.2f}s")
-                                                st.write(f"**Tipo de resposta:** {agent_response.get('type', 'unknown')}")
-                                    else:
-                                        # ❌ ERRO na execução do agent_graph
-                                        agent_response = {
-                                            "type": "error",
-                                            "content": f"❌ **Erro no Processamento**\n\n{result}\n\n"
-                                                       f"Por favor, tente reformular sua consulta.",
-                                            "user_query": user_input,
-                                            "method": "agent_graph_error"
-                                        }
-                                        logger.error(f"Erro no agent_graph: {result}")
-                                except queue.Empty:
-                                    # Caso improvável: thread terminou mas sem resultado
-                                    agent_response = {
-                                        "type": "error",
-                                        "content": "Erro inesperado ao processar consulta.",
-                                        "user_query": user_input,
-                                        "method": "agent_graph_empty"
-                                    }
-                        else:
-                            # 🔧 DIAGNÓSTICO: Verificar por que agent_graph não está disponível
-                            error_details = []
-
-                            if not backend:
-                                error_details.append("❌ Backend não inicializado")
-                            elif 'agent_graph' not in backend:
-                                error_details.append("❌ Agent Graph não encontrado no backend")
-                                available_keys = list(backend.keys())
-                                error_details.append(f"Componentes disponíveis: {', '.join(available_keys)}")
-
-                            error_msg = "🤖 **Sistema de IA Indisponível**\n\n"
-                            error_msg += "O sistema não conseguiu inicializar o agente de IA.\n\n"
-                            error_msg += "**💡 Solução:**\n"
-                            error_msg += "1. Recarregue a página (F5)\n"
-                            error_msg += "2. Verifique sua conexão de internet\n"
-                            error_msg += "3. Se o problema persistir, entre em contato com o suporte"
-
-                            # Adicionar detalhes técnicos apenas para admins
-                            user_role = st.session_state.get('role', '')
-                            if user_role == 'admin' and error_details:
-                                error_msg += "\n\n**🔧 Detalhes Técnicos (Admin):**\n"
-                                error_msg += "\n".join(error_details)
-
-                            agent_response = {
-                                "type": "error",
-                                "content": error_msg,
-                                "user_query": user_input,
-                                "method": "agent_graph_unavailable"
-                            }
-
-                # ✅ GARANTIR estrutura correta da resposta
-                if agent_response:
-                    assistant_message = {"role": "assistant", "content": agent_response}
-                    st.session_state.messages.append(assistant_message)
+                if cached_result:
+                    logger.info(f"✅ Cache HIT! Query normalizada: '{normalized_query}'")
                 else:
-                    # Fallback se agent_response não foi definido
-                    error_message = {
-                        "role": "assistant",
-                        "content": {
-                            "type": "error",
-                            "content": "Erro ao processar consulta. Tente novamente.",
-                            "user_query": user_input
+                    logger.info(f"❌ Cache MISS. Query normalizada: '{normalized_query}'")
+
+            except Exception as cache_error:
+                logger.warning(f"Erro ao acessar cache: {cache_error}")
+                cached_result = None
+
+            if cached_result:
+                # ✅ CACHE HIT!
+                agent_response = cached_result
+                agent_response["method"] = "agent_graph_cached"
+                agent_response["processing_time"] = (datetime.now() - start_time).total_seconds()
+
+                # Debug para admins
+                user_role = st.session_state.get('role', '')
+                if user_role == 'admin':
+                    with st.expander("💾 Cache Hit!"):
+                        st.success(f"✅ Resposta recuperada do cache")
+                        st.write(f"**Fonte:** {cached_result.get('cache_source', 'unknown')}")
+            else:
+                # ❌ CACHE MISS: Processar com agent_graph
+                logger.info("Cache miss. Processando com agent_graph...")
+                # ✅ CORREÇÃO CONTEXT7: Acessar backend via cache_resource (não session_state)
+                backend = initialize_backend()
+                if backend and 'agent_graph' in backend:
+                    agent_graph = backend['agent_graph']
+
+                    # ✅ CORREÇÃO: Construir o histórico completo de mensagens
+                    from langchain_core.messages import AIMessage
+                    HumanMessage = get_backend_module("HumanMessage")
+                    
+                    langchain_messages = []
+                    for msg in st.session_state.get('messages', []):
+                        if msg.get("role") == "user":
+                            # ✅ CORREÇÃO: Verificar tipo antes de chamar .get()
+                            content = msg.get("content", {})
+                            if isinstance(content, dict):
+                                user_text = content.get("content", "")
+                            elif isinstance(content, list):
+                                # Se for lista, converter para string
+                                user_text = str(content)
+                            else:
+                                # Se for string ou outro tipo, usar diretamente
+                                user_text = str(content)
+                            langchain_messages.append(HumanMessage(content=user_text))
+                        elif msg.get("role") == "assistant":
+                            # Para o assistente, podemos simplificar para o conteúdo textual por enquanto
+                            # já que o grafo espera principalmente o texto.
+                            assistant_content = msg.get("content", {})
+                            if isinstance(assistant_content, dict):
+                                text_content = assistant_content.get("content", "")
+                                if isinstance(text_content, dict): # Caso de content aninhado
+                                    text_content = text_content.get("content", "...")
+                                langchain_messages.append(AIMessage(content=str(text_content)))
+                            elif isinstance(assistant_content, list):
+                                # Se for lista, converter para string
+                                langchain_messages.append(AIMessage(content=str(assistant_content)))
+                            else:
+                                langchain_messages.append(AIMessage(content=str(assistant_content)))
+
+                    # A última mensagem (a atual) já foi adicionada à session_state, então usamos a lista completa
+                    
+                    # 🔒 SEGURANÇA: Mascarar PII no input antes de enviar ao grafo
+                    masked_query = mask_pii(user_input)
+                    if masked_query != user_input:
+                        logger.info(f"🔒 PII mascarado no input: {user_input} -> {masked_query}")
+                    
+                    graph_input = {"messages": langchain_messages, "query": masked_query}
+
+                    # ✅ OTIMIZAÇÃO CONTEXT7: Configurar thread_id para checkpointing
+                    # Permite recovery automático e isolamento de sessões
+                    config = {
+                        "configurable": {
+                            "thread_id": st.session_state.session_id  # Usa session_id existente
                         }
                     }
-                    st.session_state.messages.append(error_message)
+                    logger.info(f"🔄 Checkpointing ativado - thread_id: {st.session_state.session_id}")
 
-                # Resposta processada silenciosamente
+                    # ✅ STREAMING IMPLEMENTATION: Executar agent_graph com feedback visual
 
-            except Exception as e:
-                # Erro fatal na invocação do agente. Parar a execução e notificar o usuário.
-                logger.critical(f"Erro fatal ao invocar o backend: {e}", exc_info=True)
-                st.error("🚨 Desculpe, ocorreu um erro crítico no sistema.")
-                st.info("A equipe de desenvolvimento foi notificada. Por favor, atualize a página e tente novamente.")
-                
-                # Adiciona uma mensagem de erro clara ao chat para o usuário
-                error_content = {
-                    "type": "text",
-                    "content": "❌ **Erro Interno**\n\nOcorreu uma falha inesperada ao processar sua solicitação. A equipe de suporte já foi notificada."
+                    try:
+                        # Status de progresso
+                        status_container = st.empty()
+                        status_container.markdown("🔄 *Processando sua pergunta...*")
+
+                        # Executar grafo em modo streaming
+                        agent_response = None
+                        initial_feedback_shown = False
+
+                        for event in agent_graph.stream(graph_input, config=config):
+                            # Identificar qual nó foi executado
+                            current_node = list(event.keys())[0] if isinstance(event, dict) else "unknown"
+
+                            # Atualizar status baseado no nó
+                            if current_node == "reasoning":
+                                status_container.markdown("🧠 *Analisando intenção...*")
+                            elif current_node == "generate_initial_feedback":
+                                # 🎯 NOVO: Exibir feedback inicial ao usuário
+                                state_update = event.get(current_node, {})
+                                feedback_msg = state_update.get("initial_feedback", "")
+                                if feedback_msg and not initial_feedback_shown:
+                                    # Limpar status e mostrar feedback
+                                    status_container.empty()
+                                    # Adicionar mensagem de feedback nas mensagens do chat
+                                    st.session_state.messages.append({"role": "assistant", "content": feedback_msg})
+                                    with st.chat_message("assistant"):
+                                        st.markdown(feedback_msg)
+                                    initial_feedback_shown = True
+                                    # Atualizar status para mostrar que está processando
+                                    status_container.markdown("⚙️ *Processando...*")
+                            elif current_node == "conversational_response":
+                                status_container.markdown("💬 *Gerando resposta conversacional...*")
+                            elif current_node == "classify_intent":
+                                status_container.markdown("🎯 *Classificando tipo de consulta...*")
+                            elif current_node == "generate_parquet_query":
+                                status_container.markdown("🔍 *Preparando consulta de dados...*")
+                            elif current_node == "execute_query":
+                                status_container.markdown("📊 *Consultando dados...*")
+                            elif current_node == "generate_plotly_spec":
+                                status_container.markdown("📈 *Gerando visualização...*")
+                            elif current_node == "format_final_response":
+                                status_container.markdown("✍️ *Formatando resposta...*")
+
+                            # Verificar se temos uma resposta final no estado
+                            if isinstance(event, dict):
+                                state_update = event.get(current_node, {})
+                                if "final_response" in state_update:
+                                    agent_response = state_update["final_response"]
+
+                        # Limpar status
+                        status_container.empty()
+
+                        # Verificar se obtivemos resposta
+                        if not agent_response:
+                            agent_response = {
+                                "type": "error",
+                                "content": "Não foi possível obter uma resposta do agente."
+                            }
+
+                        # 🔒 SEGURANÇA: Mascarar PII na resposta se for dict com content
+                        if isinstance(agent_response, dict) and "content" in agent_response:
+                            content = agent_response["content"]
+                            if isinstance(content, str):
+                                masked_content = mask_pii(content)
+                                if masked_content != content:
+                                    agent_response["content"] = masked_content
+                                    logger.info(f"🔒 PII mascarado na resposta")
+                                    pii_summary = get_pii_summary()
+                                    if pii_summary:
+                                        logger.warning(f"🔒 Tipos de PII mascarados: {pii_summary}")
+
+                    except Exception as e:
+                        logger.error(f"❌ Erro no streaming: {e}", exc_info=True)
+                        agent_response = {"type": "error", "content": f"Erro ao processar: {str(e)}"}
+                else:
+                    # 🔧 DIAGNÓSTICO: Verificar por que agent_graph não está disponível
+                    error_details = []
+
+                    if not backend:
+                        error_details.append("❌ Backend não inicializado")
+                    elif 'agent_graph' not in backend:
+                        error_details.append("❌ Agent Graph não encontrado no backend")
+                        available_keys = list(backend.keys())
+                        error_details.append(f"Componentes disponíveis: {', '.join(available_keys)}")
+
+                    error_msg = "🤖 **Sistema de IA Indisponível**\n\n"
+                    error_msg += "O sistema não conseguiu inicializar o agente de IA.\n\n"
+                    error_msg += "**💡 Solução:**\n"
+                    error_msg += "1. Recarregue a página (F5)\n"
+                    error_msg += "2. Verifique sua conexão de internet\n"
+                    error_msg += "3. Se o problema persistir, entre em contato com o suporte"
+
+                    # Adicionar detalhes técnicos apenas para admins
+                    user_role = st.session_state.get('role', '')
+                    if user_role == 'admin' and error_details:
+                        error_msg += "\n\n**🔧 Detalhes Técnicos (Admin):**\n"
+                        error_msg += "\n".join(error_details)
+
+                    agent_response = {
+                        "type": "error",
+                        "content": error_msg,
+                        "user_query": user_input,
+                        "method": "agent_graph_unavailable"
+                    }
+
+            # ✅ GARANTIR estrutura correta da resposta
+            if agent_response:
+                assistant_message = {"role": "assistant", "content": agent_response}
+                st.session_state.messages.append(assistant_message)
+            else:
+                # Fallback se agent_response não foi definido
+                error_message = {
+                    "role": "assistant",
+                    "content": {
+                        "type": "error",
+                        "content": "Erro ao processar consulta. Tente novamente.",
+                        "user_query": user_input
+                    }
                 }
-                st.session_state.messages.append({"role": "assistant", "content": error_content})
-                # Não fazer st.rerun() aqui para que o erro seja visível.
+                st.session_state.messages.append(error_message)
+
+            # Resposta processada silenciosamente
+
+        except Exception as e:
+            # Erro fatal na invocação do agente. Parar a execução e notificar o usuário.
+            logger.critical(f"Erro fatal ao invocar o backend: {e}", exc_info=True)
+            st.error("🚨 Desculpe, ocorreu um erro crítico no sistema.")
+            st.info("A equipe de desenvolvimento foi notificada. Por favor, atualize a página e tente novamente.")
+                
+            # Adiciona uma mensagem de erro clara ao chat para o usuário
+            error_content = {
+                "type": "text",
+                "content": "❌ **Erro Interno**\n\nOcorreu uma falha inesperada ao processar sua solicitação. A equipe de suporte já foi notificada."
+            }
+            st.session_state.messages.append({"role": "assistant", "content": error_content})
+            # Não fazer st.rerun() aqui para que o erro seja visível.
 
         # Log the query and its outcome
         backend = initialize_backend()
@@ -1121,7 +1088,7 @@ else:
 
             # Safely determine if the main operation was successful
             is_success = agent_response.get("type") != "error"
-            
+
             # Safely get result count from chart data if it exists
             results_count = 0
             if is_success and isinstance(agent_response.get("result"), dict):
@@ -1147,6 +1114,17 @@ else:
             )
 
         st.rerun()
+
+    # --- Funções de Streaming ---
+    def stream_text(text: str, speed: float = 0.01):
+        """
+        Generator para criar efeito de digitação (typewriter effect).
+        Yields: caracteres um por um com delay entre eles.
+        """
+        import time
+        for char in text:
+            yield char
+            time.sleep(speed)
 
     # --- Renderização da Interface ---
     # 🔍 DEBUG: Mostrar histórico de mensagens na sidebar (apenas para admins)
@@ -1709,23 +1687,40 @@ else:
                 if user_query and msg["role"] == "assistant":
                     st.caption(f"📝 Pergunta: {user_query}")
 
-                # ✅ CORREÇÃO: Garantir renderização correta do content
+                # ✅ STREAMING: Renderizar com efeito de digitação para novas mensagens
+                is_last_message = (i == len(st.session_state.messages) - 1)
+
                 if isinstance(content, str):
                     # Caso normal: content é string
-                    st.markdown(content)
+                    if is_last_message and msg["role"] == "assistant":
+                        # ✅ NOVA MENSAGEM: Streaming (typewriter effect)
+                        st.write_stream(stream_text(content, speed=0.005))
+                    else:
+                        # Mensagem antiga do histórico: renderizar direto
+                        st.markdown(content)
                 elif isinstance(content, dict):
                     # Se content for dict, tentar extrair mensagem
                     if "message" in content:
-                        st.markdown(content["message"])
+                        if is_last_message and msg["role"] == "assistant":
+                            st.write_stream(stream_text(content["message"], speed=0.005))
+                        else:
+                            st.markdown(content["message"])
                     elif "text" in content:
-                        st.markdown(content["text"])
+                        if is_last_message and msg["role"] == "assistant":
+                            st.write_stream(stream_text(content["text"], speed=0.005))
+                        else:
+                            st.markdown(content["text"])
                     else:
                         # Último recurso: mostrar JSON formatado
                         st.warning("⚠️ Resposta em formato não esperado:")
                         st.json(content)
                 else:
                     # Converter para string
-                    st.markdown(str(content))
+                    text_content = str(content)
+                    if is_last_message and msg["role"] == "assistant":
+                        st.write_stream(stream_text(text_content, speed=0.005))
+                    else:
+                        st.markdown(text_content)
 
                 # ✅ DEBUG PARA ADMINS: Mostrar estrutura da resposta
                 if msg["role"] == "assistant" and st.session_state.get('role') == 'admin':
@@ -1742,25 +1737,7 @@ else:
                             st.write("**Content Keys/Length:**",
                                     list(content.keys()) if isinstance(content, dict) else len(content))
 
-                # ========================================
-                # 🎯 FASE 1: FEEDBACK SYSTEM
-                # ========================================
-                if msg["role"] == "assistant" and response_type not in ["error", "clarification"]:
-                    try:
-                        from ui.feedback_component import render_feedback_buttons
-
-                        render_feedback_buttons(
-                            query=response_data.get("user_query", ""),
-                            code=response_data.get("code", ""),
-                            result_rows=response_data.get("result_rows", 0),
-                            session_id=st.session_state.session_id,
-                            user_id=st.session_state.get('username', 'anonymous'),
-                            key_suffix=f"msg_{i}"
-                        )
-                    except Exception as feedback_error:
-                        # Feedback não crítico - não bloquear UI
-                        if st.session_state.get('role') == 'admin':
-                            st.caption(f"⚠️ Feedback indisponível: {feedback_error}")
+                # ✅ FEEDBACK REMOVIDO - Interface limpa conforme solicitado
 
         except Exception as e:
             # ❌ Tratamento de erro na renderização

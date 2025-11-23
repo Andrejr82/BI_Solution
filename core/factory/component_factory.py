@@ -255,7 +255,7 @@ class ComponentFactory:
 
             if adapter_type == "gemini":
                 api_key = config.GEMINI_API_KEY
-                model_name = config.LLM_MODEL_NAME or "gemini-2.5-flash-lite"
+                model_name = config.LLM_MODEL_NAME or "models/gemini-2.5-flash"
                 if not api_key:
                     cls.logger.error("GEMINI_API_KEY não encontrada na configuração.")
                     return None
@@ -263,7 +263,7 @@ class ComponentFactory:
             
             elif adapter_type == "deepseek":
                 api_key = config.DEEPSEEK_API_KEY
-                model_name = config.LLM_MODEL_NAME or "deepseek-chat"
+                model_name = config.LLM_MODEL_NAME or "models/gemini-2.5-flash"
                 if not api_key:
                     cls.logger.error("DEEPSEEK_API_KEY não encontrada na configuração.")
                     return None
@@ -277,6 +277,54 @@ class ComponentFactory:
                 return None
 
         return cls._components[adapter_key]
+
+    @classmethod
+    def get_llm_adapter_by_model(cls, model_name: str, temperature: float = 0.0) -> Optional[GeminiLLMAdapter]:
+        """
+        Obtém uma instância específica do GeminiLLMAdapter para um modelo e temperatura.
+        """
+        if not LLM_AVAILABLE:
+            cls.logger.warning("Componentes de LLM (Gemini) não estão disponíveis.")
+            return None
+
+        # Cria uma chave única para o componente baseado no modelo e temperatura
+        adapter_key = f"llm_gemini_{model_name}_t{temperature}"
+
+        if adapter_key not in cls._components:
+            cls.logger.info(f"Criando nova instância do GeminiLLMAdapter para o modelo: {model_name} (Temp: {temperature})")
+            config = get_safe_settings()
+            api_key = config.GEMINI_API_KEY
+
+            if not api_key:
+                cls.logger.error("GEMINI_API_KEY não encontrada na configuração para get_llm_adapter_by_model.")
+                return None
+            
+            cls._components[adapter_key] = GeminiLLMAdapter(
+                api_key=api_key, 
+                model_name=model_name,
+                temperature=temperature
+            )
+        
+        return cls._components[adapter_key]
+
+    @classmethod
+    def get_intent_classification_llm(cls) -> Optional[GeminiLLMAdapter]:
+        """Retorna o LLM otimizado para tarefas de classificação de intenção."""
+        config = get_safe_settings()
+        return cls.get_llm_adapter_by_model(
+            model_name=config.INTENT_CLASSIFICATION_MODEL,
+            temperature=config.INTENT_CLASSIFICATION_TEMPERATURE
+        )
+
+    @classmethod
+    def get_code_generation_llm(cls) -> Optional[GeminiLLMAdapter]:
+        """Retorna o LLM otimizado para tarefas de geração de código."""
+        config = get_safe_settings()
+        return cls.get_llm_adapter_by_model(
+            model_name=config.CODE_GENERATION_MODEL,
+            temperature=config.CODE_GENERATION_TEMPERATURE
+        )
+
 
     @classmethod
     def set_gemini_unavailable(cls, status: bool = True):

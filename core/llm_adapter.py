@@ -13,7 +13,7 @@ from langchain_core.outputs import ChatResult, ChatGeneration
 logger = logging.getLogger(__name__)
 
 class GeminiLLMAdapter:
-    def __init__(self, api_key: str, model_name: str, enable_cache: bool = True):
+    def __init__(self, api_key: str, model_name: str, temperature: float = 0.0, enable_cache: bool = True):
         """
         Inicializa o cliente Gemini usando OpenAI SDK com base_url customizada.
         Gemini 2.5 Flash suporta interface compatível com OpenAI.
@@ -28,6 +28,7 @@ class GeminiLLMAdapter:
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
         self.model_name = model_name
+        self.temperature = temperature # Adicionado
 
         self.cache_enabled = enable_cache
         if enable_cache:
@@ -45,7 +46,7 @@ class GeminiLLMAdapter:
             content = chunk.choices[0].delta.content or ""
             yield content
 
-    def get_completion(self, messages, model=None, temperature=0, max_tokens=4096, json_mode=False, stream=False, cache_context=None):
+    def get_completion(self, messages, model=None, temperature: float = None, max_tokens=4096, json_mode=False, stream=False, cache_context=None):
         """
         Obtém completion da LLM com cache inteligente
 
@@ -66,11 +67,12 @@ class GeminiLLMAdapter:
                     return cached_response
 
             model_to_use = model or self.model_name
+            temperature_to_use = temperature if temperature is not None else self.temperature
 
             params = {
                 "model": model_to_use,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": temperature_to_use,
                 "max_tokens": max_tokens,
                 "stream": stream,
             }
@@ -132,6 +134,40 @@ class GeminiLLMAdapter:
             return {"error": "Rate limit exceeded", "fallback_activated": True, "retry_with": "deepseek"}
         except Exception as e:
             error_msg = str(e).lower()
+
+            # ✅ TRATAMENTO ESPECÍFICO: API Key expirada (erro 400 - expired)
+            if "400" in error_msg and "expired" in error_msg:
+                logger.error(f"[CRÍTICO] API Key do Gemini expirada: {e}")
+                return {
+                    "error": "API_KEY_EXPIRED",
+                    "user_message": "🚨 **API Key Expirada**\n\n"
+                                   "Sua chave de API do Gemini expirou.\n\n"
+                                   "**Como resolver:**\n"
+                                   "1. Acesse: https://aistudio.google.com/app/apikey\n"
+                                   "2. DELETE a chave expirada\n"
+                                   "3. Crie uma NOVA API Key\n"
+                                   "4. Atualize em `.streamlit/secrets.toml`:\n"
+                                   "   `GEMINI_API_KEY = \"sua_nova_chave\"`\n"
+                                   "5. Reinicie o aplicativo (Ctrl+C e rerun)\n\n"
+                                   "💡 **Dica:** Certifique-se de copiar a chave COMPLETA ao criar!"
+                }
+
+            # ✅ TRATAMENTO ESPECÍFICO: API Key bloqueada/vazada (erro 403)
+            if "403" in error_msg or "permission_denied" in error_msg or "leaked" in error_msg:
+                logger.error(f"[CRÍTICO] API Key do Gemini bloqueada: {e}")
+                return {
+                    "error": "API_KEY_BLOCKED",
+                    "user_message": "🚨 **API do Gemini Bloqueada**\n\n"
+                                   "Sua chave de API foi marcada como comprometida e bloqueada pela Google.\n\n"
+                                   "**Como resolver:**\n"
+                                   "1. Acesse: https://aistudio.google.com/app/apikey\n"
+                                   "2. Revogue a chave antiga\n"
+                                   "3. Crie uma nova API Key\n"
+                                   "4. Atualize em `.streamlit/secrets.toml`\n"
+                                   "5. Reinicie o aplicativo\n\n"
+                                   "**IMPORTANTE:** Nunca compartilhe ou commite API keys em repositórios públicos!"
+                }
+
             # Detectar outros tipos de rate limit/quota exceeded
             if any(term in error_msg for term in ["quota", "limit", "429", "rate", "exceeded"]):
                 logger.error(f"[ALERTA] Quota/Rate limit detectado no Gemini: {e}")

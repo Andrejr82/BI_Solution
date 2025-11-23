@@ -40,6 +40,12 @@ class SafeSettings:
         self.CACHE_MAX_AGE_DAYS = self._get_int_setting("CACHE_MAX_AGE_DAYS", 7)
         self.CACHE_FORCE_CLEAN = self._get_bool_setting("CACHE_FORCE_CLEAN", False)
 
+        # Configurações da estratégia de modelos híbridos
+        self.INTENT_CLASSIFICATION_MODEL = self._get_secret_or_env("INTENT_CLASSIFICATION_MODEL", "models/gemini-2.5-flash")
+        self.CODE_GENERATION_MODEL = self._get_secret_or_env("CODE_GENERATION_MODEL", "models/gemini-2.5-pro")
+        self.INTENT_CLASSIFICATION_TEMPERATURE = self._get_float_setting("INTENT_CLASSIFICATION_TEMPERATURE", 0.0)
+        self.CODE_GENERATION_TEMPERATURE = self._get_float_setting("CODE_GENERATION_TEMPERATURE", 0.2)
+
     def _get_gemini_key(self):
         """Obtém chave Gemini de forma segura"""
         try:
@@ -77,7 +83,7 @@ class SafeSettings:
         except:
             pass
 
-        return os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
+        return os.getenv("LLM_MODEL_NAME", "models/gemini-2.5-flash")
 
     def _get_gemini_model(self):
         """Obtém modelo Gemini específico"""
@@ -88,7 +94,7 @@ class SafeSettings:
         except:
             pass
 
-        model = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash")
+        model = os.getenv("GEMINI_MODEL_NAME", "models/gemini-2.5-flash")
         # Remover aspas se existirem
         if model:
             model = model.strip('"').strip("'")
@@ -136,6 +142,14 @@ class SafeSettings:
         value = self._get_secret_or_env(key, str(default))
         try:
             return int(value)
+        except (ValueError, TypeError):
+            return default
+
+    def _get_float_setting(self, key, default=0.0):
+        """Obtém configuração float de secrets ou env"""
+        value = self._get_secret_or_env(key, str(default))
+        try:
+            return float(value)
         except (ValueError, TypeError):
             return default
 

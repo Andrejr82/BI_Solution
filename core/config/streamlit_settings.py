@@ -86,7 +86,7 @@ class StreamlitSettings:
             pass
 
         # Fallback para variável de ambiente
-        return os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
+        return os.getenv("LLM_MODEL_NAME", "models/gemini-2.5-flash")
 
     def get_sql_connection_string(self) -> Optional[str]:
         """

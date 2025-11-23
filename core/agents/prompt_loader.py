@@ -134,3 +134,70 @@ class PromptLoader:
         except Exception as e:
             logger.error(f"Erro ao salvar prompt {prompt_name}: {e}")
             return False
+
+    def load_prompt_template(self, prompt_name: str) -> Optional[str]:
+        """
+        Carrega um template de prompt em formato Markdown (.md)
+        
+        Args:
+            prompt_name (str): Nome do arquivo de prompt (com ou sem extensão .md)
+            
+        Returns:
+            str: Conteúdo do template ou None se ocorrer erro
+        """
+        # Adiciona a extensão .md se não estiver presente
+        if not prompt_name.endswith(".md"):
+            prompt_file = f"{prompt_name}.md"
+        else:
+            prompt_file = prompt_name
+        
+        # Constrói o caminho completo do arquivo
+        prompt_path = os.path.join(self.prompts_dir, prompt_file)
+        
+        # Verifica se o arquivo existe
+        if not os.path.exists(prompt_path):
+            logger.error(f"Template de prompt não encontrado: {prompt_path}")
+            return None
+        
+        # Carrega o arquivo Markdown
+        try:
+            with open(prompt_path, "r", encoding="utf-8") as file:
+                template_content = file.read()
+                logger.info(f"Template de prompt carregado com sucesso: {prompt_name}")
+                return template_content
+        except Exception as e:
+            logger.error(f"Erro ao carregar template de prompt {prompt_name}: {e}")
+            return None
+    
+    def inject_context_into_template(self, template: str, context: Dict[str, Any]) -> str:
+        """
+        Injeta contexto dinâmico em um template de prompt usando placeholders.
+        
+        Placeholders esperados no template:
+        - [CONTEXTO_DADOS]: Será substituído pelo esquema de banco de dados
+        - [OBJETIVO_ATÔMICO]: Será substituído pelo objetivo da tarefa
+        - [FORMATO_RESPOSTA]: Será substituído pelas instruções de formato
+        - [PERGUNTA_USUARIO]: Será substituído pela pergunta do usuário
+        
+        Args:
+            template (str): Conteúdo do template com placeholders
+            context (Dict[str, Any]): Dicionário com valores para substituição
+            
+        Returns:
+            str: Template com contexto injetado
+        """
+        result = template
+        
+        # Substitui placeholders por valores do contexto
+        for placeholder, value in context.items():
+            placeholder_key = f"[{placeholder}]"
+            if isinstance(value, dict):
+                # Se o valor é um dicionário, converte para string formatada
+                value_str = json.dumps(value, ensure_ascii=False, indent=2)
+            else:
+                value_str = str(value)
+            
+            result = result.replace(placeholder_key, value_str)
+            logger.debug(f"Placeholder {placeholder_key} substituído com sucesso")
+        
+        return result

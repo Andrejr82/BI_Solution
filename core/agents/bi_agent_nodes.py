@@ -17,15 +17,21 @@ logger = get_logger(__name__)
 # Importações corrigidas baseadas na estrutura completa do projeto
 from core.agent_state import AgentState
 from core.llm_base import BaseLLMAdapter
-from core.agents.code_gen_agent import CodeGenAgent
+from core.agents.code_gen_agent import CodeGenAgent, _load_catalog_cached
 from core.tools.data_tools import fetch_data_from_query
 from core.connectivity.parquet_adapter import ParquetAdapter
 from core.utils.json_utils import _clean_json_values
 
 def _extract_user_query(state: AgentState) -> str:
-    """Extrai a query do usuário do state, lidando com objetos LangChain."""
-    last_message = state['messages'][-1]
-    return last_message.content if hasattr(last_message, 'content') else last_message.get('content', '')
+    """Concatena o conteúdo de todas as mensagens em uma única string para contexto completo."""
+    full_conversation = []
+    for msg in state.get('messages', []):
+        role = "User" if getattr(msg, 'type', 'user') == 'user' else "Assistant"
+        content = getattr(msg, 'content', '')
+        if isinstance(content, dict): # Caso de content aninhado
+            content = content.get("content", str(content))
+        full_conversation.append(f"{role}: {content}")
+    return "\n".join(full_conversation)
 
 def format_mc_response(result: Dict[str, Any]) -> str:
     """
@@ -304,7 +310,13 @@ Todos os produtos com estoque apresentam movimento nos últimos 30 dias.
 
     return response_text
 
-def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
+from core.factory.component_factory import ComponentFactory
+
+# A fábrica pode ser instanciada aqui ou injetada (ver melhores práticas)
+_factory = ComponentFactory()
+
+
+def classify_intent(state: AgentState) -> Dict[str, Any]:
     """
     Classifica a intenção do utilizador usando Few-Shot Learning.
 
@@ -316,155 +328,48 @@ def classify_intent(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str,
     - 'gerar_grafico': Visualizações e gráficos
     - 'resposta_simples': Consultas simples de filtro
     """
+    llm_adapter = _factory.get_intent_classification_llm()
+    if not llm_adapter:
+        logger.error("Não foi possível obter o LLM para classificação de intenção.")
+        return {"intent": "error", "plan": {"intent": "error"}}
     user_query = _extract_user_query(state)
     logger.info(f"[NODE] classify_intent: Recebida query '{user_query}'")
 
-    # ✅ NOVO: Few-shot examples com scores de confiança
+    # ⚡ OTIMIZAÇÃO: Few-shot examples reduzidos (13→6 exemplos, -50% tokens)
+    # Removidos campos confidence/reasoning desnecessários
     few_shot_examples = [
-        # une_operation
-        {
-            "query": "quais produtos precisam abastecimento na UNE 2586?",
-            "intent": "une_operation",
-            "confidence": 0.95,
-            "reasoning": "Menciona 'abastecimento' + 'UNE' (operação específica)"
-        },
-        {
-            "query": "qual a MC do produto 704559?",
-            "intent": "une_operation",
-            "confidence": 0.98,
-            "reasoning": "Pergunta sobre MC (Média Comum) - métrica UNE"
-        },
-        {
-            "query": "calcule o preço de R$ 800 ranking 0 a vista",
-            "intent": "une_operation",
-            "confidence": 0.92,
-            "reasoning": "Cálculo de preço - regra de negócio UNE"
-        },
-        {
-            "query": "quais segmentos estão com ruptura na une scr?",
-            "intent": "une_operation",
-            "confidence": 0.98,
-            "reasoning": "Análise de 'ruptura' (estoque <= 0) por segmento, requer script Python"
-        },
-        # python_analysis
-        {
-            "query": "qual produto mais vende no segmento tecidos?",
-            "intent": "python_analysis",
-            "confidence": 0.90,
-            "reasoning": "Análise + ranking SEM menção a visualização"
-        },
-        {
-            "query": "top 5 categorias por venda",
-            "intent": "python_analysis",
-            "confidence": 0.92,
-            "reasoning": "Ranking numérico SEM pedido de gráfico"
-        },
-        {
-            "query": "liste os produtos com estoque zerado",
-            "intent": "python_analysis",
-            "confidence": 0.88,
-            "reasoning": "Análise de dados com filtro específico"
-        },
-        # gerar_grafico
-        {
-            "query": "gere um gráfico de vendas por categoria",
-            "intent": "gerar_grafico",
-            "confidence": 0.99,
-            "reasoning": "Explicitamente menciona 'gráfico'"
-        },
-        {
-            "query": "mostre a evolução de vendas mensais",
-            "intent": "gerar_grafico",
-            "confidence": 0.95,
-            "reasoning": "Análise temporal ('evolução') → visualização"
-        },
-        {
-            "query": "distribuição por segmento",
-            "intent": "gerar_grafico",
-            "confidence": 0.88,
-            "reasoning": "'Distribuição' geralmente implica visualização"
-        },
-        {
-            "query": "comparar vendas entre UNEs visualmente",
-            "intent": "gerar_grafico",
-            "confidence": 0.97,
-            "reasoning": "Palavra-chave 'visualmente' + comparação"
-        },
-        {
-            "query": "tendência dos últimos 6 meses",
-            "intent": "gerar_grafico",
-            "confidence": 0.93,
-            "reasoning": "Análise temporal de tendência → gráfico de linha"
-        },
-        # resposta_simples
-        {
-            "query": "liste os produtos da categoria AVIAMENTOS",
-            "intent": "resposta_simples",
-            "confidence": 0.94,
-            "reasoning": "Filtro direto sem análise complexa"
-        },
-        {
-            "query": "qual o estoque do produto 12345?",
-            "intent": "resposta_simples",
-            "confidence": 0.97,
-            "reasoning": "Lookup de valor único - query simples"
-        },
-        {
-            "query": "quantos produtos tem no segmento TECIDOS?",
-            "intent": "resposta_simples",
-            "confidence": 0.91,
-            "reasoning": "Contagem simples sem análise profunda"
-        }
+        # une_operation - 2 exemplos mais representativos
+        {"query": "mc do produto 704559 na une scr", "intent": "une_operation"},
+        {"query": "quais produtos precisam abastecimento na UNE MAD", "intent": "une_operation"},
+        # gerar_grafico - 2 exemplos mais representativos
+        {"query": "gere um gráfico de vendas por categoria", "intent": "gerar_grafico"},
+        {"query": "mostre a evolução de vendas mensais", "intent": "gerar_grafico"},
+        # python_analysis - 1 exemplo representativo
+        {"query": "qual produto mais vende no segmento tecidos", "intent": "python_analysis"},
+        # resposta_simples - 1 exemplo representativo
+        {"query": "liste os produtos da categoria AVIAMENTOS", "intent": "resposta_simples"}
     ]
 
-    # Construir prompt estruturado com few-shot learning
-    prompt = f"""# 🎯 CLASSIFICAÇÃO DE INTENÇÃO (Few-Shot Learning)
+    # ⚡ OTIMIZAÇÃO: Prompt simplificado (-40% tokens)
+    prompt = f"""Classifique a intenção do usuário em um sistema de análise de varejo.
 
-Você é um classificador de intenções para um sistema de análise de dados de varejo.
-
-## 📚 EXEMPLOS ROTULADOS (Aprenda com estes exemplos)
-
+EXEMPLOS:
 {json.dumps(few_shot_examples, indent=2, ensure_ascii=False)}
 
-## 🎯 CATEGORIAS DE INTENÇÃO
+CATEGORIAS:
+- une_operation: Operações UNE (abastecimento, MC, preços)
+- python_analysis: Análise/ranking sem visualização
+- gerar_grafico: Gráficos, tendências, visualizações
+- resposta_simples: Consultas básicas de filtro
 
-1. **une_operation**: Operações UNE (abastecimento, MC, preços, Linha Verde)
-2. **python_analysis**: Análise/ranking SEM visualização
-3. **gerar_grafico**: Visualizações, gráficos, tendências, distribuições
-4. **resposta_simples**: Consultas básicas de filtro/lookup
+QUERY: "{user_query}"
 
-## ⚠️ REGRAS DE PRIORIZAÇÃO
-
-1. Se mencionar UNE + (abastecimento|MC|preço) → `une_operation`
-2. Se mencionar (gráfico|visualização|evolução|tendência|distribuição) → `gerar_grafico`
-3. Se pedir (ranking|análise) SEM visualização → `python_analysis`
-4. Se for lookup simples → `resposta_simples`
-
-## 🎯 TAREFA ATUAL
-
-**Query do Usuário:** "{user_query}"
-
-## 📝 INSTRUÇÕES
-
-Analise a query acima e retorne um JSON com:
-- `intent`: uma das 4 categorias
-- `confidence`: score de 0.0 a 1.0 (sua confiança na classificação)
-- `reasoning`: breve explicação (1 frase) de por que escolheu esta categoria
-
-**IMPORTANTE:** Use os exemplos acima como referência. Queries similares devem ter a mesma classificação.
-
-## 📤 FORMATO DE SAÍDA (JSON)
-
-```json
+Retorne JSON:
 {{
-  "intent": "categoria_escolhida",
+  "intent": "categoria",
   "confidence": 0.95,
-  "reasoning": "Explicação breve"
-}}
-```
-
-**Responda APENAS com o JSON acima. Não adicione texto extra.**
-"""
+  "reasoning": "breve explicação"
+}}"""
 
     # 🔍 LOGGING DETALHADO - Diagnóstico de classificação
     logger.info(f"[CLASSIFY_INTENT] 📝 Query original: '{user_query}'")
@@ -526,10 +431,14 @@ Analise a query acima e retorne um JSON com:
 
 
 
-def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
+def generate_parquet_query(state: AgentState, parquet_adapter: ParquetAdapter) -> Dict[str, Any]:
     """
     Gera um dicionário de filtros para consulta Parquet a partir da pergunta do utilizador, usando o schema do arquivo Parquet e descrições de colunas.
     """
+    llm_adapter = _factory.get_code_generation_llm()
+    if not llm_adapter:
+        logger.error("Não foi possível obter o LLM para geração de query Parquet.")
+        return {"parquet_filters": {}, "final_response": {"type": "error", "content": "Erro interno de configuração do LLM."}}
     user_query = _extract_user_query(state)
     logger.info(f"[NODE] generate_parquet_query: Gerando filtros para '{user_query}'")
 
@@ -543,14 +452,13 @@ def generate_parquet_query(state: AgentState, llm_adapter: BaseLLMAdapter, parqu
         logger.error(f"Erro ao obter o schema do arquivo Parquet: {e}", exc_info=True)
         return {"parquet_filters": {}, "final_response": {"type": "error", "content": "Não foi possível aceder ao schema do arquivo Parquet para gerar a consulta."}}
 
-    # Load the focused catalog (catalog_focused.json)
+    # ⚡ OTIMIZAÇÃO: Usar cache de catálogo em vez de carregar toda vez
     import os
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     catalog_file_path = os.path.join(base_dir, "data", "catalog_focused.json")
-    
+
     try:
-        with open(catalog_file_path, 'r', encoding='utf-8') as f:
-            catalog_data = json.load(f)
+        catalog_data = _load_catalog_cached()
         
         # Find the entry for admatao.parquet
         admatao_catalog = next((entry for entry in catalog_data if entry.get("file_name") == "admatao.parquet"), None)
@@ -606,16 +514,16 @@ Quando o usuário mencionar:
 
 
     prompt = f"""
-    Você é um especialista em traduzir perguntas de negócio em filtros de dados JSON. Sua tarefa é analisar a **NOVA Pergunta do Usuário** e convertê-la em um objeto JSON de filtros, usando o schema e as regras de mapeamento fornecidas.
+    Você é um especialista em traduzir o histórico de uma conversa em filtros de dados JSON. Sua tarefa é analisar a **conversa completa** e convertê-la em um objeto JSON de filtros, usando o schema e as regras de mapeamento fornecidas.
 
     {field_mapping_guide}
 
     **Instruções Críticas:**
-    1.  **FOCO TOTAL NA NOVA PERGUNTA:** Sua resposta DEVE ser uma tradução direta da **NOVA Pergunta do Usuário**.
-    2.  **EXTRAÇÃO DE CÓDIGOS:** Se a pergunta contiver um número que se pareça com um código de produto (geralmente com 5 ou mais dígitos), você DEVE extraí-lo como um filtro para a coluna `PRODUTO`.
+    1.  **FOCO NA CONVERSA COMPLETA:** Sua resposta DEVE ser uma tradução da conversa completa. Considere as perguntas e respostas anteriores para resolver ambiguidades.
+    2.  **EXTRAÇÃO DE CÓDIGOS:** Se a conversa contiver um número que se pareça com um código de produto (geralmente com 5 ou mais dígitos), você DEVE extraí-lo como um filtro para a coluna `PRODUTO`.
     3.  **NÃO COPIE OS EXEMPLOS:** Os exemplos abaixo são apenas um guia de estilo e formato. Não os use como base para a sua resposta.
     4.  **GERE APENAS JSON:** Sua saída final deve ser um único e válido objeto JSON, sem nenhum texto ou explicação adicional.
-    5.  **CONSULTA VAZIA:** Se a pergunta não contiver nenhum filtro (ex: "liste todas as categorias"), retorne um objeto JSON vazio: `{{}}`.
+    5.  **CONSULTA VAZIA:** Se a conversa não contiver nenhum filtro (ex: "liste todas as categorias"), retorne um objeto JSON vazio: `{{}}`.
 
     **Schema do Arquivo Parquet (para referência de colunas):**
     ```
@@ -627,20 +535,20 @@ Quando o usuário mencionar:
     **Exemplos de Formato (Use apenas como guia):**
 
     - **Exemplo 1 (Filtro de Código de Produto):**
-      - Pergunta: "qual o estoque do produto 369947?"
+      - Conversa: "User: qual o estoque do produto 369947?"
       - Filtros JSON: `{{"PRODUTO": 369947}}`
 
-    - **Exemplo 2 (Filtro Composto):**
-      - Pergunta: "quais são as categorias do segmento tecidos com estoque 0?"
-      - Filtros JSON: `{{"NOMESEGMENTO": "TECIDO", "ESTOQUE_UNE": 0}}`
+    - **Exemplo 2 (Filtro Composto com Esclarecimento):**
+      - Conversa: "User: me mostre as vendas\nAssistant: Claro, vendas em valor ou quantidade?\nUser: quantidade"
+      - Filtros JSON: `{{"VENDA_30DD": {{">": 0}}}}` (exemplo, a lógica exata depende do LLM)
     
     - **Exemplo 3 (Filtro de Texto):**
-      - Pergunta: "liste produtos da categoria aviamentos"
+      - Conversa: "User: liste produtos da categoria aviamentos"
       - Filtros JSON: `{{"NomeCategoria": "AVIAMENTOS"}}`
 
     ---
 
-    **NOVA Pergunta do Usuário (TRADUZIR ESTA):**
+    **Conversa Completa (TRADUZIR ESTA):**
     "{user_query}"
 
     **Filtros JSON Resultantes:**
@@ -726,13 +634,20 @@ def execute_query(state: AgentState, parquet_adapter: ParquetAdapter, required_c
 
     return {"retrieved_data": retrieved_data}
 
-def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_gen_agent: CodeGenAgent) -> Dict[str, Any]:
+def generate_plotly_spec(state: AgentState, code_gen_agent: CodeGenAgent) -> Dict[str, Any]:
     """
     Gera uma especificação JSON para Plotly ou uma resposta textual usando o CodeGenAgent.
     Este nó agora lida com dois cenários:
     1.  **Com `raw_data`**: Gera um gráfico a partir de dados pré-filtrados.
     2.  **Sem `raw_data` (fluxo `python_analysis`)**: Gera um script Python para fazer a análise completa (filtrar, agregar, etc.).
     """
+    llm_adapter = _factory.get_code_generation_llm()
+    if not llm_adapter:
+        logger.error("Não foi possível obter o LLM para geração de especificação Plotly.")
+        return {"final_response": {"type": "error", "content": "Erro interno de configuração do LLM."}}
+    
+    # Garante que o code_gen_agent use o LLM correto
+    code_gen_agent.llm = llm_adapter
     logger.info("Nó: generate_plotly_spec")
     raw_data = state.get("retrieved_data")
     user_query = _extract_user_query(state)
@@ -748,31 +663,28 @@ def generate_plotly_spec(state: AgentState, llm_adapter: BaseLLMAdapter, code_ge
         return {"final_response": {"type": "text", "content": raw_data[0]["error"]}}
 
     try:
-        # Carregar o catálogo de dados para fornecer contexto ao LLM
+        # ⚡ OTIMIZAÇÃO: Carregar catálogo do cache
         catalog_context = ""
         try:
-            catalog_path = os.path.join(os.getcwd(), "data", "catalog_focused.json")
-            if os.path.exists(catalog_path):
-                with open(catalog_path, 'r', encoding='utf-8') as f:
-                    catalog_data = json.load(f)
-                
-                catalog_context = "## Entidades de Negócio (Segmentos e Fabricantes)\n\n"
-                catalog_context += "Para interpretar a query, use o seguinte contexto:\n\n"
+            catalog_data = _load_catalog_cached()
 
-                if "nomesegmento" in catalog_data:
-                    catalog_context += f"### Segmentos (coluna 'nomesegmento')\n"
-                    catalog_context += f"- **Descrição**: {catalog_data['nomesegmento']['description']}\n"
-                    catalog_context += f"- **Exemplos**: {', '.join(catalog_data['nomesegmento']['examples'][:5])}...\n\n"
-                
-                if "NOMEFABRICANTE" in catalog_data:
-                    catalog_context += f"### Fabricantes (coluna 'NOMEFABRICANTE')\n"
-                    catalog_context += f"- **Descrição**: {catalog_data['NOMEFABRICANTE']['description']}\n"
-                    catalog_context += f"- **Exemplos**: {', '.join(catalog_data['NOMEFABRICANTE']['examples'][:5])}...\n\n"
+            catalog_context = "## Entidades de Negócio (Segmentos e Fabricantes)\n\n"
+            catalog_context += "Para interpretar a query, use o seguinte contexto:\n\n"
 
-                catalog_context += "**REGRA DE OURO PARA FILTROS:**\n"
-                catalog_context += "1. Se o usuário mencionar algo como 'tecidos', 'papelaria', 'artesanato', use a coluna `nomesegmento`.\n"
-                catalog_context += "2. Se o usuário mencionar uma marca ou fornecedor como 'KIT', 'EURO ROMA', 'LINEA', 'CÍRCULO', use a coluna `NOMEFABRICANTE`.\n"
-                catalog_context += "3. Na dúvida, verifique se o termo da query está na lista de exemplos de `NOMEFABRICANTE`.\n"
+            if "nomesegmento" in catalog_data:
+                catalog_context += f"### Segmentos (coluna 'nomesegmento')\n"
+                catalog_context += f"- **Descrição**: {catalog_data['nomesegmento']['description']}\n"
+                catalog_context += f"- **Exemplos**: {', '.join(catalog_data['nomesegmento']['examples'][:5])}...\n\n"
+
+            if "NOMEFABRICANTE" in catalog_data:
+                catalog_context += f"### Fabricantes (coluna 'NOMEFABRICANTE')\n"
+                catalog_context += f"- **Descrição**: {catalog_data['NOMEFABRICANTE']['description']}\n"
+                catalog_context += f"- **Exemplos**: {', '.join(catalog_data['NOMEFABRICANTE']['examples'][:5])}...\n\n"
+
+            catalog_context += "**REGRA DE OURO PARA FILTROS:**\n"
+            catalog_context += "1. Se o usuário mencionar algo como 'tecidos', 'papelaria', 'artesanato', use a coluna `nomesegmento`.\n"
+            catalog_context += "2. Se o usuário mencionar uma marca ou fornecedor como 'KIT', 'EURO ROMA', 'LINEA', 'CÍRCULO', use a coluna `NOMEFABRICANTE`.\n"
+            catalog_context += "3. Na dúvida, verifique se o termo da query está na lista de exemplos de `NOMEFABRICANTE`.\n"
         except Exception as e:
             logger.error(f"❌ Erro ao carregar o arquivo de catálogo: {e}")
 
@@ -1038,11 +950,15 @@ def format_final_response(state: AgentState) -> Dict[str, Any]:
     return {"messages": final_messages, "final_response": response}
 
 
-def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str, Any]:
+def execute_une_tool(state: AgentState) -> Dict[str, Any]:
     """
     Executa ferramentas UNE baseado na query do usuário.
     Detecta qual ferramenta UNE usar e extrai os parâmetros necessários.
     """
+    llm_adapter = _factory.get_code_generation_llm() # Ferramentas UNE também são complexas
+    if not llm_adapter:
+        logger.error("Não foi possível obter o LLM para execução de ferramenta UNE.")
+        return {"final_response": {"type": "error", "content": "Erro interno de configuração do LLM."}}
     user_query = _extract_user_query(state)
     logger.info(f"[NODE] execute_une_tool: Processando query UNE '{user_query}'")
 
@@ -1400,3 +1316,111 @@ def execute_une_tool(state: AgentState, llm_adapter: BaseLLMAdapter) -> Dict[str
     except Exception as e:
         logger.error(f"Erro ao executar ferramenta UNE: {e}", exc_info=True)
         return {"final_response": {"type": "text", "content": f"Erro ao processar operação UNE: {str(e)}"}}
+
+
+def generate_initial_feedback(state: AgentState) -> dict:
+    """
+    🎯 MELHORIA: Gera feedback inicial para o usuário antes do processamento analítico.
+
+    Esta função informa ao usuário o que o agente irá fazer, melhorando a transparência
+    e experiência do usuário ao deixar claro que a solicitação foi compreendida e está
+    sendo processada.
+
+    Args:
+        state: Estado atual do agente com reasoning_result
+
+    Returns:
+        Dict vazio (não modifica o estado, apenas registra a ação planejada)
+    """
+    reasoning_result = state.get("reasoning_result", {})
+    messages = state.get("messages", [])
+
+    # Extrair informações do reasoning
+    reasoning = reasoning_result.get("reasoning", "")
+    emotional_tone = reasoning_result.get("emotional_tone", "neutro")
+
+    # Extrair a query do usuário
+    user_query = ""
+    if messages:
+        last_msg = messages[-1]
+        user_query = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+
+    # Gerar mensagem de feedback baseada no raciocínio
+    feedback_message = _create_feedback_message(user_query, reasoning, emotional_tone)
+
+    # Armazenar no estado para ser exibida antes do processamento
+    logger.info(f"💬 Feedback inicial gerado: {feedback_message[:100]}...")
+
+    return {
+        "initial_feedback": feedback_message
+    }
+
+
+def _create_feedback_message(query: str, reasoning: str, tone: str) -> str:
+    """
+    Cria uma mensagem de feedback inicial natural e contextualizada.
+
+    Args:
+        query: Query do usuário
+        reasoning: Raciocínio do agente
+        tone: Tom emocional detectado
+
+    Returns:
+        Mensagem de feedback formatada
+    """
+    # Detectar tipo de análise baseado na query
+    query_lower = query.lower()
+
+    # Análise de vendas
+    if any(keyword in query_lower for keyword in ["vendas", "venda", "faturamento", "receita"]):
+        if "oxford" in query_lower or "tecido" in query_lower:
+            action = "analisar as vendas dos tecidos oxford"
+        else:
+            action = "analisar os dados de vendas"
+
+    # Análise de MC
+    elif "mc" in query_lower or "média comum" in query_lower:
+        action = "calcular a Média Comum (MC)"
+
+    # Análise de estoque
+    elif "estoque" in query_lower:
+        action = "verificar os dados de estoque"
+
+    # Análise de abastecimento
+    elif "abastec" in query_lower:
+        action = "calcular o abastecimento necessário"
+
+    # Gráfico/visualização
+    elif "gráfico" in query_lower or "grafico" in query_lower or "chart" in query_lower:
+        action = "gerar o gráfico solicitado"
+
+    # Produtos sem vendas
+    elif "sem vendas" in query_lower or "sem giro" in query_lower:
+        action = "identificar produtos sem vendas"
+
+    # Análise de segmento
+    elif "segmento" in query_lower:
+        action = "analisar os dados do segmento"
+
+    # Análise genérica
+    else:
+        action = "processar sua solicitação"
+
+    # Adaptar mensagem ao tom emocional
+    if tone == "urgente":
+        prefix = "Entendi! Vou"
+        suffix = "rapidinho para você. Aguarde um momento..."
+    elif tone == "frustrado":
+        prefix = "Sem problemas! Deixa comigo, vou"
+        suffix = "agora. Só um instante..."
+    elif tone == "curioso":
+        prefix = "Boa pergunta! Vou"
+        suffix = "para te mostrar. Aguarde..."
+    elif tone == "casual":
+        prefix = "Beleza! Vou"
+        suffix = "para você. Um momento..."
+    else:  # neutro ou confuso
+        prefix = "Certo! Vou"
+        suffix = "agora. Aguarde um momento..."
+
+    return f"{prefix} {action} {suffix}"
