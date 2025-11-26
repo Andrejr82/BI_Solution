@@ -1,9 +1,0 @@
-Traceback (most recent call last):
-  File "C:\Users\AndrÚ\Documents\Agent_Solution_BI\tests\test_conversation.py", line 67, in <module>
-    test_conversational_engine()
-  File "C:\Users\AndrÚ\Documents\Agent_Solution_BI\tests\test_conversation.py", line 17, in test_conversational_engine
-    print("\n\U0001f9ea Testing Conversational Reasoning Engine...")
-  File "C:\Program Files\Python311\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 2: character maps to <undefined>
