@@ -1,0 +1,12 @@
+python-dotenv could not parse statement starting at line 2
+INFO:     Started server process [22436]
+INFO:     Waiting for application startup.
+{"environment": "development", "event": "application_startup", "timestamp": "2025-11-26T03:17:24.042391Z", "level": "info"}
+{"event": "initializing_data_adapter", "timestamp": "2025-11-26T03:17:24.042391Z", "level": "info"}
+\u26a0\ufe0f Falha ao conectar SQL Server: . Operando apenas com Parquet.
+{"source": "parquet", "event": "data_adapter_initialized", "timestamp": "2025-11-26T03:17:34.052981Z", "level": "info"}
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): normalmente é permitida apenas uma utilização de cada endereço de soquete (protocolo/endereço de rede/porta)
+INFO:     Waiting for application shutdown.
+{"event": "application_shutdown", "timestamp": "2025-11-26T03:17:34.057718Z", "level": "info"}
+INFO:     Application shutdown complete.
