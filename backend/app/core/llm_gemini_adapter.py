@@ -42,8 +42,8 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
         # Prioriza LLM_MODEL_NAME, fallback para GEMINI_MODEL_NAME, default para gemini-2.5-flash
         self.model_name = os.getenv("LLM_MODEL_NAME", os.getenv("GEMINI_MODEL_NAME", "models/gemini-2.5-flash"))
-        self.max_retries = 3
-        self.retry_delay = 2
+        self.max_retries = 2  # ✅ Reduzido de 3 para 2
+        self.retry_delay = 1  # ✅ Reduzido de 2s para 1s
 
         self.logger.info(f"Gemini adapter inicializado com modelo: {self.model_name}")
 
@@ -144,7 +144,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
                 thread = threading.Thread(target=worker)
                 thread.start()
-                thread.join(timeout=90.0)
+                thread.join(timeout=30.0)  # ✅ Reduzido de 90s para 30s
 
                 if thread.is_alive():
                     self.logger.warning(f"Thread timeout tentativa {attempt + 1}")

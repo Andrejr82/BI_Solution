@@ -7,6 +7,7 @@ import logging
 import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+from app.core.parquet_cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +47,18 @@ class ParquetDataSource:
 
     def _load_data(self, force_reload: bool = False) -> pd.DataFrame:
         """
-        Carrega os dados do arquivo Parquet.
+        Carrega os dados do arquivo Parquet usando ParquetCache global.
+        ✅ OTIMIZADO: Usa cache global ao invés de cache local.
         """
-        if not force_reload and self._df_cache is not None:
-            return self._df_cache.copy()
-
-        logger.info(f"Carregando dados de: {self.file_path}")
         try:
-            df = pd.read_parquet(self.file_path)
-            logger.info(f"✓ Dados carregados: {df.shape}")
+            # Usar ParquetCache global (já retorna Polars DataFrame)
+            df_polars = cache.get_dataframe("admmat.parquet")
 
-            self._df_cache = df
-            return self._df_cache.copy()
+            # Converter de Polars para Pandas (necessário para compatibilidade com ferramentas existentes)
+            df = df_polars.to_pandas()
+            logger.info(f"✓ Dados obtidos do cache: {df.shape}")
+
+            return df
 
         except FileNotFoundError as e:
             logger.error(f"✗ ERRO CRÍTICO: Arquivo não encontrado: {self.file_path}")

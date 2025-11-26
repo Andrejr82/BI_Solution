@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
+import { createSSEConnection } from '@/lib/api/sse';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,10 @@ interface Message {
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const currentMessageRef = useRef<HTMLDivElement>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,50 +32,95 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (query: string) => {
-      // Adicionar mensagem do usuário
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: query,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
+  // Cleanup ao desmontar
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
 
-      // Adicionar mensagem de resposta vazia (para streaming)
-      const assistantMessageId = (Date.now() + 1).toString();
-      const assistantMessage: Message = {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-        isStreaming: true,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+  const sendMessage = (query: string) => {
+    if (isStreaming) return;
 
-      // Simular streaming (será substituído por API real)
-      const response = await apiClient.post<{ response: string }>(
-        '/api/chat',
-        { query }
-      );
+    // Adicionar mensagem do usuário
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: query,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
 
-      // Atualizar com resposta completa
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? { ...msg, content: response.response, isStreaming: false }
-            : msg
-        )
-      );
-    },
-  });
+    // Criar mensagem vazia para streaming
+    const assistantId = crypto.randomUUID();
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+
+    setIsStreaming(true);
+    let buffer = '';
+    let lastUpdate = Date.now();
+
+    // Conectar SSE
+    const cleanup = createSSEConnection(
+      `/api/v1/chat/stream?q=${encodeURIComponent(query)}`,
+      {
+        onMessage: (data) => {
+          buffer += data.text;
+
+          // Atualizar DOM diretamente (performance)
+          const now = Date.now();
+          if (now - lastUpdate > 50) {
+            // Throttle: 50ms
+            if (currentMessageRef.current) {
+              currentMessageRef.current.textContent = buffer;
+            }
+            lastUpdate = now;
+          }
+        },
+        onComplete: () => {
+          // Sincronizar com React state
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? { ...msg, content: buffer, isStreaming: false }
+                : msg
+            )
+          );
+          setIsStreaming(false);
+          cleanupRef.current = null;
+        },
+        onError: (error) => {
+          console.error('SSE Error:', error);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: `❌ Erro: ${error.message}`,
+                    isStreaming: false,
+                  }
+                : msg
+            )
+          );
+          setIsStreaming(false);
+        },
+      }
+    );
+
+    cleanupRef.current = cleanup;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || sendMessageMutation.isPending) return;
+    if (!input.trim() || isStreaming) return;
 
-    sendMessageMutation.mutate(input.trim());
+    sendMessage(input.trim());
     setInput('');
   };
 
@@ -102,12 +149,26 @@ export default function ChatPage() {
             </div>
           ) : (
             messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ChatMessage
+                key={message.id}
+                message={message}
+                messageRef={
+                  message.isStreaming ? currentMessageRef : undefined
+                }
+              />
             ))
           )}
           <div ref={messagesEndRef} />
         </div>
       </Card>
+
+      {/* Indicador de streaming */}
+      {isStreaming && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>IA está digitando...</span>
+        </div>
+      )}
 
       {/* Input area */}
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -115,15 +176,15 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Digite sua pergunta sobre os dados..."
-          disabled={sendMessageMutation.isPending}
+          disabled={isStreaming}
           className="flex-1"
         />
         <Button
           type="submit"
-          disabled={sendMessageMutation.isPending || !input.trim()}
+          disabled={isStreaming || !input.trim()}
           size="icon"
         >
-          {sendMessageMutation.isPending ? (
+          {isStreaming ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <Send className="h-5 w-5" />
