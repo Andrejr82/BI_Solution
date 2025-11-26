@@ -4,12 +4,10 @@ BI Chat with AI assistant
 """
 
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import ORJSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 from pathlib import Path
-import json
-import asyncio
 
 from app.api.dependencies import get_current_active_user
 from app.infrastructure.database.models import User
@@ -26,100 +24,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-
-
-@router.get("/stream")
-async def stream_chat(
-    q: str,
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-):
-    """
-    Streaming endpoint usando Server-Sent Events (SSE)
-    ✅ Com suporte a Last-Event-ID para reconexão inteligente
-    """
-    import sys
-    import logging
-    
-    logger = logging.getLogger(__name__)
-    
-    # ✅ CRÍTICO: Obter Last-Event-ID para reconexão
-    last_event_id = request.headers.get("Last-Event-ID")
-    
-    print(f"==> SSE STREAM REQUEST: {q} (Last-Event-ID: {last_event_id}) <==", file=sys.stderr, flush=True)
-    
-    async def event_generator():
-        try:
-            # Iniciar contador de eventos
-            event_counter = int(last_event_id) if last_event_id else 0
-            
-            # Obter QueryProcessor (agente)
-            from app.core.query_processor import QueryProcessor
-            
-            if not hasattr(stream_chat, '_query_processor'):
-                print("==> Inicializando QueryProcessor para streaming... <==", file=sys.stderr, flush=True)
-                stream_chat._query_processor = QueryProcessor()
-            
-            # Processar query com agente (com timeout)
-            try:
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(stream_chat._query_processor.process_query, q),
-                    timeout=10.0
-                )
-                
-                # Extrair resposta
-                response_text = ""
-                if isinstance(result, dict):
-                    response_text = result.get("output", "")
-                
-                if not response_text:
-                    response_text = "Desculpe, não consegui processar sua pergunta. Tente reformular."
-                
-                # Simular streaming: dividir resposta em chunks de palavras
-                words = response_text.split()
-                chunk_size = 3  # 3 palavras por chunk
-                
-                for i in range(0, len(words), chunk_size):
-                    chunk_words = words[i:i + chunk_size]
-                    chunk_text = " " + " ".join(chunk_words) if i > 0 else " ".join(chunk_words)
-                    
-                    event_counter += 1
-                    
-                    # ✅ Formato SSE com ID: "id: X\ndata: {json}\n\n"
-                    yield f"id: {event_counter}\n"
-                    yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
-                    
-                    # Pequeno delay para simular streaming natural
-                    await asyncio.sleep(0.05)
-                
-            except asyncio.TimeoutError:
-                # Fallback em caso de timeout
-                response_text = "⏱️ A consulta demorou muito. Tente uma pergunta mais simples."
-                event_counter += 1
-                yield f"id: {event_counter}\n"
-                yield f"data: {json.dumps({'text': response_text, 'done': False})}\n\n"
-            
-            # Sinalizar fim do stream
-            event_counter += 1
-            yield f"id: {event_counter}\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
-            
-            print(f"==> Stream concluído: {event_counter} eventos <==", file=sys.stderr, flush=True)
-            
-        except Exception as e:
-            logger.error(f"Erro no streaming: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Nginx compatibility
-        }
-    )
-
 
 
 @router.post("", response_class=ORJSONResponse)

@@ -1,7 +1,7 @@
 """
 Create users.parquet file for authentication when SQL Server is not available
 
-Password: admin123
+Password: Admin@2024
 Pre-generated hash using bcrypt
 """
 import polars as pl
@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 # Use a pre-generated bcrypt hash for "admin123"
 # Generated using: bcrypt.hashpw(b"admin123", bcrypt.gensalt())
-ADMIN_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5UrFDxeZQJK8K"
+ADMIN_PASSWORD_HASH = "$2b$12$SsH4I.Ujx/6pwfrDIaW/TehsEkjAjXbjh8/qbwFJ0NkbGxcxejbg."
 
 # Create users data
 users_data = {
@@ -40,6 +40,6 @@ df.write_parquet(output_path)
 print(f"[OK] Created users.parquet at {output_path}")
 print(f"\nDefault credentials:")
 print(f"  Username: admin")
-print(f"  Password: admin123")
+print(f"  Password: Admin@2024")
 print(f"\nUser details:")
 print(df)

@@ -17,9 +17,10 @@ interface Message {
 
 interface ChatMessageProps {
   message: Message;
+  messageRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, messageRef }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -51,33 +52,39 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </div>
 
         <div className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown
-            components={{
-              code(props) {
-                const { children, className, ...rest } = props;
-                const match = /language-(\w+)/.exec(className || '');
-                return match ? (
-                  <SyntaxHighlighter
-                    style={vscDarkPlus}
-                    language={match[1]}
-                    PreTag="div"
-                    className="rounded-md"
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
-                ) : (
-                  <code
-                    className="rounded bg-muted px-1 py-0.5 font-mono text-sm"
-                    {...rest}
-                  >
-                    {children}
-                  </code>
-                );
-              },
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
+          {message.isStreaming ? (
+            // Usar ref para updates diretos no DOM durante streaming
+            <div ref={messageRef} className="streaming-text whitespace-pre-wrap" />
+          ) : (
+            // Renderização normal do React após streaming completo
+            <ReactMarkdown
+              components={{
+                code(props) {
+                  const { children, className, ...rest } = props;
+                  const match = /language-(\w+)/.exec(className || '');
+                  return match ? (
+                    <SyntaxHighlighter
+                      style={vscDarkPlus}
+                      language={match[1]}
+                      PreTag="div"
+                      className="rounded-md"
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code
+                      className="rounded bg-muted px-1 py-0.5 font-mono text-sm"
+                      {...rest}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          )}
 
           {message.isStreaming && (
             <span className="inline-block h-4 w-1 animate-pulse bg-primary" />
