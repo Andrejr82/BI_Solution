@@ -106,6 +106,41 @@ class ProcessManager:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
 
+    def kill_process_on_port(self, port: int):
+        """Mata o processo que está usando a porta especificada"""
+        try:
+            if platform.system() == 'Windows':
+                # Encontra o PID usando netstat
+                cmd = f'netstat -ano | findstr :{port}'
+                result = subprocess.check_output(cmd, shell=True).decode()
+                
+                if result:
+                    # Pega o último elemento da linha que é o PID
+                    for line in result.splitlines():
+                        if "LISTENING" in line:
+                            parts = line.strip().split()
+                            pid = parts[-1]
+                            if pid != "0":
+                                self.log(f"Liberando porta {port} (Matando PID {pid})...", "WARNING")
+                                subprocess.run(f'taskkill /F /PID {pid}', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                # Linux/Mac (lsof)
+                cmd = f"lsof -t -i:{port}"
+                try:
+                    pid = subprocess.check_output(cmd, shell=True).decode().strip()
+                    if pid:
+                        self.log(f"Liberando porta {port} (Matando PID {pid})...", "WARNING")
+                        subprocess.run(f"kill -9 {pid}", shell=True)
+                except:
+                    pass
+                    
+            # Aguarda um momento para o SO liberar a porta
+            time.sleep(1)
+            
+        except Exception:
+            pass  # Ignora erros se não conseguir matar ou não encontrar
+
+
     def wait_for_port(self, port: int, timeout: int = 30, service: str = "Service") -> bool:
         """Espera até que uma porta esteja respondendo"""
         import socket
@@ -158,8 +193,8 @@ class ProcessManager:
             process = subprocess.Popen(
                 cmd,
                 cwd=backend_dir,
-                stdout=subprocess.PIPE if not self.dev_mode else None,
-                stderr=subprocess.PIPE if not self.dev_mode else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 universal_newlines=True
@@ -175,6 +210,14 @@ class ProcessManager:
                 return process
             else:
                 self.log("Backend não respondeu a tempo", "ERROR")
+                # Exibe o output do processo do backend para diagnóstico
+                stdout, stderr = process.communicate()
+                if stdout:
+                    self.log("--- Output do Backend (stdout) ---", "WARNING")
+                    print(stdout)
+                if stderr:
+                    self.log("--- Output do Backend (stderr) ---", "ERROR")
+                    print(stderr)
                 process.kill()
                 return None
 
@@ -234,9 +277,13 @@ class ProcessManager:
         self.log(f"Diretório: {frontend_dir}", "INFO")
 
         try:
+            # Define variável de ambiente para o frontend usar a URL correta
+            env = os.environ.copy()
+            env['NEXT_PUBLIC_API_URL'] = 'http://127.0.0.1:8000'
             process = subprocess.Popen(
                 cmd,
                 cwd=frontend_dir,
+                env=env,
                 stdout=subprocess.PIPE if not self.dev_mode else None,
                 stderr=subprocess.PIPE if not self.dev_mode else None,
                 text=True,
@@ -410,6 +457,13 @@ Exemplos de uso:
 
     # Inicializa gerenciador
     manager = ProcessManager(dev_mode=args.dev)
+
+    # Limpeza preventiva de portas
+    manager.log("Verificando portas...", "INFO")
+    if not args.frontend_only:
+        manager.kill_process_on_port(8000)
+    if not args.backend_only:
+        manager.kill_process_on_port(3000)
 
     # Inicia serviços
     if not args.frontend_only:

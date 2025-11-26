@@ -1,0 +1,43 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.db
+
+# Logs
+*.log
+*.log.*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Alembic
+alembic_*.txt
+alembic_*.log
+
+# Outros
+*.pyc
+.DS_Store
+backend_auth.db
+backend_output.log
+backend_debug.log
+backend_startup.log

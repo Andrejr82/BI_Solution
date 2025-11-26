@@ -28,7 +28,7 @@ async def seed_admin():
             existing_admin = result.scalar_one_or_none()
             
             if existing_admin:
-                print("❌ Admin user already exists")
+                print("[ERRO] Admin user already exists")
                 return
             
             # Create admin user
@@ -44,18 +44,18 @@ async def seed_admin():
             await db.commit()
             await db.refresh(admin_user)
             
-            print("✅ Admin user created successfully!")
+            print("[OK] Admin user created successfully!")
             print(f"   Username: admin")
             print(f"   Password: admin123")
             print(f"   Email: admin@agentbi.com")
             print(f"   ID: {admin_user.id}")
-            print("\n⚠️  IMPORTANT: Change the password after first login!")
+            print("\n[IMPORTANTE] Change the password after first login!")
             
         except Exception as e:
-            print(f"❌ Error creating admin user: {e}")
+            print(f"[ERRO] Error creating admin user: {e}")
             await db.rollback()
 
 
 if __name__ == "__main__":
-    print("🔧 Seeding admin user...")
+    print("Seeding admin user...")
     asyncio.run(seed_admin())
