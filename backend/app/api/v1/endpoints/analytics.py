@@ -8,7 +8,7 @@ import io
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,40 +43,35 @@ async def get_analytics_data(
     For now, returns mock data
     """
     
-    # Mock data - replace with real query
-    mock_data = []
+    # Real implementation using Parquet
+    import polars as pl
+    from pathlib import Path
+    import logging
     
-    # Generate sample data for last 30 days
-    today = datetime.now()
-    for i in range(30):
-        date = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Caminho híbrido Docker/Dev
+        docker_path = Path("/app/data/parquet/admmat.parquet")
+        dev_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "parquet" / "admmat.parquet"
+
+        parquet_path = docker_path if docker_path.exists() else dev_path
+
+        if not parquet_path.exists():
+            logger.warning(f"Parquet file not found at: {parquet_path}")
+            return []
+            
+        df = pl.read_parquet(parquet_path)
         
-        for cat in ["Vendas", "Produtos", "Clientes"]:
-            # Apply category filter
-            if category and cat != category:
-                continue
-            
-            value = 1000 + (i * 100)
-            
-            # Apply value filters
-            if min_value and value < min_value:
-                continue
-            if max_value and value > max_value:
-                continue
-            
-            mock_data.append({
-                "id": f"{date}-{cat}",
-                "date": date,
-                "category": cat,
-                "value": value,
-                "growth": 5.5 if i % 2 == 0 else -2.3,
-                "metadata": {
-                    "segment": segment or "Geral",
-                    "source": "mock"
-                }
-            })
-    
-    return mock_data[:100]  # Limit to 100 records
+        # TODO: Implementar filtros reais com Polars
+        # Por enquanto retorna lista vazia para não mostrar dados falsos
+        # A implementação completa dos filtros será feita na próxima etapa
+        
+        return []
+        
+    except Exception as e:
+        logger.error(f"Error reading analytics data: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving analytics data")
 
 
 @router.get("/metrics", response_model=list[AnalyticsMetric])
@@ -90,33 +85,9 @@ async def get_analytics_metrics(
     TODO: Calculate from real data
     """
     
-    # Mock metrics
-    return [
-        {
-            "label": "Vendas Totais",
-            "value": 125000.50,
-            "format": "currency",
-            "trend": 12.5
-        },
-        {
-            "label": "Total de Produtos",
-            "value": 1250,
-            "format": "number",
-            "trend": 5.2
-        },
-        {
-            "label": "Taxa de Crescimento",
-            "value": 8.7,
-            "format": "percentage",
-            "trend": 2.1
-        },
-        {
-            "label": "Clientes Ativos",
-            "value": 450,
-            "format": "number",
-            "trend": -3.2
-        }
-    ]
+    # Real implementation
+    # Retorna lista vazia se não implementado, para evitar dados falsos
+    return []
 
 
 @router.post("/export")
@@ -127,47 +98,81 @@ async def export_analytics(
 ) -> StreamingResponse:
     """
     Export analytics data to CSV or Excel
+
+    Uses real Parquet data for export.
     """
-    
-    # Get data (reuse get_analytics_data logic)
-    # For now, use mock data
-    data = [
-        {"date": "2025-11-23", "category": "Vendas", "value": 1000, "growth": 5.5},
-        {"date": "2025-11-22", "category": "Vendas", "value": 950, "growth": 3.2},
-        {"date": "2025-11-21", "category": "Vendas", "value": 920, "growth": 2.1},
-    ]
-    
-    if export_request.format == "csv":
-        # Generate CSV
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["date", "category", "value", "growth"])
-        writer.writeheader()
-        writer.writerows(data)
-        
-        # Return as streaming response
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename=analytics_{datetime.now().strftime('%Y%m%d')}.csv"
-            }
-        )
-    
-    elif export_request.format == "excel":
-        # TODO: Implement Excel export with openpyxl or xlsxwriter
-        # For now, return CSV with .xlsx extension
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["date", "category", "value", "growth"])
-        writer.writeheader()
-        writer.writerows(data)
-        
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f"attachment; filename=analytics_{datetime.now().strftime('%Y%m%d')}.xlsx"
-            }
-        )
+    import polars as pl
+    from pathlib import Path
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Read data from Parquet
+        project_root = Path(__file__).parent.parent.parent.parent.parent
+        parquet_path = project_root / "data" / "parquet" / "admmat.parquet"
+
+        if not parquet_path.exists():
+            logger.warning(f"Parquet file not found at: {parquet_path}")
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        df = pl.read_parquet(parquet_path)
+
+        # Apply filters if provided
+        if export_request.filters:
+            filters = export_request.filters
+            if filters.date_start and "DATA" in df.columns:
+                df = df.filter(pl.col("DATA") >= filters.date_start)
+            if filters.date_end and "DATA" in df.columns:
+                df = df.filter(pl.col("DATA") <= filters.date_end)
+            if filters.category and "CATEGORIA" in df.columns:
+                df = df.filter(pl.col("CATEGORIA") == filters.category)
+
+        # Convert to list of dicts for export
+        data = df.to_dicts()
+
+        if not data:
+            raise HTTPException(status_code=404, detail="No data to export")
+
+        fieldnames = list(data[0].keys()) if data else []
+
+        if export_request.format == "csv":
+            # Generate CSV
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(data)
+
+            # Return as streaming response
+            return StreamingResponse(
+                iter([output.getvalue()]),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f"attachment; filename=analytics_{datetime.now().strftime('%Y%m%d')}.csv"
+                }
+            )
+
+        elif export_request.format == "excel":
+            # Export to Excel using Polars
+            output = io.BytesIO()
+            df.write_excel(output)
+            output.seek(0)
+
+            return StreamingResponse(
+                iter([output.getvalue()]),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=analytics_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                }
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting analytics data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error exporting data: {str(e)}")
 
 
 @router.post("/query")
@@ -177,18 +182,12 @@ async def custom_query(
     _: Annotated[User, Depends(require_permission("VIEW_ANALYTICS"))],
 ) -> dict:
     """
-    Execute custom analytics query
-    
-    TODO: Implement with LangChain/LLM for natural language queries
+    Execute custom analytics query using natural language
+
+    This endpoint will integrate with LangChain/LLM for natural language queries.
+    Currently not implemented to avoid returning mock data.
     """
-    
-    # Mock response
-    return {
-        "query": query_request.query,
-        "result": {
-            "message": "Custom query execution not yet implemented",
-            "suggestion": "This will integrate with LangChain for natural language queries"
-        },
-        "data": [],
-        "execution_time_ms": 0
-    }
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Custom query execution not yet implemented. This feature will integrate with LangChain for natural language queries."
+    )

@@ -1,24 +1,29 @@
-"""
-Authentication Endpoints
+"""Authentication Endpoints
 Login, logout, refresh token, and current user
 """
 
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+logger = logging.getLogger(__name__)
+from fastapi import APIRouter, Depends, HTTPException, Form, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user
 from app.config.database import get_db
-from app.config.security import create_access_token, create_refresh_token, verify_password
+from app.config.security import (
+    create_access_token,
+    create_refresh_token,
+    verify_password,
+    decode_token,
+)
 from app.infrastructure.database.models import User
 from app.schemas.auth import LoginRequest, RefreshTokenRequest, Token
 from app.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
 
 @router.post("/login", response_model=Token)
 async def login(
@@ -26,125 +31,105 @@ async def login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Token:
     """
-    Login endpoint
-    
-    Returns JWT access and refresh tokens
+    Production authentication endpoint - optimized for speed.
+
+    Uses hybrid authentication:
+    1. Parquet (primary, fast)
+    2. SQL Server (only if explicitly enabled and USE_SQL_SERVER=true)
+
+    Fast and efficient with proper error handling.
     """
-    # Find user by username
-    result = await db.execute(
-        select(User).where(User.username == login_data.username)
+    from app.core.auth_service import auth_service
+    from app.config.settings import settings
+
+    # Autentica usando Parquet diretamente quando SQL Server desabilitado
+    user_data = await auth_service.authenticate_user(
+        username=login_data.username,
+        password=login_data.password,
+        db=db if settings.USE_SQL_SERVER else None,
     )
-    user = result.scalar_one_or_none()
-    
-    # Validate credentials
-    if not user or not verify_password(login_data.password, user.hashed_password):
+
+    if not user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    if not user.is_active:
+
+    if not user_data.get("is_active", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user"
         )
-    
-    # Update last login
-    user.last_login = datetime.now(timezone.utc)
-    await db.commit()
-    
-    # Create tokens
+
+    # Generate tokens
     token_data = {
-        "sub": str(user.id),
-        "username": user.username,
-        "role": user.role,
+        "sub": user_data["id"],
+        "username": user_data["username"],
+        "role": user_data["role"]
     }
-    
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
-    
+
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer"
     )
 
+@router.post("/login_form", response_model=Token)
+async def login_form(
+    username: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    """Login endpoint that accepts form data (used by HTML login page)."""
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+    user.last_login = datetime.now(timezone.utc)
+    await db.commit()
+    token_data = {"sub": str(user.id), "username": user.username, "role": user.role}
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     refresh_data: RefreshTokenRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Token:
-    """
-    Refresh access token using refresh token
-    """
-    from app.config.security import decode_token
-    
-    try:
-        payload = decode_token(refresh_data.refresh_token)
-        
-        # Validate token type
-        if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type"
-            )
-        
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
-        # Get user
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        
-        if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
-            )
-        
-        # Create new tokens
-        token_data = {
-            "sub": str(user.id),
-            "username": user.username,
-            "role": user.role,
-        }
-        
-        access_token = create_access_token(token_data)
-        new_refresh_token = create_refresh_token(token_data)
-        
-        return Token(
-            access_token=access_token,
-            refresh_token=new_refresh_token,
-            token_type="bearer"
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
-
+    """Refresh access token using refresh token."""
+    payload = decode_token(refresh_data.refresh_token)
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    token_data = {"sub": str(user.id), "username": user.username, "role": user.role}
+    access_token = create_access_token(token_data)
+    new_refresh_token = create_refresh_token(token_data)
+    return Token(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-) -> User:
-    """Get current authenticated user information"""
+    current_user: Annotated[User, Depends(get_current_active_user)],
+) -> UserResponse:
+    """Get current authenticated user information."""
     return current_user
-
 
 @router.post("/logout")
 async def logout() -> dict[str, str]:
-    """
-    Logout endpoint
-    
-    Note: JWT tokens are stateless, so logout is handled client-side
-    by removing the token. This endpoint is for consistency.
-    """
-    return {"message": "Successfully logged out"}
+    """Placeholder logout endpoint (client can discard tokens)."""
+    return {"detail": "Logged out"}

@@ -1,3 +1,0 @@
-"""
-Testes para módulo agents
-"""

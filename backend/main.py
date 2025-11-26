@@ -6,7 +6,7 @@ Entry point for the backend API
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -40,25 +40,40 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("application_startup", environment=settings.ENVIRONMENT)
     
-    # Create database tables (in production, use Alembic migrations)
-    if settings.DEBUG:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("database_tables_created")
+    try:
+        # Create database tables (in production, use Alembic migrations)
+        if settings.DEBUG:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("database_tables_created")
+    except Exception as e:
+        logger.warning("database_connection_failed", error=str(e))
+        logger.info("continuing_without_database")
 
-    # Initialize HybridDataAdapter
-    logger.info("initializing_data_adapter")
-    app.state.data_adapter = HybridDataAdapter()
-    await app.state.data_adapter.connect()
-    logger.info("data_adapter_initialized", source=app.state.data_adapter.current_source)
+    try:
+        # Initialize HybridDataAdapter
+        logger.info("initializing_data_adapter")
+        app.state.data_adapter = HybridDataAdapter()
+        await app.state.data_adapter.connect()
+        logger.info("data_adapter_initialized", source=app.state.data_adapter.current_source)
+    except Exception as e:
+        logger.warning("data_adapter_failed", error=str(e))
+        logger.info("continuing_without_data_adapter")
     
     yield
     
     # Shutdown
     logger.info("application_shutdown")
     if hasattr(app.state, "data_adapter"):
-        await app.state.data_adapter.disconnect()
-    await engine.dispose()
+        try:
+            await app.state.data_adapter.disconnect()
+        except:
+            pass
+    try:
+        await engine.dispose()
+    except:
+        pass
+
 
 
 # Create FastAPI app
@@ -70,14 +85,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Configure CORS - Permissive for debugging
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for debugging
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Request: {request.method} {request.url}")
+    try:
+        response = await call_next(request)
+        logger.info(f"Response: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"Request failed: {e}")
+        raise
 
 # Configure rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -98,6 +124,18 @@ async def health_check() -> dict[str, str]:
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Root endpoint for simple login UI
+from fastapi import Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="app/templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Render a basic login page"""
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 # Global exception handler

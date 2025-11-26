@@ -29,11 +29,28 @@ export default function LoginPage() {
 
     try {
       const response = await authService.login(credentials);
-      login(response.user, response.access_token);
+
+      // Temporarily store tokens to enable authenticated requests
+      const setToken = useAuthStore.getState().setToken;
+      setToken(response.access_token, response.refresh_token);
+
+      // Fetch real user data from the server
+      const user = await authService.getCurrentUser();
+
+      // Complete login with real user data
+      login(user, response.access_token, response.refresh_token);
+
       router.push('/dashboard');
-    } catch (err) {
-      setError('Credenciais inválidas. Tente novamente.');
-      console.error(err);
+    } catch (err: any) {
+      // Detect network errors specifically
+      if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+        setError('Backend não está disponível. Certifique-se de que o servidor está rodando na porta 8000.');
+      } else if (err.response?.status === 401 || err.response?.status === 403) {
+        setError('Credenciais inválidas. Tente novamente. (Dica: Senha padrão é Admin@2024)');
+      } else {
+        setError('Erro ao fazer login. Tente novamente.');
+      }
+      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }

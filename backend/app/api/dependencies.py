@@ -24,46 +24,196 @@ async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """
-    Get current authenticated user from JWT token
-    
-    Raises:
-        HTTPException: If token is invalid or user not found
+    Get current user from JWT token - PARQUET ONLY (SIMPLIFIED)
     """
+    import polars as pl
+    from pathlib import Path
+    from datetime import datetime, timezone
+    import sys
+
+    print("==> get_current_user CALLED <==", file=sys.stderr, flush=True)
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Decode JWT
+    try:
+        token = credentials.credentials
+        payload = decode_token(token)
+
+        if payload.get("type") != "access":
+            print("==> Invalid token type <==", file=sys.stderr, flush=True)
+            raise credentials_exception
+
+        user_id = payload.get("sub")
+        if user_id is None:
+            print("==> No user_id in token <==", file=sys.stderr, flush=True)
+            raise credentials_exception
+
+        print(f"==> Token decoded: user_id={user_id} <==", file=sys.stderr, flush=True)
+
+    except JWTError as e:
+        print(f"==> JWT Error: {e} <==", file=sys.stderr, flush=True)
+        raise credentials_exception
+
+    # Read from Parquet ONLY
+    # Docker path vs Dev path
+    docker_path = Path("/app/data/parquet/users.parquet")
+    dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
+    parquet_path = docker_path if docker_path.exists() else dev_path
+    print(f"==> Parquet path: {parquet_path} <==", file=sys.stderr, flush=True)
+
+    if not parquet_path.exists():
+        print(f"==> Parquet NOT FOUND <==", file=sys.stderr, flush=True)
+        raise credentials_exception
+
+    try:
+        df = pl.read_parquet(parquet_path)
+        print(f"==> Parquet loaded: {len(df)} rows <==", file=sys.stderr, flush=True)
+
+        # Simple filter without cast
+        user_data = df.filter(pl.col("id") == user_id)
+        print(f"==> Filter result: {len(user_data)} rows <==", file=sys.stderr, flush=True)
+
+        if len(user_data) == 0:
+            print(f"==> User {user_id} NOT FOUND <==", file=sys.stderr, flush=True)
+            raise credentials_exception
+
+        user_row = user_data.row(0, named=True)
+        print(f"==> User found: {user_row['username']} <==", file=sys.stderr, flush=True)
+
+        user = User(
+            id=user_row["id"],
+            username=user_row["username"],
+            email=user_row.get("email", ""),
+            role=user_row["role"],
+            is_active=user_row.get("is_active", True),
+            hashed_password=user_row["hashed_password"],
+            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
+            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
+            last_login=user_row.get("last_login")
+        )
+
+        if not user.is_active:
+            print("==> User INACTIVE <==", file=sys.stderr, flush=True)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
+
+        print(f"==> SUCCESS: {user.username} authenticated <==", file=sys.stderr, flush=True)
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"==> ERROR: {e} <==", file=sys.stderr, flush=True)
+        raise credentials_exception
+
+
+async def get_current_user_old(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """
+    Get current authenticated user from JWT token - PARQUET ONLY VERSION
     
+    Simplified version that ONLY uses Parquet for maximum speed and reliability.
+    """
+    import sys
+    import polars as pl
+    from pathlib import Path
+    from datetime import datetime, timezone
+    
+    print("==> get_current_user CALLED <==", file=sys.stderr, flush=True)
+    
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    # Decode and validate JWT token
     try:
         token = credentials.credentials
         payload = decode_token(token)
         
-        # Validate token type
+        print(f"==> Token decoded successfully <==", file=sys.stderr, flush=True)
+
         if payload.get("type") != "access":
+            print(f"==> Invalid token type: {payload.get('type')} <==", file=sys.stderr, flush=True)
             raise credentials_exception
-        
+
         user_id: str | None = payload.get("sub")
         if user_id is None:
+            print(f"==> No user_id in token <==", file=sys.stderr, flush=True)
             raise credentials_exception
             
-    except JWTError:
+        print(f"==> Looking for user_id: {user_id} <==", file=sys.stderr, flush=True)
+
+    except JWTError as e:
+        print(f"==> JWT Error: {e} <==", file=sys.stderr, flush=True)
         raise credentials_exception
+
+    # Load user from Parquet
+    docker_path = Path("/app/data/parquet/users.parquet")
+    dev_path = Path(__file__).parent.parent.parent / "data" / "parquet" / "users.parquet"
+    parquet_path = docker_path if docker_path.exists() else dev_path
     
-    # Get user from database
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    
-    if user is None:
+    print(f"==> Parquet path: {parquet_path} <==", file=sys.stderr, flush=True)
+    print(f"==> Exists: {parquet_path.exists()} <==", file=sys.stderr, flush=True)
+
+    if not parquet_path.exists():
+        print(f"==> ERROR: Parquet file not found! <==", file=sys.stderr, flush=True)
         raise credentials_exception
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
+
+    try:
+        df = pl.read_parquet(parquet_path)
+        print(f"==> Parquet loaded: {len(df)} rows <==", file=sys.stderr, flush=True)
+        
+        # Filter for user (simple comparison without cast)
+        user_data = df.filter(pl.col("id") == user_id)
+        print(f"==> Filter result: {len(user_data)} rows <==", file=sys.stderr, flush=True)
+
+        if len(user_data) == 0:
+            print(f"==> User {user_id} NOT FOUND <==", file=sys.stderr, flush=True)
+            raise credentials_exception
+
+        user_row = user_data.row(0, named=True)
+        print(f"==> User found: {user_row.get('username')} <==", file=sys.stderr, flush=True)
+
+        user = User(
+            id=user_row["id"],
+            username=user_row["username"],
+            email=user_row.get("email", ""),
+            role=user_row["role"],
+            is_active=user_row.get("is_active", True),
+            hashed_password=user_row["hashed_password"],
+            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
+            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
+            last_login=user_row.get("last_login")
         )
-    
-    return user
+
+        if not user.is_active:
+            print(f"==> User {user.username} is INACTIVE <==", file=sys.stderr, flush=True)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
+
+        print(f"==> User {user.username} AUTHENTICATED <==", file=sys.stderr, flush=True)
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"==> ERROR: {e} <==", file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        raise credentials_exception
 
 
 async def get_current_active_user(

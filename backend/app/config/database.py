@@ -13,14 +13,27 @@ from app.config.settings import get_settings
 
 settings = get_settings()
 
-# Create async engine
-engine = create_async_engine(
-    str(settings.DATABASE_URL),
-    echo=settings.DB_ECHO,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_pre_ping=True,
-)
+# Create async engine with optimized pool settings
+# Use NullPool when SQL Server is disabled to avoid connection attempts
+from sqlalchemy.pool import NullPool
+
+if settings.USE_SQL_SERVER:
+    engine = create_async_engine(
+        str(settings.DATABASE_URL),
+        echo=settings.DB_ECHO,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_pre_ping=True,
+        pool_timeout=settings.SQL_SERVER_TIMEOUT,
+        connect_args={"timeout": settings.SQL_SERVER_TIMEOUT},
+    )
+else:
+    # Use NullPool when SQL Server is disabled - no connection pooling, no connection attempts
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",  # Dummy in-memory DB when SQL disabled
+        poolclass=NullPool,
+        echo=False,
+    )
 
 # Create session factory
 AsyncSessionLocal = async_sessionmaker(

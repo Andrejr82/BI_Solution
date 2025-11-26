@@ -65,23 +65,21 @@ class HybridDataAdapter(DatabaseAdapter):
             self.current_source = "parquet"
 
     async def connect(self) -> None:
-        """Tenta conectar ao SQL Server, fallback para Parquet se falhar."""
+        """Tenta conectar ao SQL Server (apenas para check), mas garante Parquet para queries."""
         if self.use_sql_server and self.sql_adapter:
             try:
-                # Tentar conectar com timeout
+                # Tentar conectar com timeout apenas para garantir que o serviço está de pé se necessário
                 await asyncio.wait_for(self.sql_adapter.connect(), timeout=self.sql_timeout)
                 self.sql_available = True
-                self.current_source = "sql_server"
-                logger.info("✅ Conectado ao SQL Server com sucesso.")
+                # self.current_source = "sql_server" # REMOVIDO: Forçar Parquet como fonte de dados
+                logger.info("✅ Conectado ao SQL Server (Disponível para Sync/Auth).")
             except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"⚠️ Falha ao conectar SQL Server: {e}. Usando Fallback Parquet.")
+                logger.warning(f"⚠️ Falha ao conectar SQL Server: {e}. Operando apenas com Parquet.")
                 self.sql_available = False
-                self.current_source = "parquet"
-                
-                if not self.fallback_enabled:
-                    raise  # Se fallback desabilitado, re-raise erro
         
         # Parquet "conecta" (lazy)
+        # Garantir que a fonte atual seja SEMPRE parquet para queries
+        self.current_source = "parquet"
         await self.parquet_adapter.connect()
 
     async def disconnect(self) -> None:
@@ -92,56 +90,13 @@ class HybridDataAdapter(DatabaseAdapter):
 
     async def execute_query(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Executa query com fallback automático.
-        Nota: SQL Server precisa de query SQL string, Parquet precisa de filtros dict.
-        Este método assume que recebe filtros dict e converte para SQL se necessário.
+        Executa query EXCLUSIVAMENTE no Parquet.
         """
-        
-        # Tentar SQL Server Primeiro
-        if self.use_sql_server and self.sql_available and self.sql_adapter:
-            try:
-                # Converter filtros para SQL
-                sql_query = self._build_sql_query(query_filters)
-                return await self.sql_adapter.execute_query(sql_query)
-            except Exception as e:
-                logger.error(f"Erro na query SQL Server: {e}")
-                if self.fallback_enabled:
-                    logger.info("🔄 Ativando Fallback para Parquet...")
-                    self.current_source = "parquet"
-                    # self.sql_available = False # Opcional: marcar como indisponível temporariamente
-                else:
-                    raise
-
-        # Fallback para Parquet
-        if self.fallback_enabled and self.parquet_adapter:
+        if self.parquet_adapter:
             return await self.parquet_adapter.execute_query(query_filters)
         
         return []
 
-    def _build_sql_query(self, filters: Dict[str, Any]) -> str:
-        """
-        Constrói query SQL simples a partir de filtros dict.
-        Implementação básica - deve ser expandida conforme necessidade.
-        """
-        # Mapeamento de tabelas/views deve ser configurado
-        table_name = "Vendas" # Exemplo, deve ser configurável
-        
-        conditions = []
-        for col, val in filters.items():
-            if isinstance(val, str):
-                conditions.append(f"{col} = '{val}'")
-            else:
-                conditions.append(f"{col} = {val}")
-        
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
-        return f"SELECT * FROM {table_name} WHERE {where_clause}"
-
     async def get_schema(self) -> str:
-        if self.current_source == "sql_server" and self.sql_adapter:
-            try:
-                return await self.sql_adapter.get_schema()
-            except:
-                pass # Fallback
-        
+        """Retorna schema do Parquet."""
         return await self.parquet_adapter.get_schema()

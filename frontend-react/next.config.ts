@@ -8,17 +8,16 @@ const nextConfig: NextConfig = {
   // Performance Optimizations
   reactStrictMode: true,
   
+  // Output standalone para Docker (otimiza tamanho da imagem)
+  output: 'standalone',
+  
   // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
 
-  // Image optimization
-  images: {
-    formats: ['image/avif', 'image/webp'],
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-  },
+  // Turbopack configuration
+  turbopack: {},
 
   // Experimental features for performance
   experimental: {
@@ -37,6 +36,13 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Image optimization
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
+
   // Headers for caching
   async headers() {
     return [
@@ -50,6 +56,28 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+
+  // Proxy API requests to backend
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://127.0.0.1:8000/api/:path*',
+      },
+    ];
+  },
+
+  // Webpack configuration for node-canvas
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Evitar que o canvas seja incluído no bundle do client
+      config.externals = {
+        ...config.externals,
+        canvas: 'commonjs canvas',
+      };
+    }
+    return config;
   },
 };
 
