@@ -2,405 +2,318 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Visão Geral do Projeto
 
-Agent Solution BI is a conversational Business Intelligence platform with a modern React frontend and FastAPI backend sharing a unified Python core. The system uses LangGraph for AI workflow orchestration and supports multiple data sources (Parquet, SQL Server) with intelligent fallback.
+Agent Solution BI é uma aplicação full-stack de Business Intelligence conversacional com tecnologia Gemini. O sistema usa uma arquitetura híbrida de dados (SQL Server + Parquet) com sistema de agentes LangGraph para processamento de consultas em linguagem natural.
 
-## Architecture
+**Stack Principal:**
+- **Frontend**: Next.js 16 + React 19 + TypeScript + Tailwind CSS
+- **Backend**: FastAPI + Python 3.11+ + Uvicorn
+- **LLM**: Google Gemini 2.5 Flash (via langchain-openai)
+- **Dados**: SQL Server (autenticação/metadados) + Parquet (dados analíticos)
+- **Agentes**: LangGraph + LangChain para processamento de queries
+- **Cache**: Redis (em Docker)
 
-### Architecture Design
-- **Frontend React** (`frontend-react/`): Next.js 16 production UI at port 3000
-- **Backend FastAPI** (`backend/`): Modern async API at port 8000
-- **Core Backend** (`core/`): Shared business logic and LangGraph agents
+## Comandos Essenciais
 
-The React frontend communicates with the FastAPI backend, which consumes the `core/` modules for AI/BI processing.
-
-### Core Components Architecture
-```
-core/
-├── agents/               # LangGraph agent nodes and workflows
-│   ├── bi_agent_nodes.py         # BI query processing nodes
-│   ├── caculinha_bi_agent.py     # Main BI agent orchestrator
-│   └── conversational_reasoning_node.py  # v3.0 extended thinking
-├── connectivity/         # Data adapters with fallback system
-│   ├── hybrid_adapter.py         # Auto-fallback: Parquet → SQL Server
-│   ├── parquet_adapter.py        # Primary Parquet/Polars adapter
-│   └── sql_server_adapter.py     # Fallback SQL Server adapter
-├── graph/               # LangGraph workflow builders
-│   ├── agent.py                  # Graph construction
-│   └── graph_builder.py          # Node orchestration
-├── business_intelligence/  # BI-specific logic
-│   ├── intent_classifier.py      # Query intent classification
-│   └── generic_query_executor.py # Query execution engine
-├── factory/             # Dependency injection and factories
-├── config/              # Settings and configuration
-└── utils/               # Cache, logging, helpers
-```
-
-### State Management
-The system uses `AgentState` (TypedDict) in `core/agent_state.py` for LangGraph workflows:
-- `messages`: LangChain message history
-- `sql_query`: Generated SQL/Parquet queries
-- `plotly_spec`/`plotly_fig`: Visualization specs
-- `retrieved_data`: Query results
-- `final_response`: Formatted user response
-- `reasoning_mode`: "conversational" or "analytical" (v3.0)
-
-## Development Commands
-
-### Python Backend
-
-**Environment Setup:**
+### Iniciar Sistema Completo
 ```bash
-# Create virtual environment (Windows)
-python -m venv .venv_new
-.venv_new\Scripts\activate
+# Windows (recomendado)
+python run.py
 
-# Install dependencies
-pip install -r requirements.txt
+# Apenas backend
+python run.py --backend-only
+
+# Apenas frontend
+python run.py --frontend-only
+
+# Modo desenvolvimento (logs verbosos)
+python run.py --dev
 ```
 
-**Running Services:**
+### Backend (FastAPI)
 ```bash
-# FastAPI Backend
 cd backend
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Rodar backend diretamente
 python main.py
-# or
-uvicorn main:app --reload --port 8000
-# → http://localhost:8000/docs (Swagger UI)
 
-# Both backend entry points exist:
-# - backend/main.py (modern FastAPI with async, lifespan, rate limiting)
-# - scripts/caculinha_backend.py (legacy compatibility, simpler)
+# Rodar com uvicorn
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Testing:**
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=core --cov-report=html
-
-# Run specific test file
-pytest tests/test_quick_wins_simple.py
-
-# Verbose logging (configured in pytest.ini)
-pytest -v --log-cli-level=INFO
-```
-
-### React Frontend
-
-**Setup:**
+### Frontend (Next.js)
 ```bash
 cd frontend-react
-npm install
-# or
+
+# Instalar dependências (preferencialmente com pnpm)
 pnpm install
+# ou: npm install
+
+# Dev server
+pnpm dev
+# ou: npm run dev
+
+# Build de produção
+pnpm build
+
+# Rodar testes
+pnpm test
+pnpm test:watch
+pnpm test:coverage
 ```
 
-**Development:**
+### Docker
 ```bash
-# Development server
-npm run dev
-# → http://localhost:3000
+# Iniciar stack completa
+docker-compose up -d
 
-# Build for production
-npm run build
+# Ver logs
+docker-compose logs -f
 
-# Start production server
-npm run start
+# Rebuild sem cache
+docker-compose build --no-cache
 
-# Linting
-npm run lint
-
-# Testing
-npm run test              # Run tests
-npm run test:watch        # Watch mode
-npm run test:coverage     # Coverage report
-npm run test:ci           # CI mode with coverage
+# Parar e remover containers
+docker-compose down
 ```
 
-## Critical Patterns
+### Utilitários
+```bash
+# Diagnóstico completo do sistema
+python diagnose_system.py
 
-### 1. LLM Adapter Factory Pattern
-**Always use `ComponentFactory` to acquire LLM adapters. Never instantiate directly.**
+# Limpar porta específica
+python kill_port.py 8000
+python kill_port.py 3000
 
-```python
-from core.factory.component_factory import ComponentFactory
-
-# ✅ Correct
-llm_adapter = ComponentFactory.get_llm_adapter()
-
-# ❌ Wrong - bypasses fallback logic
-from core.llm_adapter import LLMAdapter
-adapter = LLMAdapter()
+# Testar login via API
+python test_login.py
 ```
 
-**Why:** `ComponentFactory` implements automatic fallback (Gemini → DeepSeek), rate limiting detection, and quota management via `ComponentFactory.set_gemini_unavailable(True)`.
+## Arquitetura
 
-See: `core/llm_adapter.py` for fallback implementation.
+### Estrutura de Dados Híbrida
 
-### 2. Data Adapter Pattern
-Use `HybridDataAdapter` for automatic Parquet → SQL Server fallback:
+O sistema usa uma arquitetura **híbrida** crítica para entender:
 
-```python
-from core.connectivity.hybrid_adapter import HybridDataAdapter
+1. **SQL Server** (`backend/app/config/settings.py`):
+   - Usado para autenticação de usuários e metadados
+   - Configurado via `DATABASE_URL` e `USE_SQL_SERVER=true`
+   - **Importante**: Pode ser desabilitado sem quebrar o sistema (fallback automático)
 
-adapter = HybridDataAdapter()
-await adapter.connect()
-result = await adapter.query("SELECT * FROM vendas")
-# Automatically falls back to SQL Server if Parquet fails
+2. **Parquet** (`data/parquet/`):
+   - Fonte PRIMÁRIA para dados analíticos (`admmat.parquet`)
+   - Fallback para autenticação (`users.parquet`)
+   - Sempre disponível, sem dependências externas
+
+3. **HybridDataAdapter** (`backend/app/infrastructure/data/hybrid_adapter.py`):
+   - Gerencia fallback automático SQL Server → Parquet
+   - FORÇADO a usar Parquet para queries de dados (linha 82)
+   - Timeout configurável via `SQL_SERVER_TIMEOUT`
+
+### Sistema de Agentes (LangGraph)
+
+**Localização**: `backend/app/core/`
+
+O sistema usa LangGraph para processamento de queries com múltiplos agentes especializados:
+
+```
+Query do Usuário
+    ↓
+Supervisor (supervisor_agent.py)
+    ↓ (decide rota)
+    ├─→ Direct Response (respostas simples)
+    ├─→ Clarification (perguntas ambíguas)
+    └─→ Caculinha BI Agent (queries complexas)
+        ↓
+        ├─→ BI Tools (execute_sql_query, generate_chart, etc.)
+        └─→ Chart Tools (render_plotly_figure)
+            ↓
+        Response Final
 ```
 
-Location: `core/connectivity/hybrid_adapter.py`
+**Arquivos Chave:**
+- `backend/app/core/graph/graph_builder.py` - Define o grafo de execução
+- `backend/app/core/agents/supervisor_agent.py` - Roteador principal
+- `backend/app/core/agents/caculinha_bi_agent.py` - Agente de BI principal
+- `backend/app/core/agent_state.py` - Estado compartilhado entre agentes
 
-### 3. Response Caching
-Cache is persistent with 6-hour TTL. Preserve `cache_context` parameter:
+### Backend API Structure
 
-```python
-from core.utils.response_cache import ResponseCache
+**Rotas principais** (`backend/app/api/v1/endpoints/`):
+- `/api/v1/auth/login` - Autenticação JWT
+- `/api/v1/chat` - Interface de chat com BI agent (CRÍTICO)
+- `/api/v1/analytics` - Endpoints de análises
+- `/api/v1/reports` - CRUD de relatórios
+- `/api/v1/metrics` - Métricas do dashboard
+- `/api/v1/admin` - Administração de usuários
 
-cache = ResponseCache()
-cached = cache.get(prompt, cache_context="parquet")
-if not cached:
-    result = expensive_operation()
-    cache.set(prompt, result, cache_context="parquet")
-```
+**Autenticação**:
+- JWT com refresh tokens (`backend/app/config/security.py`)
+- Middleware de autenticação em `backend/app/api/dependencies.py`
+- Credenciais padrão: `admin` / `Admin@2024` (ver `CREDENTIALS.md`)
 
-Cache files: `data/cache/`
+### Frontend Structure
 
-### 4. Lazy Loading
-Heavy imports and configurations load on-demand. Maintain this pattern to reduce startup time (critical for cloud deployments):
+**Arquitetura**: Next.js App Router com autenticação de rotas
 
-```python
-# ✅ Good - lazy import
-def generate_chart():
-    import plotly.graph_objects as go  # Import only when needed
-    return go.Figure(...)
+- `frontend-react/src/app/(authenticated)/` - Rotas protegidas
+  - `dashboard/` - Dashboard principal
+  - `chat/` - Interface de chat com agente
+  - `analytics/` - Análises customizadas
+  - `reports/` - Gerenciamento de relatórios
+  - `admin/` - Painel administrativo
 
-# ❌ Bad - eager import at module level
-import plotly.graph_objects as go  # Slows down ALL imports
-```
+- `frontend-react/src/components/` - Componentes reutilizáveis
+  - `ui/` - Shadcn/ui components
+  - `chat/` - Componentes de chat
+  - `permissions/` - Sistema RBAC (RoleBasedRender, PermissionGate)
 
-### 5. LangGraph Node Structure
-Nodes follow this signature:
+- `frontend-react/src/services/` - Camada de API
+  - `auth.service.ts` - Autenticação e gestão de tokens
+  - Estado global com Zustand
 
-```python
-from core.agent_state import AgentState
+- `frontend-react/src/lib/api/client.ts` - Cliente Axios configurado
 
-def my_node(state: AgentState) -> AgentState:
-    """
-    Node must accept AgentState and return modified AgentState.
-    Use state.get() for optional fields.
-    """
-    messages = state["messages"]
-    # Process...
-    return {
-        **state,
-        "final_response": {"text": "...", "plotly_spec": {...}}
-    }
-```
+## Variáveis de Ambiente Críticas
 
-Example nodes: `core/agents/bi_agent_nodes.py`
-
-## Data Flow
-
-### Query Processing Pipeline
-1. User input → `intent_classifier.py` (classify query type)
-2. Intent → LangGraph workflow (`core/graph/agent.py`)
-3. Nodes execute sequentially:
-   - `generate_parquet_query` → SQL/filter generation
-   - `execute_query` → Data retrieval via adapters
-   - `generate_plotly_spec` → Visualization spec
-   - Format final response
-4. Response → Frontend (React via FastAPI)
-
-### Data Sources
-- **Primary**: Parquet files in `data/*.parquet` (read via Polars/Dask)
-- **Fallback**: SQL Server (configured in `.env`)
-- **Cache**: `data/cache/*.json` (6-hour TTL)
-- **History**: `data/query_history/*.json` (daily files)
-
-## Configuration
-
-### Environment Variables (`.env`)
+### Backend (.env ou docker-compose.yml)
 ```env
-# LLM Configuration
-GEMINI_API_KEY=<your-key>          # Primary LLM
-DEEPSEEK_API_KEY=<backup-key>      # Fallback LLM
+# Database (Híbrido)
+DATABASE_URL=mssql+aioodbc://user:pass@host:1433/db?driver=ODBC+Driver+17+for+SQL+Server
+USE_SQL_SERVER=false  # Desabilitado por padrão para evitar timeouts
+FALLBACK_TO_PARQUET=true
+SQL_SERVER_TIMEOUT=2
 
-# Database (optional)
-SQL_SERVER=localhost
-SQL_DATABASE=db_name
-SQL_USERNAME=user
-SQL_PASSWORD=pass
+# Gemini API
+GEMINI_API_KEY=your-key-here  # OBRIGATÓRIO para agente funcionar
 
-# API Settings
-PORT=5000
-HOST=0.0.0.0
+# JWT
+SECRET_KEY=your-secret-key-min-32-chars
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Cache
-CACHE_AUTO_CLEAN=True
-CACHE_MAX_AGE_DAYS=7
+# Redis (apenas Docker)
+REDIS_URL=redis://localhost:6379/0
 ```
 
-### Backend Settings
-Backend uses Pydantic settings (`backend/app/config/settings.py`):
-- `ENVIRONMENT`: development/production
-- `DEBUG`: Enable/disable debug mode
-- `LOG_LEVEL`: INFO/DEBUG/WARNING
-- `BACKEND_CORS_ORIGINS`: CORS configuration
-
-## Testing Patterns
-
-### Unit Tests
-```python
-import pytest
-from core.connectivity.parquet_adapter import ParquetAdapter
-
-@pytest.mark.asyncio
-async def test_parquet_query():
-    adapter = ParquetAdapter()
-    result = await adapter.query("SELECT * FROM vendas LIMIT 10")
-    assert len(result) > 0
+### Frontend (auto-configurado via run.py)
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
 ```
 
-### Mocking LLM Calls
-```python
-from unittest.mock import Mock, patch
+## Problemas Comuns e Soluções
 
-@patch('core.llm_adapter.LLMAdapter.generate')
-def test_with_mock_llm(mock_generate):
-    mock_generate.return_value = "Mocked response"
-    # Test code...
-```
+### Backend não inicia
+1. Verifique se `DATABASE_URL` no ambiente do sistema está vazia:
+   ```powershell
+   $env:DATABASE_URL = ""
+   ```
+2. Execute: `python backend/main.py` e observe os logs
+3. Se erro de Gemini API: Configure `GEMINI_API_KEY` no `.env`
 
-### Test Data
-Use fixtures in `data/` for reproducible tests. Parquet files are committed to repo.
+### Frontend não conecta ao Backend
+- Certifique-se que backend está rodando na porta 8000
+- Verifique CORS em `backend/main.py` (linha 89-95)
+- Frontend usa `http://127.0.0.1:8000` (não `localhost`)
 
-## Common Tasks
+### Erro de autenticação "Invalid credentials"
+- Senha é case-sensitive: `Admin@2024` (não `admin123`)
+- Verificar se `data/parquet/users.parquet` existe
+- Rodar `python backend/scripts/create_parquet_users.py` se necessário
 
-### Adding a New LangGraph Node
-1. Define node function in `core/agents/bi_agent_nodes.py` or new file
-2. Accept/return `AgentState` TypedDict
-3. Register in `core/graph/graph_builder.py`
-4. Add unit tests
+### Sistema de agentes não responde
+1. Verificar `GEMINI_API_KEY` está configurada
+2. Fallback automático para queries Parquet diretas está em `backend/app/api/v1/endpoints/chat.py` (linha 65+)
+3. Logs do agente estão em nível INFO - verificar console
 
-### Adding a New API Endpoint
-1. Create endpoint in `backend/app/api/v1/endpoints/`
-2. Import in `backend/app/api/v1/router.py`
-3. Use dependency injection for `data_adapter` via `app.state`
-4. Add rate limiting with `@limiter.limit("10/minute")`
+### Docker: Backend reiniciando constantemente
+- SQL Server não acessível do container? Use `host.docker.internal` no Windows
+- Ou desabilite SQL Server: `USE_SQL_SERVER=false` em `.env.docker`
+- Verifique logs: `docker-compose logs backend`
 
-### Modifying Prompt Templates
-Templates are in:
-- Python code: `core/agents/prompt_loader.py`
-- JSON examples: `data/query_examples.json`
-- Preserve format that generates valid `plotly_spec` JSON
+## Desenvolvimento
 
-### Cache Management
+### Adicionar nova rota de API
+1. Criar endpoint em `backend/app/api/v1/endpoints/`
+2. Importar e incluir router em `backend/app/api/v1/router.py`
+3. Proteger com `Depends(get_current_active_user)` se necessário
+
+### Adicionar nova ferramenta para o Agente
+1. Criar função em `backend/app/core/tools/`
+2. Decorar com `@tool` do LangChain
+3. Adicionar à lista `bi_tools` em `backend/app/core/agents/caculinha_bi_agent.py`
+4. Atualizar prompt do agente se necessário
+
+### Adicionar nova página no Frontend
+1. Criar em `frontend-react/src/app/(authenticated)/nova-pagina/page.tsx`
+2. Adicionar link no Sidebar: `frontend-react/src/components/layout/Sidebar.tsx`
+3. Usar `ProtectedRoute` se precisar permissões específicas
+
+### Modificar schema de dados Parquet
+1. Schema atual em: `backend/parquet_schema.txt`
+2. Regenerar: `python backend/scripts/inspect_parquet.py`
+3. Atualizar ferramentas do agente que usam colunas específicas
+
+## Testes
+
+### Backend
 ```bash
-# Manual cache cleanup:
-python -c "from core.utils.cache_cleaner import run_cache_cleanup; run_cache_cleanup()"
+cd backend
+pytest
+pytest --cov  # com coverage
 ```
 
-## Error Handling
-
-### LLM Fallback
-When Gemini fails (rate limit/quota):
-- System auto-detects via exception handling in `core/llm_adapter.py`
-- Sets `ComponentFactory.set_gemini_unavailable(True)`
-- Subsequent calls use DeepSeek automatically
-- Logs fallback event to `logs/`
-
-### Data Adapter Fallback
-When Parquet fails:
-- `HybridDataAdapter` catches exception
-- Switches `current_source = "sql_server"`
-- Retries query on SQL Server
-- Logs fallback to `logs/`
-
-## Troubleshooting
-
-### "Module not found" errors
-Ensure project root is in PYTHONPATH:
-```python
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
-```
-
-### LLM quota exceeded
-Check `logs/` for fallback events. System auto-switches to DeepSeek.
-
-### Frontend build errors
+### Frontend
 ```bash
 cd frontend-react
-rm -rf node_modules .next
-pnpm install
-pnpm run build
+pnpm test
+pnpm test:watch
+pnpm test:coverage
 ```
 
-## Documentation References
+## Migrações de Banco (Alembic)
 
-Key documentation files in `docs/`:
-- `MIGRATION_PLAN.md` - FastAPI + React architecture guide
-- `INTEGRATION_SETUP.md` - Frontend-Backend integration guide
-- `README.md` - Comprehensive project overview (Portuguese)
-- `FASE_1_COMPLETA.md` / `FASE_2_COMPLETA.md` - Implementation phases
+```bash
+cd backend
 
-## Code Style
+# Criar nova migração
+alembic revision --autogenerate -m "descrição"
 
-- Follow PEP 8 for Python
-- Use `ruff` and `black` for formatting (configured in CI)
-- TypeScript/React: ESLint + Prettier (configured in `frontend-react/`)
-- Add type hints to all Python function signatures
-- Document complex business logic with inline comments
+# Aplicar migrações
+alembic upgrade head
 
-## Git Workflow
+# Reverter última migração
+alembic downgrade -1
+```
 
-Recent commits show:
-- Main branch: `main`
-- Feature branches: Use descriptive names
-- Commits: Descriptive messages (see git log for style)
-- Pre-commit hooks: Not configured (consider adding)
+**Nota**: Em desenvolvimento, tabelas são auto-criadas se `DEBUG=true` (via `backend/main.py` linha 44-48).
 
-## Windows-Specific Notes
+## Deployment
 
-- Use `.venv_new\Scripts\activate` (not `source venv/bin/activate`)
-- Batch scripts in `scripts/`: `RUN.bat`, `git_push_to_bi_solution.bat`
-- Path separators: Use `Path` from pathlib for cross-platform compatibility
+### Produção com Docker
+1. Configurar `.env.docker` com valores de produção
+2. Setar `ENVIRONMENT=production`
+3. Gerar `SECRET_KEY` forte: `openssl rand -hex 32`
+4. `docker-compose up -d`
 
-## Performance Considerations
+### Build Frontend para produção
+```bash
+cd frontend-react
+pnpm build
+pnpm start  # Servidor Next.js otimizado
+```
 
-1. **Backend startup**: Optimizations applied
-   - Lazy imports for heavy libraries (Plotly, transformers)
-   - Async initialization for FastAPI lifespan
+## Notas Importantes
 
-2. **Query performance**:
-   - Parquet + Polars is faster than SQL for analytical queries
-   - Use `HybridDataAdapter` for automatic optimization
-
-3. **LLM latency**:
-   - Response cache reduces 90%+ of repeat queries to <100ms
-   - Extended thinking mode (v3.0) adds latency for complex reasoning
-
-## Security Notes
-
-- PII masking: Use `core.security.mask_pii()` for logs
-- Authentication: JWT tokens in `backend/app/config/security.py`
-- Rate limiting: Configured via SlowAPI in `backend/main.py`
-- SQL injection: Parameterized queries only (enforced by adapters)
-
-## Version Information
-
-- Python: 3.11+
-- Node.js: 20+ (for React frontend)
-- Key frameworks:
-  - FastAPI 0.116+
-  - LangChain 0.3.27
-  - LangGraph 0.6.4
-  - Next.js 16.0.3
-  - React 19.2.0
-
-Last updated: 2025-11-23
+- **Sempre interaja em Português PT-BR** conforme instruções do usuário
+- O sistema foi migrado de Streamlit para React - não há mais interface Streamlit
+- `run.py` é o launcher unificado - NÃO usar `RUN.bat` diretamente
+- Parquet é SEMPRE a fonte de dados para queries analíticas (forçado em `hybrid_adapter.py`)
+- O sistema de agentes tem fallback automático para queries diretas se LangGraph falhar
+- Credenciais estão documentadas em `CREDENTIALS.md` e `DOCKER_README.md`
+- Docker usa `host.docker.internal` para acessar SQL Server no host Windows

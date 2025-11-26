@@ -14,7 +14,7 @@ export interface AuthResponse {
 
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    // Connect to FastAPI backend: POST /api/v1/auth/login
+    // Use production authentication endpoint only
     return apiClient.post<AuthResponse>('/api/v1/auth/login', credentials);
   },
 
