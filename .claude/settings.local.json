@@ -1,9 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python test_interface_flow.py:*)",
-      "Bash(rm:*)",
-      "Bash(timeout 10 python:*)"
+      "Bash(python kill_port.py:*)",
+      "mcp__context7__resolve-library-id",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker exec:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

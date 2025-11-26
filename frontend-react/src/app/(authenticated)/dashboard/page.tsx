@@ -15,15 +15,55 @@ interface Metrics {
   usersGrowth: number;
 }
 
+interface SaleItem {
+  date: string;
+  product: string;
+  value: number;
+  quantity: number;
+}
+
+interface TopProduct {
+  product: string;
+  productName: string;
+  totalSales: number;
+  revenue: number;
+}
+
 async function fetchMetrics(): Promise<Metrics> {
-  return apiClient.get<Metrics>('/api/metrics/summary');
+  return apiClient.get<Metrics>('/api/v1/metrics/summary');
+}
+
+async function fetchRecentSales(): Promise<SaleItem[]> {
+  return apiClient.get<SaleItem[]>('/api/v1/metrics/recent-sales?limit=10');
+}
+
+async function fetchTopProducts(): Promise<TopProduct[]> {
+  return apiClient.get<TopProduct[]>('/api/v1/metrics/top-products?limit=5');
 }
 
 export default function DashboardPage() {
-  const { data: metrics, isLoading } = useQuery({
+  const { data: metrics, isLoading, error } = useQuery({
     queryKey: ['metrics'],
     queryFn: fetchMetrics,
+    retry: 1,
   });
+
+  const { data: recentSales, isLoading: isLoadingSales } = useQuery({
+    queryKey: ['recent-sales'],
+    queryFn: fetchRecentSales,
+    retry: 1,
+  });
+
+  const { data: topProducts, isLoading: isLoadingProducts } = useQuery({
+    queryKey: ['top-products'],
+    queryFn: fetchTopProducts,
+    retry: 1,
+  });
+
+  // Log any errors for debugging
+  if (error) {
+    console.error('Erro ao carregar métricas:', error);
+  }
 
   const cards = [
     {

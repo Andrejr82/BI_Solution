@@ -5,6 +5,7 @@ Pydantic Settings with environment variables
 
 from functools import lru_cache
 from typing import Literal
+import os
 
 from pydantic import Field, field_validator, model_validator, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,7 +44,7 @@ class Settings(BaseSettings):
     # Database - SQL Server
     # Usando aioodbc para suporte assíncrono com SQLAlchemy
     DATABASE_URL: str = Field(
-        default="mssql+aioodbc://sa:password@localhost/agentbi?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+        default="mssql+aioodbc://AgenteVirtual:Cacula@2020@FAMILIA\\SQLJR,1433/Projeto_Caculinha?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
     )
     DB_ECHO: bool = False
     DB_POOL_SIZE: int = 10
@@ -52,13 +53,13 @@ class Settings(BaseSettings):
     # Connection string para aioodbc (SQLServerAdapter)
     # Deve corresponder aos mesmos parâmetros do DATABASE_URL
     PYODBC_CONNECTION_STRING: str = Field(
-        default="DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=agentbi;UID=sa;PWD=password;TrustServerCertificate=yes"
+        default="DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=Projeto_Caculinha;UID=AgenteVirtual;PWD=Cacula@2020;TrustServerCertificate=yes"
     )
     
     # Hybrid Architecture Flags
-    USE_SQL_SERVER: bool = True
+    USE_SQL_SERVER: bool = False  # Disabled by default to prevent timeouts
     FALLBACK_TO_PARQUET: bool = True
-    SQL_SERVER_TIMEOUT: int = 10
+    SQL_SERVER_TIMEOUT: int = 2  # Reduced timeout
 
     # Redis
     REDIS_URL: RedisDsn = Field(default="redis://localhost:6379/0")
@@ -88,8 +89,29 @@ class Settings(BaseSettings):
     # Prometheus
     METRICS_ENABLED: bool = True
 
+    # AI / LLM
+    GEMINI_API_KEY: str | None = None
+    LLM_MODEL_NAME: str = "models/gemini-2.5-flash"
+    INTENT_CLASSIFICATION_MODEL: str = "models/gemini-2.5-flash"
+    CODE_GENERATION_MODEL: str = "models/gemini-2.5-flash"
+
     @model_validator(mode="after")
     def compute_pyodbc_string(self) -> "Settings":
+        # OTIMIZAÇÃO: Se DATABASE_URL vazio, desabilitar SQL Server (evita timeout de 10s no login!)
+        if not self.DATABASE_URL or self.DATABASE_URL.strip() == "":
+            self.USE_SQL_SERVER = False
+            self.FALLBACK_TO_PARQUET = True
+            return self
+
+        # Força a verificação da variável de ambiente para USE_SQL_SERVER
+        if os.environ.get("USE_SQL_SERVER", "false").lower() == "true":
+            self.USE_SQL_SERVER = True
+        # Se a URL for SQLite, e a variável de ambiente não for true, desabilitar o uso do SQL Server
+        elif self.DATABASE_URL and self.DATABASE_URL.startswith("sqlite"):
+            self.USE_SQL_SERVER = False
+            self.FALLBACK_TO_PARQUET = True
+            return self
+
         # Se PYODBC_CONNECTION_STRING for o default, tentar derivar de DATABASE_URL
         default_pyodbc = self.model_fields["PYODBC_CONNECTION_STRING"].default
         if self.PYODBC_CONNECTION_STRING == default_pyodbc and self.DATABASE_URL:
