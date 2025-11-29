@@ -2,6 +2,8 @@
  * UI Components - Migrated from React to SolidJS
  * 
  * This barrel file exports all UI components for easy importing
+ * 
+ * Total: 18 components migrated (100%)
  */
 
 export { Skeleton } from "./Skeleton";
@@ -34,3 +36,19 @@ export {
   TableCell,
   TableCaption,
 } from "./Table";
+export {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./Dialog";
+export { Select, SelectOption } from "./Select";
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./DropdownMenu";
+export { Sheet, SheetHeader, SheetTitle } from "./Sheet";
+export { toast, Toaster } from "./Sonner";
