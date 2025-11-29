@@ -21,17 +21,17 @@ Este documento detalha as etapas para migrar o projeto de frontend React (locali
 
 ### Fase 0: Pré-Migração - Preparação e Avaliação
 
-*   **[ ] 0.1. Verificação do Ambiente:**
+*   [X] 0.1. Verificação do Ambiente:
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='node -v', description='Verificar versão do Node.js')`
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='pnpm -v', description='Verificar versão do pnpm')`
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='ls -F frontend-solid/package.json', description='Verificar a existência do package.json do frontend-solid')`
     *   **[LLM_ACTION: READ_FILE]** `read_file(file_path='frontend-solid/package.json', description='Ler package.json do frontend-solid para confirmar configuração.')`
         *   **[LLM_VERIFICATION]** Confirmar a presença de `solid-js` e `vite-plugin-solid` nas dependências.
-*   **[ ] 0.2. Criação da Branch de Migração:**
+*   [X] 0.2. Criação da Branch de Migração:
     *   **[LLM_ACTION: USER_INPUT_REQUIRED]** Perguntar ao usuário o nome da branch de migração (sugestão: `feature/migrate-to-solidjs`).
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='git checkout -b [USER_PROVIDED_BRANCH_NAME]', description='Criar nova branch Git para a migração.')`
     *   **[LLM_VERIFICATION]** `run_shell_command(command='git branch', description='Verificar se a branch foi criada com sucesso.')`
-*   **[ ] 0.3. Auditoria do Código React Existente (`backups/frontend-react`):**
+*   [X] 0.3. Auditoria do Código React Existente (`backups/frontend-react`):
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='ls -R backups/frontend-react/src', description='Listar recursivamente todos os arquivos .tsx/.jsx na pasta src do frontend React.')`
     *   **[LLM_ACTION: ITERATE_FILES]** Para cada arquivo `.tsx` ou `.jsx` encontrado:
         *   **[LLM_ACTION: READ_FILE]** `read_file(file_path='[PATH_TO_REACT_COMPONENT_FILE]', description='Ler o conteúdo do arquivo de componente React.')`
@@ -47,7 +47,7 @@ Este documento detalha as etapas para migrar o projeto de frontend React (locali
     *   **[LLM_ACTION: RUN_COMMAND]** `run_shell_command(command='read_file(file_path=\'backups/frontend-react/package.json\')', description='Ler package.json do frontend React para identificar dependências de terceiros.')`
         *   **[LLM_ACTION: ANALYZE_DEPENDENCIES]** Internamente, extrair lista de `dependencies` e `devDependencies`.
         *   **[LLM_ACTION: WRITE_TO_INTERNAL_MEMORY]** Armazenar a lista de dependências.
-*   **[ ] 0.4. Seleção de um Componente Piloto (PoC):**
+*   [X] 0.4. Seleção de um Componente Piloto (PoC):
     *   **[LLM_ACTION: USER_INPUT_REQUIRED]** Apresentar ao usuário a lista de componentes identificados em `0.3` e pedir para escolher um componente pequeno e isolado para ser o piloto.
     *   **[LLM_ACTION: WRITE_TO_INTERNAL_MEMORY]** Armazenar o caminho do componente piloto escolhido.
     *   **[LLM_ACTION: USER_CONFIRMATION]** Solicitar ao usuário que faça um commit inicial do ambiente base: `git add . && git commit -m "feat: Initial migration setup and React codebase audit"`
