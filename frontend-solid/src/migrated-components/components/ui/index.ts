@@ -23,3 +23,14 @@ export { Avatar, AvatarImage, AvatarFallback } from "./Avatar";
 export { Alert, AlertTitle, AlertDescription } from "./Alert";
 export { LazyImage } from "./LazyImage";
 export { SkipLink } from "./SkipLink";
+export { Tabs, TabsList, TabsTrigger, TabsContent } from "./Tabs";
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableCaption,
+} from "./Table";
