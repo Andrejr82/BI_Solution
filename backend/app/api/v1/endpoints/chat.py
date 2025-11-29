@@ -31,21 +31,33 @@ class ChatResponse(BaseModel):
 @router.get("/stream")
 async def stream_chat(
     q: str,
+    token: str,  # ✅ Token via query parameter (EventSource limitation)
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
 ):
     """
     Streaming endpoint usando Server-Sent Events (SSE)
+    ✅ Autenticação via query parameter (EventSource não suporta headers)
     ✅ Com suporte a Last-Event-ID para reconexão inteligente
     """
     import sys
     import logging
-    
+    from app.api.dependencies import get_current_user_from_token
+
     logger = logging.getLogger(__name__)
-    
+
+    # ✅ Validar token manualmente
+    try:
+        current_user = await get_current_user_from_token(token)
+        logger.info(f"SSE authenticated user: {current_user.username}")
+    except Exception as e:
+        logger.error(f"SSE authentication failed: {e}")
+        async def error_generator():
+            yield f"data: {json.dumps({'error': 'Não autenticado'})}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
     # ✅ CRÍTICO: Obter Last-Event-ID para reconexão
     last_event_id = request.headers.get("Last-Event-ID")
-    
+
     print(f"==> SSE STREAM REQUEST: {q} (Last-Event-ID: {last_event_id}) <==", file=sys.stderr, flush=True)
     
     async def event_generator():
@@ -53,51 +65,64 @@ async def stream_chat(
             # Iniciar contador de eventos
             event_counter = int(last_event_id) if last_event_id else 0
             
-            # Obter QueryProcessor (agente)
-            from app.core.query_processor import QueryProcessor
+            # SISTEMA ROBUSTO COM REGEX (100% OFFLINE)
+            from app.core.robust_chatbi import RobustChatBI
+            from pathlib import Path
             
-            if not hasattr(stream_chat, '_query_processor'):
-                print("==> Inicializando QueryProcessor para streaming... <==", file=sys.stderr, flush=True)
-                stream_chat._query_processor = QueryProcessor()
+            # Caminho do Parquet
+            docker_path = Path("/app/data/parquet/admmat.parquet")
+            dev_path = Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "data" / "parquet" / "admmat.parquet"
+            parquet_path = docker_path if docker_path.exists() else dev_path
             
-            # Processar query com agente (com timeout)
+            response_text = ""
+            
             try:
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(stream_chat._query_processor.process_query, q),
-                    timeout=10.0
-                )
+                # Inicializar sistema robusto
+                if not hasattr(event_generator, '_chatbi'):
+                    print("DEBUG: Inicializando RobustChatBI...", file=sys.stderr, flush=True)
+                    event_generator._chatbi = RobustChatBI(parquet_path)
                 
-                # Extrair resposta
-                response_text = ""
-                if isinstance(result, dict):
-                    response_text = result.get("output", "")
+                # Processar pergunta com REGEX
+                safe_q = q.encode('ascii', 'ignore').decode('ascii')
+                print(f"DEBUG: Recebida pergunta: '{safe_q}'", file=sys.stderr, flush=True)
+                result = event_generator._chatbi.process_query(q)
                 
-                if not response_text:
-                    response_text = "Desculpe, não consegui processar sua pergunta. Tente reformular."
-                
-                # Simular streaming: dividir resposta em chunks de palavras
-                words = response_text.split()
-                chunk_size = 3  # 3 palavras por chunk
-                
-                for i in range(0, len(words), chunk_size):
-                    chunk_words = words[i:i + chunk_size]
-                    chunk_text = " " + " ".join(chunk_words) if i > 0 else " ".join(chunk_words)
+                response_text = result["text"]
+                safe_response = response_text.encode('ascii', 'ignore').decode('ascii')
+                print(f"DEBUG: Resposta gerada (len={len(response_text)}): {safe_response[:50]}...", file=sys.stderr, flush=True)
                     
-                    event_counter += 1
-                    
-                    # ✅ Formato SSE com ID: "id: X\ndata: {json}\n\n"
-                    yield f"id: {event_counter}\n"
-                    yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
-                    
-                    # Pequeno delay para simular streaming natural
-                    await asyncio.sleep(0.05)
+            except Exception as e:
+                print(f"ERRO CRÍTICO no processamento: {e}", file=sys.stderr, flush=True)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                response_text = "Desculpe, ocorreu um erro interno."
+            
+            # Streaming com velocidade natural
+            words = response_text.split()
+            chunk_size = 2  # 2 palavras por chunk
+            
+            print(f"DEBUG: Iniciando streaming de {len(words)} palavras...", file=sys.stderr, flush=True)
+            
+            for i in range(0, len(words), chunk_size):
+                chunk_words = words[i:i + chunk_size]
+                chunk_text = " " + " ".join(chunk_words) if i > 0 else " ".join(chunk_words)
                 
-            except asyncio.TimeoutError:
-                # Fallback em caso de timeout
-                response_text = "⏱️ A consulta demorou muito. Tente uma pergunta mais simples."
                 event_counter += 1
+                
+                # Log a cada 10 chunks para não poluir demais
+                if i % 20 == 0:
+                    safe_chunk = chunk_text.encode('ascii', 'ignore').decode('ascii')
+                    print(f"DEBUG: Enviando chunk {i}: '{safe_chunk}'", file=sys.stderr, flush=True)
+                
                 yield f"id: {event_counter}\n"
-                yield f"data: {json.dumps({'text': response_text, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                
+                # Delay para streaming natural (100ms - mais rápido)
+                await asyncio.sleep(0.1)
+            
+            print("DEBUG: Streaming concluído. Enviando sinal de done.", file=sys.stderr, flush=True)
+            yield f"id: {event_counter + 1}\n"
+            yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
             
             # Sinalizar fim do stream
             event_counter += 1
@@ -143,8 +168,8 @@ async def send_chat_message(
     
     print(f"==> CHAT REQUEST: {query} <==", file=sys.stderr, flush=True)
 
-    # ✅ AGENTE HABILITADO - Otimizado para performance
-    use_agent = True
+    # ✅ AGENTE DESABILITADO TEMPORARIAMENTE - Usando fallback direto ao Parquet
+    use_agent = False
 
     # Tentar usar sistema de agentes primeiro COM TIMEOUT
     if use_agent:

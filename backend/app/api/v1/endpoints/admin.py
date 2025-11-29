@@ -6,7 +6,7 @@ User management, audit logs, and system settings
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks # Adicionado BackgroundTasks
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from app.config.security import get_password_hash
 from app.infrastructure.database.models import AuditLog, Report, User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.core.parquet_cache import cache
+from app.core.sync_service import sync_service # Adicionado
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -26,6 +27,20 @@ class AdminStats(BaseModel):
     activeUsers: int
     totalQueries: int
     systemHealth: str
+
+
+@router.post("/sync-parquet")
+async def sync_parquet_data(
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[User, Depends(require_role("admin"))],
+):
+    """
+    Trigger SQL Server -> Parquet synchronization
+    
+    Runs in background. Requires admin role.
+    """
+    background_tasks.add_task(sync_service.run_sync)
+    return {"message": "Sincronização iniciada em segundo plano. Verifique os logs para progresso.", "status": "processing"}
 
 
 @router.get("/stats", response_model=AdminStats)

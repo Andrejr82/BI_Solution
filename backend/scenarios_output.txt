@@ -1,0 +1,41 @@
+============================================================
+TESTES DE CENARIO - ROBUST CHAT BI
+============================================================
+
+[1] Preparando dados de teste...
+   Produto Teste: 704563 (ALCA BOLSA 7708 DIAM.100MM PS CAR PT LAS 755)
+   UNE com Produto: 2586
+   UNE sem Produto: 1974
+
+[2] Inicializando ChatBI...
+
+[Teste 1] Saudacao Simples
+   Query: Ola, bom dia
+   PASSOU
+   Resposta:  Ol! Sou seu assistente de BI.  Posso ajudar com:  Consultas de preos  Anlise de vendas  Informaes d...
+
+[Teste 2] Produto Inexistente
+   Query: vendas do produto 999999999
+   FALHOU
+   Esperado: Deve informar que produto nao existe
+   Obtido:  No encontrei o produto 999999.  Verifique se o cdigo est correto.
+
+[Teste 3] Busca por ID (Sucesso)
+   Query: quantas vendas do produto 704563 na une 2586
+   PASSOU
+   Resposta:  **Produto 704563** na UNE 2586:  **Nome:** ALCA BOLSA 7708 DIAM.100MM PS CAR PT LAS 755  **Valor:**...
+
+[Teste 4] Busca por Nome (Sucesso)
+   Query: vendas de ALCA BOLSA 7708 DIAM.100MM PS CAR PT LAS 755 na loja 2586
+   PASSOU
+   Resposta:  **Produto 704563** na UNE 2586:  **Nome:** ALCA BOLSA 7708 DIAM.100MM PS CAR PT LAS 755  **Valor:**...
+
+[Teste 5] Sugestao de UNE (Produto existe, UNE errada)
+   Query: vendas do produto 704563 na une 1974
+   FALHOU
+   Esperado: Deve sugerir UNEs onde o produto esta disponivel
+   Obtido:  O produto 704563 no foi encontrado na UNE 1974.   Mas ele est disponvel nas seguintes UNEs: **1685, 2586, 520, 2720, 1**...  Tente consultar uma dessas lojas!
+
+============================================================
+RESULTADO FINAL: 3/5 testes passaram
+============================================================

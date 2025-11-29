@@ -20,6 +20,7 @@ class TokenData(BaseModel):
     user_id: str
     username: str
     role: str
+    allowed_segments: list[str] = Field(default_factory=list) # Novo Campo
 
 
 class LoginRequest(BaseModel):

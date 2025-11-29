@@ -1,0 +1,24 @@
+{
+  "name": "agent-bi-solid-prod",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.10.10",
+    "@tanstack/solid-query": "^5.90.14",
+    "axios": "^1.6.5",
+    "clsx": "^2.1.0",
+    "lucide-solid": "^0.303.0",
+    "solid-js": "^1.8.11",
+    "tailwind-merge": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11",
+    "vite-plugin-solid": "^2.8.2"
+  }
+}

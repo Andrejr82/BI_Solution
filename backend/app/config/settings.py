@@ -15,8 +15,13 @@ from sqlalchemy.engine import make_url
 class Settings(BaseSettings):
     """Application settings"""
 
+    # Calculate absolute path to .env file
+    # backend/app/config/settings.py -> backend/.env
+    _base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    _env_path = os.path.join(_base_dir, ".env")
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_env_path,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

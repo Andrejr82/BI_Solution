@@ -793,10 +793,10 @@ def gerar_grafico_vendas_mensais_produto(
         if df_raw is None or df_raw.empty:
             return {"status": "error", "message": "Não foi possível carregar dados"}
 
-        # A coluna de código do produto é 'ITEM'
-        codigo_col = 'ITEM'
+        # A coluna de código do produto é 'PRODUTO' (conforme schema do admmat.parquet)
+        codigo_col = 'PRODUTO'
         
-        # Converter a coluna 'ITEM' para numérico para garantir a comparação
+        # Converter a coluna 'PRODUTO' para numérico para garantir a comparação
         df_raw[codigo_col] = pd.to_numeric(df_raw[codigo_col], errors='coerce')
         
         # Filtrar por código de produto
@@ -806,7 +806,7 @@ def gerar_grafico_vendas_mensais_produto(
             return {
                 "status": "error",
                 "message": (
-                    f"Produto com ITEM {codigo_produto} não encontrado. "
+                    f"Produto com código {codigo_produto} não encontrado. "
                     "Verifique o código informado."
                 ),
             }
@@ -874,7 +874,7 @@ def gerar_grafico_vendas_mensais_produto(
             )
 
         fig = _apply_chart_customization(
-            fig, title=(f"Vendas Mensais - Produto ITEM {codigo_produto}")
+            fig, title=(f"Vendas Mensais - Produto {codigo_produto}")
         )
 
         fig.update_xaxes(title_text="Mês")

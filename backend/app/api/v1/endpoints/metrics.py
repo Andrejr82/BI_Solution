@@ -9,9 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user
-from app.config.database import get_db
 from app.infrastructure.database.models import User
-from app.core.parquet_cache import cache
+from app.core.data_scope_service import data_scope_service # Importar o serviço
 
 router = APIRouter(prefix="/metrics", tags=["Metrics"])
 
@@ -28,7 +27,7 @@ class MetricsSummary(BaseModel):
 @router.get("/summary", response_model=MetricsSummary)
 async def get_metrics_summary(
     current_user: Annotated[User, Depends(get_current_active_user)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    # db: Annotated[AsyncSession, Depends(get_db)] # Não mais usada diretamente aqui
 ) -> MetricsSummary:
     """
     Get dashboard metrics summary
@@ -43,8 +42,8 @@ async def get_metrics_summary(
     logger = logging.getLogger(__name__)
 
     try:
-        # Usar cache LRU para performance (10x mais rápido após primeiro load)
-        df = cache.get_dataframe("admmat.parquet")
+        # Limitar a 10000 linhas para cálculo de métricas (performance)
+        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=10000)
 
         # Calcular métricas reais baseado no schema do admmat.parquet
         # Produtos únicos
@@ -123,12 +122,13 @@ async def get_recent_sales(
     logger = logging.getLogger(__name__)
 
     try:
-        # Usar cache LRU
-        df = cache.get_dataframe("admmat.parquet")
+        df = data_scope_service.get_filtered_dataframe(current_user)
 
         # Usar colunas reais do admmat.parquet
-        # Filtrar produtos com vendas na semana atual
-        df_recent = df.filter(pl.col("QTDE_SEMANA_ATUAL") > 0).head(limit)
+        # Filtrar produtos com vendas na semana atual (converter para numérico primeiro)
+        df_recent = df.filter(
+            pl.col("QTDE_SEMANA_ATUAL").cast(pl.Float64).fill_null(0) > 0
+        ).head(limit)
 
         sales = []
         for row in df_recent.iter_rows(named=True):
@@ -162,8 +162,7 @@ async def get_top_products(
     logger = logging.getLogger(__name__)
 
     try:
-        # Usar cache LRU
-        df = cache.get_dataframe("admmat.parquet")
+        df = data_scope_service.get_filtered_dataframe(current_user)
 
         # Usar VENDA_30DD para ranking de top produtos
         df_with_sales = df.filter(pl.col("VENDA_30DD") > 0)
