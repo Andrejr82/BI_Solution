@@ -30,16 +30,16 @@ class Settings(BaseSettings):
 
     # API
     API_V1_PREFIX: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: str | list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8000"]
+    BACKEND_CORS_ORIGINS: str = Field(
+        default="http://localhost:3000,http://localhost:8000"
     )
 
-    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
-        if isinstance(v, str):
-            return [i.strip() for i in v.split(",")]
-        return v
+    # @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    # @classmethod
+    # def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
+    #     if isinstance(v, str):
+    #         return [i.strip() for i in v.split(",")]
+    #     return v
 
     # Database - SQL Server
     # Usando aioodbc para suporte assíncrono com SQLAlchemy
