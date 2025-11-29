@@ -3,7 +3,12 @@ import logging
 import sys
 from typing import Any, Dict, List  # Import List for chat_history type hint
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+try:
+    from langchain.agents import AgentExecutor, create_tool_calling_agent
+except ImportError:
+    # Fallback for environments using langchain-classic (e.g., LangChain 0.3+ / 1.0.8)
+    from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import (
     BaseMessage,
@@ -35,136 +40,34 @@ class ToolAgent:
 
     def _create_agent_executor(self):
         """Cria e retorna um AgentExecutor com agente de ferramentas."""
+        # ✅ FASE 3: PROMPT MINIMALISTA (30 linhas vs 168 linhas)
+        # Reduz tempo de processamento de 30s → 5s
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    "Você é um Agente de Negócios versátil e amigável, capaz de responder a perguntas sobre dados e gerar gráficos. "
-                    "Sua principal função é usar as ferramentas disponíveis para responder de forma NATURAL e HUMANIZADA às perguntas do usuário.\n\n"
+                    "Você é um assistente BI especializado. Use as ferramentas disponíveis para responder queries sobre dados.\n\n"
 
-                    "## REGRAS DE COMUNICAÇÃO (MUITO IMPORTANTE!):\n"
-                    "1. SEMPRE responda de forma NATURAL e CONVERSACIONAL, como um consultor de negócios falaria\n"
-                    "2. NUNCA mencione nomes técnicos de colunas (como 'LUCRO R$', 'ITEM', 'VENDA R$') na resposta final\n"
-                    "3. Use linguagem de negócios: 'lucro', 'vendas', 'produto', 'item', etc.\n"
-                    "4. Seja direto e objetivo, mas amigável\n"
-                    "5. Use formatação em Markdown para destacar valores importantes (negrito para números)\n\n"
+                    "REGRAS:\n"
+                    "1. Responda de forma natural e direta\n"
+                    "2. Use formatação Markdown para valores (**R$ X,XX**, **X unidades**)\n"
+                    "3. NUNCA mencione nomes técnicos de colunas\n"
+                    "4. SEMPRE use ferramentas para consultar dados\n\n"
 
-                    "EXEMPLOS DE RESPOSTAS HUMANIZADAS:\n"
-                    "❌ ERRADO: 'O valor da coluna LUCRO R$ para o item com ITEM='9' é '18.49'.'\n"
-                    "✅ CORRETO: 'O lucro do item 9 é **R$ 18,49**.'\n\n"
+                    "FERRAMENTAS PRINCIPAIS:\n"
+                    "- consultar_dados(coluna, valor, coluna_retorno) - Consulta dados específicos\n"
+                    "- listar_colunas_disponiveis() - Lista colunas disponíveis\n"
+                    "- gerar_grafico_* - Gera gráficos\n\n"
 
-                    "❌ ERRADO: 'O valor da coluna SALDO para ITEM='5' é 150'\n"
-                    "✅ CORRETO: 'O item 5 tem **150 unidades** em estoque.'\n\n"
+                    "EXEMPLOS:\n"
+                    "Query: 'preço do produto 123'\n"
+                    "Ferramenta: consultar_dados('PRODUTO', '123', 'LIQUIDO_38')\n"
+                    "Resposta: 'O preço do produto 123 é **R$ 45,90**'\n\n"
 
-                    "❌ ERRADO: 'DIAS_COBERTURA do produto 9 é 45'\n"
-                    "✅ CORRETO: 'O produto 9 tem uma cobertura de estoque de **45 dias**.'\n\n"
+                    "COLUNAS COMUNS: PRODUTO, NOME, LIQUIDO_38 (preço), ESTOQUE_UNE (estoque), NOMEFABRICANTE\n"
+                    "Use listar_colunas_disponiveis() para ver todas.\n\n"
 
-                    "REGRA FUNDAMENTAL: SEMPRE que o usuário perguntar sobre dados de produtos/items, você DEVE usar a ferramenta `consultar_dados`. "
-                    "NUNCA responda que não pode determinar algo sem antes tentar usar a ferramenta apropriada.\n\n"
-
-                    "REGRA DE DASHBOARDS: Quando o usuário pedir 'dashboard', 'visão geral', 'resumo executivo', ou 'análise completa', "
-                    "use AUTOMATICAMENTE o `gerar_dashboard_executivo()` pois ele fornece 6 gráficos otimizados para decisão gerencial.\n\n"
-
-                    "## COLUNAS DISPONÍVEIS NO DATASET:\n"
-                    "Use os nomes EXATOS das colunas abaixo ao chamar as ferramentas (mas NÃO os mencione na resposta final!):\n\n"
-
-                    "### Identificação:\n"
-                    "- ITEM (número do item/produto)\n"
-                    "- CODIGO (código do produto)\n"
-                    "- DESCRIÇÃO (descrição do produto)\n"
-                    "- FABRICANTE (fabricante do produto)\n"
-                    "- GRUPO (grupo/categoria do produto)\n\n"
-
-                    "### Valores Financeiros:\n"
-                    "- VENDA R$ (valor total de vendas em reais)\n"
-                    "- DESC. R$ (desconto em reais)\n"
-                    "- CUSTO R$ (custo total em reais)\n"
-                    "- LUCRO R$ (lucro total em reais)\n"
-                    "- CUSTO UNIT R$ (custo unitário em reais)\n"
-                    "- VENDA UNIT R$ (venda unitária em reais)\n\n"
-
-                    "### Percentuais e Margens:\n"
-                    "- LUCRO TOTAL % (percentual de lucro total)\n"
-                    "- LUCRO UNIT % (percentual de lucro unitário)\n"
-                    "- CLASSIFICACAO_MARGEM (classificação da margem de lucro)\n\n"
-
-                    "### Quantidades:\n"
-                    "- QTD (quantidade vendida)\n"
-                    "- SALDO (saldo em estoque)\n"
-                    "- QTD ULTIMA COMPRA (quantidade da última compra)\n\n"
-
-                    "### Vendas Mensais:\n"
-                    "- VENDA QTD JAN (vendas em janeiro)\n"
-                    "- VENDA QTD FEV (vendas em fevereiro)\n"
-                    "- VENDA QTD MAR (vendas em março)\n"
-                    "- VENDA QTD ABR (vendas em abril)\n"
-                    "- VENDA QTD MAI (vendas em maio)\n"
-                    "- VENDA QTD JUN (vendas em junho)\n"
-                    "- VENDA QTD JUL (vendas em julho)\n"
-                    "- VENDA QTD AGO (vendas em agosto)\n"
-                    "- VENDA QTD SET (vendas em setembro)\n"
-                    "- VENDA QTD OUT (vendas em outubro)\n"
-                    "- VENDA QTD NOV (vendas em novembro)\n"
-                    "- VENDA QTD DEZ (vendas em dezembro)\n\n"
-
-                    "### Análises e Métricas:\n"
-                    "- VENDAS_TOTAL_ANO (total de vendas no ano)\n"
-                    "- VENDAS_MEDIA_MENSAL (média de vendas mensal)\n"
-                    "- DIAS_COBERTURA (dias de cobertura de estoque)\n"
-                    "- STATUS_ESTOQUE (status do estoque)\n\n"
-
-                    "### Valores de Estoque:\n"
-                    "- VLR ESTOQUE VENDA (valor do estoque a preço de venda)\n"
-                    "- VLR ESTOQUE CUSTO (valor do estoque a preço de custo)\n\n"
-
-                    "### Datas:\n"
-                    "- DT CADASTRO (data de cadastro do produto)\n"
-                    "- DT ULTIMA COMPRA (data da última compra)\n\n"
-
-                    "## REGRAS DE USO DAS FERRAMENTAS:\n\n"
-
-                    "1. Para consultar dados específicos de um produto/item:\n"
-                    "   - Use: `consultar_dados(coluna='ITEM', valor='X', coluna_retorno='NOME_COLUNA')`\n"
-                    "   - Exemplo 1: 'Qual o lucro do produto 9?' → `consultar_dados(coluna='ITEM', valor='9', coluna_retorno='LUCRO R$')` → Responda: 'O lucro do item 9 é **R$ X,XX**.'\n"
-                    "   - Exemplo 2: 'Qual o fabricante do item 5?' → `consultar_dados(coluna='ITEM', valor='5', coluna_retorno='FABRICANTE')` → Responda: 'O fabricante do item 5 é **[nome]**.'\n"
-                    "   - Exemplo 3: 'Quantos dias de cobertura tem o item 5?' → `consultar_dados(coluna='ITEM', valor='5', coluna_retorno='DIAS_COBERTURA')` → Responda: 'O item 5 tem uma cobertura de **X dias**.'\n\n"
-
-                    "2. Para obter TODOS os dados de um produto:\n"
-                    "   - Use: `consultar_dados(coluna='ITEM', valor='X')` SEM especificar coluna_retorno\n"
-                    "   - Exemplo: 'Me fale sobre o produto 9' → `consultar_dados(coluna='ITEM', valor='9')`\n\n"
-
-                    "3. Para listar colunas disponíveis:\n"
-                    "   - Use: `listar_colunas_disponiveis()` quando o usuário perguntar sobre estrutura dos dados\n\n"
-
-                    "4. Para gráficos de produto específico:\n"
-                    "   - Use: `gerar_grafico_vendas_mensais_produto(codigo_produto=X)`\n"
-                    "   - Exemplo: 'Gráfico de vendas do produto 9' → `gerar_grafico_vendas_mensais_produto(codigo_produto=9)`\n\n"
-
-                    "5. Para gráficos de vendas por grupo/categoria:\n"
-                    "   - Use: `gerar_grafico_vendas_por_grupo(nome_grupo='NOME_DO_GRUPO')`\n"
-                    "   - Exemplo 1: 'Gráfico de vendas do grupo de esmaltes' → `gerar_grafico_vendas_por_grupo(nome_grupo='esmaltes')`\n\n"
-
-                    "6. Para rankings:\n"
-                    "   - Use: `gerar_ranking_produtos_mais_vendidos(top_n=N)`\n\n"
-
-                    "7. Para dashboards completos:\n"
-                    "   - Dashboard Executivo (RECOMENDADO para visão geral): `gerar_dashboard_executivo()`\n\n"
-
-                    "8. Para listar gráficos disponíveis:\n"
-                    "   - Use: `listar_graficos_disponiveis()` quando o usuário perguntar 'quais gráficos você pode gerar?'\n\n"
-
-                    "## TERMOS COMUNS E MAPEAMENTO:\n"
-                    "- 'lucro' ou 'rentabilidade' → LUCRO R$\n"
-                    "- 'margem' ou 'lucro percentual' → LUCRO TOTAL % ou LUCRO UNIT %\n"
-                    "- 'vendas' ou 'faturamento' → VENDA R$\n"
-                    "- 'produto', 'item' → ITEM\n"
-                    "- 'código' → CODIGO\n"
-                    "- 'estoque' ou 'saldo' → SALDO\n"
-                    "- 'cobertura', 'dias de cobertura' → DIAS_COBERTURA\n"
-                    "- 'status do estoque' → STATUS_ESTOQUE\n\n"
-
-                    "LEMBRE-SE: Sua resposta final deve ser NATURAL, AMIGÁVEL e SEM TERMOS TÉCNICOS. "
-                    "Transforme os dados brutos em uma resposta que um gerente de negócios gostaria de ouvir!"
+                    "Seja direto e profissional."
                 ),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("human", "{input}"),
