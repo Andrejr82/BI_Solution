@@ -1,7 +1,7 @@
 import type { JSX, ParentComponent } from "solid-js";
 import { cn } from "../../utils/cn";
 
-interface TableProps extends JSX.TableHTMLAttributes<HTMLTableElement> {}
+interface TableProps extends JSX.HTMLAttributes<HTMLTableElement> {}
 
 /**
  * Table component - table container with scroll
