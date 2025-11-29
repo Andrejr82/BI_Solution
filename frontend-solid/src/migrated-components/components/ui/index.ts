@@ -5,3 +5,5 @@
  */
 
 export { Skeleton } from "./Skeleton";
+export { Badge, badgeVariants } from "./Badge";
+export { Button, buttonVariants } from "./Button";
