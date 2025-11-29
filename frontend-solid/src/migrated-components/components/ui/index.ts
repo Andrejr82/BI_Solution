@@ -19,3 +19,7 @@ export {
   CardContent,
   CardFooter,
 } from "./Card";
+export { Avatar, AvatarImage, AvatarFallback } from "./Avatar";
+export { Alert, AlertTitle, AlertDescription } from "./Alert";
+export { LazyImage } from "./LazyImage";
+export { SkipLink } from "./SkipLink";
