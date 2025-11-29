@@ -63,6 +63,7 @@ generated_charts/
 # Parquet files
 data/parquet/
 data/parquet_cleaned/
+data/parquet_columns.txt
 
 # Specific project files to ignore
 Relatorio_integracao_1308.md
@@ -88,6 +89,7 @@ maintenance/
 credentials.json
 secrets/
 .secrets/
+data/token.json
 
 # Arquivo inválido do Windows
 nul

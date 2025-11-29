@@ -38,6 +38,7 @@ async def seed_admin():
                 hashed_password=get_password_hash("admin123"),
                 role="admin",
                 is_active=True,
+                allowed_segments='["*"]', # Admin pode ver tudo
             )
             
             db.add(admin_user)

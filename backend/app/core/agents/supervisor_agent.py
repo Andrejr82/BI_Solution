@@ -114,3 +114,25 @@ class SupervisorAgent:
 
         # Ambos os tipos vão para ToolAgent que decidirá qual ferramenta usar
         return self.tool_agent.process_query(query)
+
+    def stream_query(self, query: str):
+        """
+        Roteia a consulta para o ToolAgent com streaming.
+
+        Args:
+            query: Consulta do usuário
+
+        Yields:
+            dict: Eventos do agente (chunks de texto, ações, etc.)
+        """
+        # Detectar se é requisição de gráfico
+        is_chart_request = self._detect_chart_intent(query)
+
+        if is_chart_request:
+            self.logger.info(f"Streaming de consulta de gráfico para ToolAgent: '{query}'")
+        else:
+            self.logger.info(f"Streaming de consulta padrão para ToolAgent: '{query}'")
+
+        # Delegar para método de streaming do ToolAgent
+        for event in self.tool_agent.stream_query(query):
+            yield event

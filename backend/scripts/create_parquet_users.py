@@ -8,6 +8,7 @@ import polars as pl
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
+import json # Adicionado
 
 # Use a pre-generated bcrypt hash for "admin123"
 # Generated using: bcrypt.hashpw(b"admin123", bcrypt.gensalt())
@@ -23,6 +24,7 @@ users_data = {
     "is_active": [True],
     "is_superuser": [True],
     "role": ["admin"],
+    "allowed_segments": [json.dumps(["*"])], # Adicionado: Admin pode ver tudo
     "created_at": [datetime.now(timezone.utc)],
     "updated_at": [datetime.now(timezone.utc)],
     "last_login": [None]

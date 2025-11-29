@@ -151,6 +151,16 @@ class ToolAgent:
 
         except Exception as e:
             self.logger.error(f"Erro ao invocar o agente LangChain: {e}", exc_info=True)
+            
+            # Debug: Write error to file
+            try:
+                import traceback
+                with open("error_log_agent.txt", "w", encoding="utf-8") as f:
+                    f.write(f"Error: {str(e)}\n")
+                    f.write(traceback.format_exc())
+            except:
+                pass
+                
             return {
                 "type": "error",
                 "output": (

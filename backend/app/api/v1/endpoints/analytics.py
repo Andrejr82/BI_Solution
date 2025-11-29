@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from app.api.dependencies import get_db, get_current_active_user
 from app.infrastructure.database.models import User
 from app.core.parquet_cache import cache
+from app.core.data_scope_service import data_scope_service # Adicionado
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -55,8 +56,9 @@ async def get_analytics_data(
     logger = logging.getLogger(__name__)
 
     try:
-        # Usar cache LRU para performance
-        df = cache.get_dataframe("admmat.parquet")
+        # Usar o DataScopeService para obter o DataFrame já filtrado
+        # Limitar a 5000 linhas para analytics (performance)
+        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=5000)
 
         # Filtrar por vendas > 0 (produtos ativos)
         df_filtered = df.filter(pl.col("VENDA_30DD") > 0)

@@ -5,8 +5,9 @@ SQLAlchemy model for users table
 
 import uuid
 from datetime import datetime
+import json # Adicionado para manipulação de JSON string
 
-from sqlalchemy import Boolean, DateTime, String, Uuid
+from sqlalchemy import Boolean, DateTime, String, Uuid, Text # Adicionado Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -26,6 +27,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="viewer")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    allowed_segments: Mapped[str] = mapped_column(Text, nullable=False, default="[]") # Armazenar como JSON string
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -36,3 +38,15 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, role={self.role})>"
+
+    @property
+    def segments_list(self) -> list[str]:
+        """Converte a string JSON de allowed_segments para uma lista Python."""
+        import json
+        return json.loads(self.allowed_segments)
+
+    @segments_list.setter
+    def segments_list(self, segments: list[str]):
+        """Define allowed_segments a partir de uma lista Python, convertendo para string JSON."""
+        import json
+        self.allowed_segments = json.dumps(segments)

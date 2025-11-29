@@ -3,6 +3,7 @@ API Dependencies
 FastAPI dependency injection utilities
 """
 
+import json # Adicionado
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -92,6 +93,7 @@ async def get_current_user(
             role=user_row["role"],
             is_active=user_row.get("is_active", True),
             hashed_password=user_row["hashed_password"],
+            allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
             created_at=user_row.get("created_at", datetime.now(timezone.utc)),
             updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
             last_login=user_row.get("last_login")
@@ -226,6 +228,82 @@ async def get_current_active_user(
             detail="Inactive user"
         )
     return current_user
+
+
+async def get_current_user_from_token(token: str) -> User:
+    """
+    Get current user from raw JWT token string
+    Used for SSE endpoints where EventSource doesn't support custom headers
+    """
+    import polars as pl
+    from pathlib import Path
+    from datetime import datetime, timezone
+    import sys
+    
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    # Decode JWT
+    try:
+        payload = decode_token(token)
+        
+        if payload.get("type") != "access":
+            raise credentials_exception
+        
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+            
+    except JWTError:
+        raise credentials_exception
+    
+    # Read from Parquet
+    docker_path = Path("/app/data/parquet/users.parquet")
+    dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
+    parquet_path = docker_path if docker_path.exists() else dev_path
+    
+    if not parquet_path.exists():
+        raise credentials_exception
+    
+    try:
+        df = pl.read_parquet(parquet_path)
+        user_data = df.filter(pl.col("id") == user_id)
+        
+        if len(user_data) == 0:
+            raise credentials_exception
+        
+        # CORREÇÃO: Definir user_row antes de usar
+        user_row = user_data.row(0, named=True)
+        
+        user = User(
+            id=user_row["id"],
+            username=user_row["username"],
+            email=user_row.get("email", ""),
+            role=user_row["role"],
+            is_active=user_row.get("is_active", True),
+            hashed_password=user_row["hashed_password"],
+            allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
+            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
+            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
+            last_login=user_row.get("last_login")
+        )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception:
+        raise credentials_exception
+
 
 
 def require_role(*allowed_roles: str):

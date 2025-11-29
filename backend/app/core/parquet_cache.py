@@ -94,7 +94,16 @@ class ParquetCache:
                 f"  - Dev: {dev_path}"
             )
 
-        return pl.read_parquet(parquet_path)
+        # Otimização: usar streaming para arquivos grandes (> 100 MB)
+        # Isso carrega em chunks ao invés de tudo na memória de uma vez
+        logger.info(f"📂 Loading Parquet: {parquet_path}")
+
+        # SEMPRE usar scan + collect(streaming=True) para arquivos Parquet grandes
+        # Isso usa menos memória RAM ao processar em chunks
+        df = pl.scan_parquet(parquet_path).collect(streaming=True)
+
+        logger.info(f"✅ Loaded {len(df):,} rows × {len(df.columns)} columns")
+        return df
 
     def clear(self):
         """Clear cache (useful for testing or manual refresh)"""

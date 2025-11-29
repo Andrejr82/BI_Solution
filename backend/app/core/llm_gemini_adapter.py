@@ -40,10 +40,10 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
         genai.configure(api_key=settings.GEMINI_API_KEY)
 
-        # Prioriza LLM_MODEL_NAME, fallback para GEMINI_MODEL_NAME, default para gemini-2.5-flash
-        self.model_name = os.getenv("LLM_MODEL_NAME", os.getenv("GEMINI_MODEL_NAME", "models/gemini-2.5-flash"))
-        self.max_retries = 2  # ✅ Reduzido de 3 para 2
-        self.retry_delay = 1  # ✅ Reduzido de 2s para 1s
+        # ✅ FASE 2: Gemini 1.5 Flash (MUITO mais rápido que 2.5)
+        self.model_name = os.getenv("LLM_MODEL_NAME", os.getenv("GEMINI_MODEL_NAME", "models/gemini-1.5-flash"))
+        self.max_retries = 1  # ✅ Apenas 1 tentativa
+        self.retry_delay = 0.5  # ✅ 500ms entre tentativas
 
         self.logger.info(f"Gemini adapter inicializado com modelo: {self.model_name}")
 
@@ -144,7 +144,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
                 thread = threading.Thread(target=worker)
                 thread.start()
-                thread.join(timeout=30.0)  # ✅ Reduzido de 90s para 30s
+                thread.join(timeout=10.0)  # ✅ FASE 2: Reduzido para 10s
 
                 if thread.is_alive():
                     self.logger.warning(f"Thread timeout tentativa {attempt + 1}")

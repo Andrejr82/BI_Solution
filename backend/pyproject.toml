@@ -6,7 +6,7 @@ authors = ["André <andre@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = "^0.35.0"}
 pydantic = "^2.11.0"
@@ -27,6 +27,21 @@ sentry-sdk = {extras = ["fastapi"], version = "^2.35.0"}
 prometheus-client = "^0.22.0"
 slowapi = "^0.1.9"
 httpx = "^0.28.0"
+email-validator = "^2.0.0"
+polars = "^1.35.2"
+dask = {extras = ["dataframe"], version = "^2025.11.0"}
+jinja2 = "^3.1.6"
+pyarrow-hotfix = "^0.7"
+langchain-google-genai = "^2.0.5"
+langgraph = "^0.2.55"
+aiosqlite = "^0.21.0"
+langchain = "^0.3.13"
+langchain-community = "^0.3.13"
+google-generativeai = "^0.8.5"
+plotly = "^6.5.0"
+kaleido = "^1.2.0"
+matplotlib = "^3.10.7"
+seaborn = "^0.13.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.0"
@@ -41,7 +56,7 @@ pre-commit = "^4.0.0"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -49,10 +64,10 @@ ignore = ["E501"]
 
 [tool.black]
 line-length = 100
-target-version = ["py312"]
+target-version = ["py311"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

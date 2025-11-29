@@ -160,7 +160,7 @@ class ProductAgent:
 
         [INSTRUÇÕES]
         1. Analise a pergunta do usuário e o catálogo de dados para identificar o arquivo e as colunas mais relevantes.
-        2. Para perguntas sobre vendas, priorize o arquivo `ADMAT.parquet` e use a coluna `VENDA_30D` para representar a quantidade de vendas.
+        2. Para perguntas sobre vendas, priorize o arquivo `ADMAT.parquet` e use a coluna `VENDA_30DD` para representar a quantidade de vendas.
         3. Converta a pergunta em uma lista de filtros JSON. Cada filtro deve ser um objeto com "column", "operator" e "value".
         4. Operadores suportados: `==` (igual a), `!=` (diferente de), `>` (maior que), `<` (menor que), `contains` (para strings).
         5. Para buscas em colunas de texto (string), sempre use o operador `contains`.
@@ -175,12 +175,12 @@ class ProductAgent:
             "target_file": "ADMAT.parquet",
             "filters": [
                 {{
-                    "column": "CATEGORIA",
+                    "column": "NOMECATEGORIA",
                     "operator": "contains",
                     "value": "brinquedos"
                 }},
                 {{
-                    "column": "PREÇO 38%",
+                    "column": "LIQUIDO_38",
                     "operator": ">",
                     "value": 50
                 }}
@@ -196,12 +196,12 @@ class ProductAgent:
             "target_file": "ADMAT.parquet",
             "filters": [
                 {{
-                    "column": "FABRICANTE",
+                    "column": "NOMEFABRICANTE",
                     "operator": "contains",
                     "value": "ACME"
                 }},
                 {{
-                    "column": "GRUPO",
+                    "column": "NOMEGRUPO",
                     "operator": "!=",
                     "value": "Papelaria"
                 }}
@@ -241,7 +241,7 @@ class ProductAgent:
 
     def get_product_details(self, product_code):
         self.logger.info(f"Buscando detalhes do produto com código: {product_code}")
-        filters = {"CÓDIGO": product_code}
+        filters = {"PRODUTO": product_code}
         df = get_table_df("ADMAT", filters=filters)
         if df is None or df.empty:
             self.logger.warning(
@@ -254,21 +254,21 @@ class ProductAgent:
 
         prod = df.iloc[0][
             [
-                "CÓDIGO",
+                "PRODUTO",
                 "NOME",
-                "PREÇO 38%",
-                "FABRICANTE",
-                "CATEGORIA",
-                "GRUPO",
+                "LIQUIDO_38",
+                "NOMEFABRICANTE",
+                "NOMECATEGORIA",
+                "NOMEGRUPO",
             ]
         ]
         product = {
-            "codigo": prod["CÓDIGO"],
+            "codigo": prod["PRODUTO"],
             "nome": prod["NOME"],
-            "preco": prod["PREÇO 38%"],
-            "fabricante": prod["FABRICANTE"],
-            "categoria": prod["CATEGORIA"],
-            "grupo": prod["GRUPO"],
+            "preco": prod["LIQUIDO_38"],
+            "fabricante": prod["NOMEFABRICANTE"],
+            "categoria": prod["NOMECATEGORIA"],
+            "grupo": prod["NOMEGRUPO"],
         }
         self.logger.info(
             f"Detalhes do produto {product_code} encontrados: {product['nome']}"
@@ -316,7 +316,7 @@ class ProductAgent:
             return {"success": False, "message": "Dados de vendas não disponíveis."}
 
         # Encontrar a linha do produto
-        product_row = df_admat[df_admat["CÓDIGO"] == product_code]
+        product_row = df_admat[df_admat["PRODUTO"] == product_code]
         if product_row.empty:
             self.logger.warning(
                 f"Produto {product_code} não encontrado em ADMAT.parquet."
@@ -331,7 +331,7 @@ class ProductAgent:
         sales_data = []
         # Coletar dados de vendas mensais (assumindo colunas de data)
         # Ex: '2023-05-01 00:00:00', '2023-06-01 00:00:00', etc.
-        # E 'VENDA 30D' ou 'VEND. QTD 30D'
+        # E 'VENDA_30DD' (vendas dos últimos 30 dias)
 
         # Tentativa de coletar dados de vendas mensais
         for col in df_admat.columns:
@@ -349,16 +349,10 @@ class ProductAgent:
             except ValueError:
                 continue  # Não é uma coluna de data
 
-        # Adicionar VENDA 30D se existir e não for nulo
-        if "VENDA 30D" in product_row and not pd.isna(product_row["VENDA 30D"]):
+        # Adicionar VENDA_30DD se existir e não for nulo
+        if "VENDA_30DD" in product_row and not pd.isna(product_row["VENDA_30DD"]):
             sales_data.append(
-                {"date": "Últimos 30 Dias", "quantity": product_row["VENDA 30D"]}
-            )
-        elif "VEND. QTD 30D" in product_row and not pd.isna(
-            product_row["VEND. QTD 30D"]
-        ):
-            sales_data.append(
-                {"date": "Últimos 30 Dias", "quantity": product_row["VEND. QTD 30D"]}
+                {"date": "Últimos 30 Dias", "quantity": product_row["VENDA_30DD"]}
             )
 
         if not sales_data:

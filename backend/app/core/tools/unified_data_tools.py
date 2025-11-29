@@ -98,7 +98,7 @@ def listar_colunas_disponiveis() -> Dict[str, Any]:
 @tool
 def consultar_dados(
     coluna: Optional[str] = None,
-    valor: Optional[str] = None,
+    valor: Optional[Any] = None,  # ✅ ACEITA QUALQUER TIPO (string, int, float)
     coluna_retorno: Optional[str] = None,
     limite: int = 100
 ) -> str:
@@ -109,7 +109,7 @@ def consultar_dados(
     
     Args:
         coluna: Nome da coluna para filtrar (opcional).
-        valor: Valor a buscar na coluna (opcional).
+        valor: Valor a buscar na coluna (aceita string, int ou float).
         coluna_retorno: Coluna específica para retornar (opcional).
         limite: Limite de registros (padrão: 100).
     
@@ -122,14 +122,14 @@ def consultar_dados(
         data_manager = get_data_manager()
         
         # Se não houver filtro, retorna os primeiros dados
-        if not coluna or not valor:
+        if not coluna or valor is None:
             df_resultado = data_manager.get_data(limit=limite)
         else:
-            # Usa o método de busca do data_manager
+            # ✅ Converte valor para string (aceita int, float ou string)
             df_resultado = data_manager.search_data(column=coluna, value=str(valor), limit=limite)
 
         if df_resultado is None or df_resultado.empty:
-            filtro_msg = f" com filtro {coluna}='{valor}'" if coluna and valor else ""
+            filtro_msg = f" com filtro {coluna}='{valor}'" if coluna and valor is not None else ""
             return f"Nenhum dado encontrado{filtro_msg}."
 
         # Se coluna_retorno especificada, retornar apenas essa coluna
@@ -143,13 +143,47 @@ def consultar_dados(
             valor_retornado = df_resultado[coluna_retorno].iloc[0]
             
             if pd.isna(valor_retornado) or valor_retornado == '':
-                return f"O valor para '{coluna_retorno}' no item com {coluna}='{valor}' não foi encontrado ou está vazio."
-            
-            # Se a coluna de filtro for 'ITEM' e a coluna de retorno for 'FABRICANTE', formatar de forma mais humana
-            if coluna.upper() == 'ITEM' and coluna_retorno.upper() == 'FABRICANTE':
-                return f"O fabricante do item {valor} é '{valor_retornado}'."
+                return f"O valor para '{coluna_retorno}' no produto com {coluna}='{valor}' não foi encontrado ou está vazio."
+
+            # Formatação humanizada para casos comuns
+            coluna_upper = coluna.upper()
+            coluna_retorno_upper = coluna_retorno.upper()
+
+            # PREÇO DO PRODUTO
+            if coluna_upper == 'PRODUTO' and coluna_retorno_upper == 'LIQUIDO_38':
+                try:
+                    preco = float(valor_retornado)
+                    return f"O preço do produto {valor} é **R$ {preco:.2f}**."
+                except:
+                    return f"O preço do produto {valor} é R$ {valor_retornado}."
+
+            # CUSTO DO PRODUTO
+            elif coluna_upper == 'PRODUTO' and coluna_retorno_upper == 'ULTIMA_ENTRADA_CUSTO_CD':
+                try:
+                    custo = float(valor_retornado)
+                    return f"O custo do produto {valor} é **R$ {custo:.2f}**."
+                except:
+                    return f"O custo do produto {valor} é R$ {valor_retornado}."
+
+            # ESTOQUE DO PRODUTO
+            elif coluna_upper == 'PRODUTO' and coluna_retorno_upper == 'ESTOQUE_UNE':
+                try:
+                    estoque = int(valor_retornado)
+                    return f"O produto {valor} tem **{estoque} unidades** em estoque."
+                except:
+                    return f"O produto {valor} tem {valor_retornado} em estoque."
+
+            # NOME DO PRODUTO
+            elif coluna_upper == 'PRODUTO' and coluna_retorno_upper == 'NOME':
+                return f"O produto {valor} é **{valor_retornado}**."
+
+            # FABRICANTE DO PRODUTO
+            elif coluna_upper == 'PRODUTO' and coluna_retorno_upper == 'NOMEFABRICANTE':
+                return f"O fabricante do produto {valor} é **{valor_retornado}**."
+
+            # FALLBACK (caso genérico)
             else:
-                return f"O valor da coluna '{coluna_retorno}' para o item com {coluna}='{valor}' é '{valor_retornado}'."
+                return f"O valor de {coluna_retorno} para {coluna}='{valor}' é '{valor_retornado}'."
         
         # Retornar dados completos
         response_data = _truncate_df_for_llm(df_resultado, max_rows=limite)
