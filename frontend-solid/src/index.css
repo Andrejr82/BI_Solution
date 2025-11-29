@@ -1,4 +1,7 @@
 /* src/index.css */
+/* Import migrated globals from React frontend */
+@import "./migrated-components/globals.css";
+
 :root {
   --background: #020817;
   --foreground: #f8fafc;
