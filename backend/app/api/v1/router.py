@@ -5,7 +5,20 @@ Combines all v1 endpoints
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import admin, analytics, auth, reports, auth_alt, metrics, chat
+from app.api.v1.endpoints import (
+    admin, 
+    analytics, 
+    auth, 
+    reports, 
+    auth_alt, 
+    metrics, 
+    chat,
+    rupturas,
+    transfers,
+    diagnostics,
+    learning,
+    playground
+)
 
 api_router = APIRouter()
 
@@ -17,3 +30,10 @@ api_router.include_router(reports.router)
 api_router.include_router(admin.router)
 api_router.include_router(metrics.router)  # Dashboard metrics
 api_router.include_router(chat.router)  # BI Chat
+
+# New Endpoints
+api_router.include_router(rupturas.router)
+api_router.include_router(transfers.router)
+api_router.include_router(diagnostics.router)
+api_router.include_router(learning.router)
+api_router.include_router(playground.router)

@@ -77,11 +77,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((response) => {
   return response;
 }, (error) => {
+  // Não redirecionar automaticamente para login em caso de 401
+  // Deixar que cada componente trate o erro como preferir
   if (error.response && error.response.status === 401) {
-    if (!window.location.pathname.includes('/login')) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
+    console.warn('⚠️ 401 Unauthorized - Token pode estar inválido ou expirado');
+    // NÃO fazer redirect automático - causa loop de logout
   }
   return Promise.reject(error);
 });

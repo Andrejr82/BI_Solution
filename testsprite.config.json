@@ -1,0 +1,93 @@
+{
+  "project": {
+    "name": "Agent Solution BI",
+    "description": "Business Intelligence application with conversational AI powered by Google Gemini",
+    "version": "1.0.0",
+    "repository": "Andrejr82/BI_Solution"
+  },
+  "application": {
+    "frontend": {
+      "url": "http://localhost:3000",
+      "framework": "SolidJS",
+      "buildTool": "Vite"
+    },
+    "backend": {
+      "url": "http://localhost:8000",
+      "framework": "FastAPI",
+      "apiDocs": "http://localhost:8000/docs"
+    }
+  },
+  "testing": {
+    "framework": "playwright",
+    "testDirectory": "./tests/e2e",
+    "browsers": ["chromium", "firefox", "webkit"],
+    "parallel": true,
+    "retries": 2,
+    "timeout": 30000
+  },
+  "testScenarios": {
+    "authentication": {
+      "enabled": true,
+      "credentials": {
+        "admin": {
+          "username": "admin",
+          "password": "Admin@2024"
+        },
+        "user": {
+          "username": "user",
+          "password": "User@2024"
+        }
+      }
+    },
+    "userJourneys": [
+      "login-flow",
+      "dashboard-navigation",
+      "chatbi-interaction",
+      "admin-crud",
+      "report-generation"
+    ],
+    "apiEndpoints": [
+      "/api/auth/login",
+      "/api/auth/logout",
+      "/api/users",
+      "/api/analytics/metrics",
+      "/api/reports",
+      "/api/chat/query"
+    ],
+    "components": [
+      "Button",
+      "Card",
+      "Dialog",
+      "Table",
+      "Input",
+      "Badge",
+      "Alert",
+      "Avatar",
+      "Tabs",
+      "Sheet",
+      "Toast",
+      "Select",
+      "DropdownMenu"
+    ]
+  },
+  "environment": {
+    "variables": {
+      "VITE_API_URL": "http://127.0.0.1:8000",
+      "USE_SQL_SERVER": "True"
+    }
+  },
+  "reporting": {
+    "formats": ["html", "json"],
+    "outputDirectory": "./playwright-report",
+    "screenshots": "only-on-failure",
+    "videos": "retain-on-failure",
+    "traces": "on-first-retry"
+  },
+  "performance": {
+    "targets": {
+      "initialLoad": 3000,
+      "navigation": 500,
+      "apiResponse": 1000
+    }
+  }
+}

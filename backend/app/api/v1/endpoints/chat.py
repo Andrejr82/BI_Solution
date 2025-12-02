@@ -97,9 +97,9 @@ async def stream_chat(
                 traceback.print_exc(file=sys.stderr)
                 response_text = "Desculpe, ocorreu um erro interno."
             
-            # Streaming com velocidade natural
+            # Streaming com velocidade natural (sem delay artificial)
             words = response_text.split()
-            chunk_size = 2  # 2 palavras por chunk
+            chunk_size = 5  # Aumentado para 5 palavras por chunk para maior throughput
             
             print(f"DEBUG: Iniciando streaming de {len(words)} palavras...", file=sys.stderr, flush=True)
             
@@ -109,16 +109,17 @@ async def stream_chat(
                 
                 event_counter += 1
                 
-                # Log a cada 10 chunks para não poluir demais
-                if i % 20 == 0:
+                # Log a cada 20 chunks para não poluir demais
+                if i % 100 == 0:
                     safe_chunk = chunk_text.encode('ascii', 'ignore').decode('ascii')
                     print(f"DEBUG: Enviando chunk {i}: '{safe_chunk}'", file=sys.stderr, flush=True)
                 
                 yield f"id: {event_counter}\n"
                 yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
                 
-                # Delay para streaming natural (100ms - mais rápido)
-                await asyncio.sleep(0.1)
+                # REMOVIDO: await asyncio.sleep(0.1) - O frontend deve lidar com a animação
+                # await asyncio.sleep(0.01) # Pequeno yield para não bloquear o event loop, se necessário
+
             
             print("DEBUG: Streaming concluído. Enviando sinal de done.", file=sys.stderr, flush=True)
             yield f"id: {event_counter + 1}\n"

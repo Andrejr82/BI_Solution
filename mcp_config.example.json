@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "testsprite": {
+      "command": "npx",
+      "args": ["-y", "@testsprite/mcp-server"],
+      "env": {
+        "TESTSPRITE_API_KEY": "SUBSTITUA_COM_SUA_API_KEY_AQUI"
+      }
+    }
+  }
+}

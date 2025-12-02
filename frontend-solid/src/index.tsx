@@ -35,6 +35,29 @@ function PrivateRoute(props: { component: any }) {
   );
 }
 
+// Componente de Proteção de Rotas com RBAC
+function RoleRoute(props: { component: any; requiredRole: string }) {
+  return (
+    <Show
+      when={auth.isAuthenticated()}
+      fallback={<Navigate href="/login" />}
+    >
+      <Show
+        when={auth.user()?.role === props.requiredRole}
+        fallback={
+          <div class="flex items-center justify-center min-h-screen flex-col gap-4 p-8">
+            <h1 class="text-4xl font-bold text-destructive">Acesso Negado</h1>
+            <p class="text-lg text-muted-foreground">Você não tem permissão para acessar esta página.</p>
+            <p class="text-sm text-muted-foreground">403 - Forbidden</p>
+          </div>
+        }
+      >
+        {props.component}
+      </Show>
+    </Show>
+  );
+}
+
 // Componente Principal da Aplicação
 function App() {
   return (
@@ -42,10 +65,27 @@ function App() {
       {/* Rota Pública - Login */}
       <Route path="/login" component={Login} />
       
+      {/* Rota raiz - redireciona baseado em autenticação ANTES do Layout */}
+      <Route path="/" component={() => {
+        console.log('🔄 Root route hit. Auth state:', auth.isAuthenticated());
+        return (
+          <Show
+            when={auth.isAuthenticated()}
+            fallback={() => {
+              console.log('➡️ Redirecting to /login');
+              return <Navigate href="/login" />;
+            }}
+          >
+            {() => {
+              console.log('➡️ Redirecting to /dashboard');
+              return <Navigate href="/dashboard" />;
+            }}
+          </Show>
+        );
+      }} />
+      
       {/* Rotas Protegidas - Dentro do Layout */}
       <Route path="/" component={Layout}>
-        {/* Redirect raiz para dashboard */}
-        <Route path="/" component={() => <Navigate href="/dashboard" />} />
         
         {/* Dashboards */}
         <Route path="/dashboard" component={() => <PrivateRoute component={<Dashboard />} />} />
@@ -64,11 +104,18 @@ function App() {
         {/* Sistema */}
         <Route path="/diagnostics" component={() => <PrivateRoute component={<Diagnostics />} />} />
         <Route path="/profile" component={() => <PrivateRoute component={<Profile />} />} />
-        <Route path="/admin" component={() => <PrivateRoute component={<Admin />} />} />
+        <Route path="/admin" component={() => <RoleRoute component={<Admin />} requiredRole="admin" />} />
       </Route>
       
-      {/* Fallback - Redirecionar para dashboard */}
-      <Route path="*" component={() => <Navigate href="/dashboard" />} />
+      {/* Fallback - Redirecionar baseado em autenticação */}
+      <Route path="*" component={() => (
+        <Show
+          when={auth.isAuthenticated()}
+          fallback={<Navigate href="/login" />}
+        >
+          <Navigate href="/dashboard" />
+        </Show>
+      )} />
     </Router>
   );
 }

@@ -15,16 +15,16 @@ function createAuthStore() {
       const payload = JSON.parse(atob(initToken.split('.')[1]));
       const userData = {
         username: payload.sub || 'user',
-        role: payload.role || 'admin',
+        role: payload.role || 'user',
         email: payload.email || `${payload.sub}@agentbi.com`,
       };
       setUser(userData);
+      setIsAuthenticated(true); // IMPORTANTE: garantir que está autenticado
       console.log('🔄 User restaurado do token:', userData);
     } catch (e) {
-      console.error('Erro ao restaurar user do token:', e);
-      localStorage.removeItem('token');
-      setToken(null);
-      setIsAuthenticated(false);
+      console.error('❌ Erro ao restaurar user do token:', e);
+      // Não remover token imediatamente - pode ser temporário
+      console.warn('⚠️ Token inválido, mas mantendo para tentar revalidar');
     }
   }
 
