@@ -28,10 +28,10 @@ async def get_critical_rupturas(
              # Fallback se colunas não existirem exatamente com esses nomes
              return []
 
-        # Casting para garantir tipos numéricos
+        # Casting para garantir tipos numéricos (strict=False trata strings vazias como null)
         df = df.with_columns([
-            pl.col("VENDA_30DD").cast(pl.Float64).fill_null(0),
-            pl.col("ESTOQUE_UNE").cast(pl.Float64).fill_null(0)
+            pl.col("VENDA_30DD").cast(pl.Float64, strict=False).fill_null(0),
+            pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0)
         ])
 
         rupturas = df.filter(
