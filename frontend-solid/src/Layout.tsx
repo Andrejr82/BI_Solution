@@ -5,6 +5,7 @@ import {
   AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield
 } from 'lucide-solid';
 import { For, Show, children } from 'solid-js';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function Layout(props: any) {
   const location = useLocation();
@@ -114,7 +115,9 @@ export default function Layout(props: any) {
           </div>
         </header>
         <main class="flex-1 overflow-hidden relative bg-background">
-          {props.children}
+          <ErrorBoundary>
+            {props.children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -31,6 +31,7 @@ class AuthService:
 
     def __init__(self):
         self.use_sql_server = settings.USE_SQL_SERVER
+        self.use_supabase = settings.USE_SUPABASE_AUTH
 
         # Try Docker path first, then development path
         docker_path = Path("/app/data/parquet/users.parquet")
@@ -50,8 +51,13 @@ class AuthService:
         """
         Authenticate user with hybrid approach.
 
+        Priority:
+        1. Supabase (if USE_SUPABASE_AUTH=true)
+        2. Parquet (fallback or when Supabase disabled)
+        3. SQL Server (if USE_SQL_SERVER=true and available)
+
         Args:
-            username: User's username
+            username: User's username or email
             password: User's plain text password
             db: Optional database session (used when SQL Server is enabled)
 
@@ -60,16 +66,26 @@ class AuthService:
         """
         user_data = None
 
-        # OTIMIZAÇÃO: Parquet PRIMEIRO (10x mais rápido, sem timeout)
+        # Priority 1: Supabase Auth (if enabled)
+        if self.use_supabase:
+            try:
+                user_data = await self._auth_from_supabase(username, password)
+                if user_data:
+                    logger.info(f"User '{username}' authenticated via Supabase")
+                    return user_data
+            except Exception as e:
+                logger.warning(f"Supabase auth failed for '{username}': {e}")
+
+        # Priority 2: Parquet (fallback or primary if Supabase disabled)
         try:
             user_data = await self._auth_from_parquet(username, password)
             if user_data:
-                logger.info(f"User '{username}' authenticated via Parquet (FAST)")
+                logger.info(f"User '{username}' authenticated via Parquet")
                 return user_data
         except Exception as e:
             logger.error(f"Parquet auth failed for '{username}': {e}")
 
-        # Fallback SQL Server (apenas se Parquet falhar E SQL estiver habilitado)
+        # Priority 3: SQL Server (last resort)
         if self.use_sql_server and db is not None:
             try:
                 user_data = await self._auth_from_sql(username, password, db)
@@ -115,6 +131,54 @@ class AuthService:
             "role": user.role,
             "is_active": user.is_active,
         }
+
+    async def _auth_from_supabase(
+        self,
+        username: str,
+        password: str
+    ) -> Optional[dict]:
+        """Authenticate from Supabase Auth"""
+        try:
+            from app.core.supabase_client import get_supabase_client
+            
+            supabase = get_supabase_client()
+            
+            # Supabase usa email para login, então tentamos com username como email
+            # Se username não for email, tentamos adicionar @agentbi.com
+            email = username if "@" in username else f"{username}@agentbi.com"
+            
+            # Tentar autenticar com Supabase
+            response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            if not response.user:
+                logger.warning(f"Supabase auth failed: no user returned for '{email}'")
+                return None
+            
+            user = response.user
+            
+            # Buscar metadados adicionais (role) se existir tabela user_profiles
+            role = "user"  # Default
+            try:
+                profile_response = supabase.table("user_profiles").select("*").eq("id", user.id).execute()
+                if profile_response.data and len(profile_response.data) > 0:
+                    role = profile_response.data[0].get("role", "user")
+            except Exception as e:
+                logger.warning(f"Could not fetch user profile from Supabase: {e}")
+            
+            return {
+                "id": str(user.id),
+                "username": email.split("@")[0],  # Extrair username do email
+                "email": user.email or email,
+                "role": role,
+                "is_active": True,
+            }
+            
+        except Exception as e:
+            logger.error(f"Supabase authentication error: {e}")
+            return None
 
     async def _auth_from_parquet(
         self,

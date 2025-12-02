@@ -133,3 +133,46 @@ async def get_current_user_info(
 async def logout() -> dict[str, str]:
     """Placeholder logout endpoint (client can discard tokens)."""
     return {"detail": "Logged out"}
+
+
+@router.post("/change-password")
+async def change_password(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    old_password: str = Form(...),
+    new_password: str = Form(...)
+):
+    """Change user password (updates Parquet only)."""
+    import polars as pl
+    from app.config.security import get_password_hash
+    from pathlib import Path
+
+    # Verify old password
+    if not verify_password(old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+
+    # Determine Parquet path (same logic as auth_service)
+    docker_path = Path("/app/data/parquet/users.parquet")
+    dev_path = Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
+    parquet_path = docker_path if docker_path.exists() else dev_path
+
+    if not parquet_path.exists():
+        raise HTTPException(status_code=500, detail="User database not found")
+
+    try:
+        df = pl.read_parquet(parquet_path)
+        new_hash = get_password_hash(new_password)
+        
+        # Update password for specific user
+        df = df.with_columns(
+            pl.when(pl.col("id") == current_user.id)
+            .then(pl.lit(new_hash))
+            .otherwise(pl.col("hashed_password"))
+            .alias("hashed_password")
+        )
+        
+        df.write_parquet(parquet_path)
+        return {"message": "Password updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update password: {str(e)}")
+

@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import auth from '@/store/auth';
+import { Typewriter } from '@/components';
 
 // Interface para mensagem
 interface Message {
@@ -115,17 +116,21 @@ export default function Chat() {
         <For each={messages()}>
           {(msg) => (
             <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                class={`max-w-[80%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${ 
-                  msg.role === 'user' 
-                    ? 'bg-primary text-primary-foreground' 
+              <div
+                class={`max-w-[80%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-card border text-card-foreground'
                 }`}
-                style={{"white-space": "pre-wrap"}} 
               >
-                {msg.text}
-                {msg.role === 'assistant' && isStreaming() && msg.id === messages()[messages().length - 1].id && (
-                   <span class="inline-block w-2 h-4 ml-1 bg-current animate-pulse">|</span>
+                {/* Usar Typewriter apenas para mensagens do assistente que estão sendo recebidas */}
+                {msg.role === 'assistant' && isStreaming() && msg.id === messages()[messages().length - 1].id ? (
+                  <Typewriter
+                    text={msg.text}
+                    speed={15}
+                  />
+                ) : (
+                  <span style={{"white-space": "pre-wrap"}}>{msg.text}</span>
                 )}
               </div>
             </div>

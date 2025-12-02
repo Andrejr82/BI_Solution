@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     INTENT_CLASSIFICATION_MODEL: str = "models/gemini-2.5-flash"
     CODE_GENERATION_MODEL: str = "models/gemini-2.5-flash"
 
+    # Supabase
+    SUPABASE_URL: str = Field(default="")
+    SUPABASE_ANON_KEY: str = Field(default="")
+    USE_SUPABASE_AUTH: bool = Field(default=True)  # Priorizar Supabase sobre Parquet
+
+    @model_validator(mode="after")
+    def validate_secret_key(self) -> "Settings":
+        if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters")
+        return self
+
     @model_validator(mode="after")
     def compute_pyodbc_string(self) -> "Settings":
         # OTIMIZAÇÃO: Se DATABASE_URL vazio, desabilitar SQL Server (evita timeout de 10s no login!)

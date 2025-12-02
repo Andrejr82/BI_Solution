@@ -50,8 +50,14 @@ class RobustChatBI:
         try:
             result = self._execute_query(produto, une, periodo, tipo_consulta)
             return result
+        except KeyError as e:
+            print(f"[ERROR] KeyError ao executar consulta: {e}")
+            print(f"[DEBUG] Produto: {produto}, UNE: {une}, Periodo: {periodo}")
+            import traceback
+            traceback.print_exc()
+            return self._fallback_response(user_query)
         except Exception as e:
-            print(f"Erro ao executar consulta: {e}")
+            print(f"[ERROR] Erro ao executar consulta: {e}")
             import traceback
             traceback.print_exc()
             return self._fallback_response(user_query)
@@ -201,8 +207,19 @@ class RobustChatBI:
         # Selecionar colunas
         cols_to_select = ["PRODUTO", "NOME", "UNE"] + [p for p in periodo if p in self.columns]
         
-        # Executar
-        result = query.select(cols_to_select).head(1).collect()
+        # Executar com tratamento de erro
+        try:
+            result = query.select(cols_to_select).head(1).collect()
+        except Exception as e:
+            print(f"[ERROR] Erro ao executar query Polars: {e}")
+            print(f"[DEBUG] Colunas selecionadas: {cols_to_select}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "text": f"❌ Erro ao processar consulta. Por favor, tente novamente.",
+                "data": None
+            }
         
         # Formatar resposta
         if len(result) > 0:
@@ -215,8 +232,9 @@ class RobustChatBI:
             # Calcular valores
             valores = []
             for mes in periodo:
+                # Usar .get() para evitar KeyError se a coluna não existir
                 if mes in row:
-                    val = row[mes]
+                    val = row.get(mes)
                     # Converter para float se necessário
                     if val is not None:
                         valores.append(float(val))

@@ -1,12 +1,18 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import auth from '@/store/auth';
 import { LogIn, Loader2 } from 'lucide-solid';
 
 export default function Login() {
+  console.log('🔵 Login component mounting...');
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
   const navigate = useNavigate();
+  
+  // Log when rendering
+  createEffect(() => {
+    console.log('🔵 Login component rendered. Auth loading:', auth.loading());
+  });
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
