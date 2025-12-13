@@ -1,8 +1,0 @@
-# Ignore node_modules, as they are installed within the container
-node_modules
-
-# Ignore the Next.js build output directory
-.next
-
-# Ignore local environment files
-.env.local
