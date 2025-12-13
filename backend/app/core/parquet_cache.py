@@ -81,8 +81,8 @@ class ParquetCache:
         # Try Docker path first
         docker_path = Path(f"/app/data/parquet/{parquet_name}")
 
-        # Fallback to development path (4 levels up from this file)
-        dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / parquet_name
+        # Fallback to development path (backend/data/parquet)
+        dev_path = Path(__file__).parent.parent.parent / "data" / "parquet" / parquet_name
 
         parquet_path = docker_path if docker_path.exists() else dev_path
 
