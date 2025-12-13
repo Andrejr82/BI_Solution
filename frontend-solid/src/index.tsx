@@ -1,8 +1,8 @@
-/* src/index.tsx - Ponto de Entrada da Aplicação SolidJS */
+/* src/index.tsx - Versão ULTRA SIMPLIFICADA sem verificação de versão */
 import { render } from 'solid-js/web';
 import { Router, Route, Navigate } from '@solidjs/router';
 import { Show } from 'solid-js';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query'; // Added import
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import './index.css';
 
 // Importar Layout e Páginas
@@ -19,9 +19,14 @@ import Admin from './pages/Admin';
 import Rupturas from './pages/Rupturas';
 import Transfers from './pages/Transfers';
 import Diagnostics from './pages/Diagnostics';
+import Examples from './pages/Examples';
+import Help from './pages/Help';
+import SharedConversation from './pages/SharedConversation';
 
 // Importar Store de Autenticação
 import auth from './store/auth';
+
+console.log('✅ All imports loaded successfully');
 
 // Componente de Proteção de Rotas
 function PrivateRoute(props: { component: any }) {
@@ -60,54 +65,43 @@ function RoleRoute(props: { component: any; requiredRole: string }) {
 
 // Componente Principal da Aplicação
 function App() {
+  console.log('✅ App component created');
   return (
     <Router>
-      {/* Rota Pública - Login */}
+      {/* Rotas Públicas */}
       <Route path="/login" component={Login} />
-      
-      {/* Rota raiz - redireciona baseado em autenticação ANTES do Layout */}
+      <Route path="/shared/:share_id" component={SharedConversation} />
+
+      {/* Rota raiz - redireciona baseado em autenticação */}
       <Route path="/" component={() => {
-        console.log('🔄 Root route hit. Auth state:', auth.isAuthenticated());
         return (
           <Show
             when={auth.isAuthenticated()}
-            fallback={() => {
-              console.log('➡️ Redirecting to /login');
-              return <Navigate href="/login" />;
-            }}
+            fallback={<Navigate href="/login" />}
           >
-            {() => {
-              console.log('➡️ Redirecting to /dashboard');
-              return <Navigate href="/dashboard" />;
-            }}
+            <Navigate href="/dashboard" />
           </Show>
         );
       }} />
-      
+
       {/* Rotas Protegidas - Dentro do Layout */}
       <Route path="/" component={Layout}>
-        
-        {/* Dashboards */}
         <Route path="/dashboard" component={() => <PrivateRoute component={<Dashboard />} />} />
         <Route path="/metrics" component={() => <PrivateRoute component={<Analytics />} />} />
         <Route path="/rupturas" component={() => <PrivateRoute component={<Rupturas />} />} />
-        
-        {/* Operacional */}
         <Route path="/transfers" component={() => <PrivateRoute component={<Transfers />} />} />
         <Route path="/reports" component={() => <PrivateRoute component={<Reports />} />} />
-        
-        {/* Inteligência */}
         <Route path="/chat" component={() => <PrivateRoute component={<Chat />} />} />
+        <Route path="/examples" component={() => <PrivateRoute component={<Examples />} />} />
         <Route path="/learning" component={() => <PrivateRoute component={<Learning />} />} />
         <Route path="/playground" component={() => <PrivateRoute component={<Playground />} />} />
-        
-        {/* Sistema */}
         <Route path="/diagnostics" component={() => <PrivateRoute component={<Diagnostics />} />} />
+        <Route path="/help" component={() => <PrivateRoute component={<Help />} />} />
         <Route path="/profile" component={() => <PrivateRoute component={<Profile />} />} />
         <Route path="/admin" component={() => <RoleRoute component={<Admin />} requiredRole="admin" />} />
       </Route>
-      
-      {/* Fallback - Redirecionar baseado em autenticação */}
+
+      {/* Fallback */}
       <Route path="*" component={() => (
         <Show
           when={auth.isAuthenticated()}
@@ -124,14 +118,39 @@ function App() {
 const root = document.getElementById('root');
 
 if (!root) {
-  throw new Error('Root element not found. Make sure there is a <div id="root"></div> in your index.html');
+  console.error('❌ ROOT ELEMENT NOT FOUND!');
+  throw new Error('Root element not found');
 }
 
-// Create a client
-const queryClient = new QueryClient(); // New QueryClient instance
+console.log('✅ Root element found:', root);
 
-render(() => ( // Wrap App with QueryClientProvider
-  <QueryClientProvider client={queryClient}>
-    <App />
-  </QueryClientProvider>
-), root);
+// Create QueryClient
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+console.log('✅ QueryClient created');
+
+// Render app
+try {
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  ), root);
+  console.log('✅ App rendered successfully!');
+} catch (error) {
+  console.error('❌ Error rendering app:', error);
+  document.body.innerHTML = `
+    <div style="padding: 20px; color: white; background: #1a1a1a; font-family: sans-serif;">
+      <h1 style="color: #ef4444;">❌ Erro ao Renderizar Aplicação</h1>
+      <pre style="background: #2a2a2a; padding: 10px; border-radius: 5px; overflow: auto;">${error}</pre>
+      <p>Verifique o console do navegador (F12) para mais detalhes.</p>
+    </div>
+  `;
+}

@@ -70,6 +70,20 @@ class Settings(BaseSettings):
     REDIS_URL: RedisDsn = Field(default="redis://localhost:6379/0")
     REDIS_CACHE_TTL: int = 3600  # 1 hour
 
+    # Custom Cache Settings
+    CACHE_TTL_MINUTES: int = 360 # 6 hours for LLM responses
+    CACHE_MAX_AGE_DAYS: int = 7 # For cache cleaner
+    AGENT_GRAPH_CACHE_TTL_MINUTES: int = 360 # 6 hours for agent graph cache
+
+    # RAG (Retrieval Augmented Generation)
+    RAG_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    RAG_FAISS_INDEX_PATH: str = "data/rag/faiss_index.bin"
+
+    # Learning System
+    LEARNING_FEEDBACK_PATH: str = "data/feedback/"
+    LEARNING_EXAMPLES_PATH: str = "data/learning/"
+    LEARNING_MAX_EXAMPLES: int = 1000
+
     # Security
     SECRET_KEY: str = Field(
         default="your-secret-key-change-in-production-min-32-chars-long"
@@ -94,16 +108,20 @@ class Settings(BaseSettings):
     # Prometheus
     METRICS_ENABLED: bool = True
 
-    # AI / LLM
+    # AI / LLM - Usando Gemini 2.0 Flash Experimental (mais moderno e inteligente)
     GEMINI_API_KEY: str | None = None
-    LLM_MODEL_NAME: str = "models/gemini-2.5-flash"
-    INTENT_CLASSIFICATION_MODEL: str = "models/gemini-2.5-flash"
-    CODE_GENERATION_MODEL: str = "models/gemini-2.5-flash"
+    LLM_MODEL_NAME: str = "gemini-2.0-flash-exp"
+    INTENT_CLASSIFICATION_MODEL: str = "gemini-2.0-flash-exp"
+    CODE_GENERATION_MODEL: str = "gemini-2.0-flash-exp"
+
+    # Data Sources
+    PARQUET_DATA_PATH: str = Field(default="data/parquet/admmat.parquet")
+    PARQUET_FILE_PATH: str = Field(default="data/parquet/admmat.parquet")  # Alias for compatibility
 
     # Supabase
     SUPABASE_URL: str = Field(default="")
     SUPABASE_ANON_KEY: str = Field(default="")
-    USE_SUPABASE_AUTH: bool = Field(default=True)  # Priorizar Supabase sobre Parquet
+    USE_SUPABASE_AUTH: bool = Field(default=False)  # Disabled by default to align with Parquet auth
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":

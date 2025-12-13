@@ -28,11 +28,11 @@ class ParquetAdapter(DatabaseAdapter):
     async def disconnect(self) -> None:
         await self._hybrid.disconnect()
 
-    async def execute_query(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def execute_query(self, query_filters: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
         """
         Executa query usando PolarsDaskAdapter (híbrido).
         """
-        return await self._hybrid.execute_query(query_filters)
+        return await self._hybrid.execute_query(query_filters, **kwargs)
 
     async def get_schema(self) -> str:
         return await self._hybrid.get_schema()

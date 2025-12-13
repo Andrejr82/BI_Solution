@@ -1,113 +1,431 @@
-import { For, Show } from 'solid-js';
-import dashboard from '@/store/dashboard';
-import { BarChart3, TrendingUp, ArrowUpRight, Activity, Zap } from 'lucide-solid';
+import { createSignal, onMount, Show, createResource, For } from 'solid-js';
+import { BarChart3, TrendingUp, RefreshCw, Filter, X } from 'lucide-solid';
+import api from '../lib/api';
+import { PlotlyChart } from '../components/PlotlyChart';
+import { ChartDownloadButton } from '../components/ChartDownloadButton';
+
+interface SalesAnalysis {
+  vendas_por_categoria: Array<{
+    categoria: string;
+    vendas: number;
+  }>;
+  giro_estoque: Array<{
+    produto: string;
+    nome: string;
+    giro: number;
+  }>;
+  distribuicao_abc: {
+    A: number;
+    B: number;
+    C: number;
+  };
+}
+
+interface FilterOptions {
+  categorias: string[];
+  segmentos: string[];
+}
 
 export default function Analytics() {
-  const { state } = dashboard;
+  const [data, setData] = createSignal<SalesAnalysis | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
 
-  // Agregar dados reais por UNE para o gráfico
-  const getUneData = () => {
-    const unes: Record<string, number> = {};
-    state.data.forEach(item => {
-      unes[item.une] = (unes[item.une] || 0) + item.revenue;
-    });
-    
-    // Pegar Top 5 UNEs
-    return Object.entries(unes)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5)
-      .map(([name, value]) => ({ name, value }));
+  // Filtros
+  const [categoria, setCategoria] = createSignal('');
+  const [segmento, setSegmento] = createSignal('');
+
+  // Carregar opções de filtro
+  const [filterOptions] = createResource<FilterOptions>(async () => {
+    const response = await api.get<FilterOptions>('/analytics/filter-options');
+    return response.data;
+  });
+
+  // Chart specs
+  const [vendasCategoriaChart, setVendasCategoriaChart] = createSignal<any>({});
+  const [giroEstoqueChart, setGiroEstoqueChart] = createSignal<any>({});
+  const [distribuicaoABCChart, setDistribuicaoABCChart] = createSignal<any>({});
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (categoria()) params.append('categoria', categoria());
+      if (segmento()) params.append('segmento', segmento());
+
+      const response = await api.get<SalesAnalysis>(`/analytics/sales-analysis?${params.toString()}`);
+      setData(response.data);
+
+      // Gerar gráficos
+      generateCharts(response.data);
+    } catch (err: any) {
+      console.error('Erro ao carregar análise:', err);
+      setError(err.response?.data?.detail || 'Erro ao carregar análise de vendas');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const chartData = () => getUneData();
-  const maxValue = () => Math.max(...chartData().map(d => d.value)) || 1;
+  const generateCharts = (analysisData: SalesAnalysis) => {
+    // 1. Vendas por Categoria (Bar Chart)
+    if (analysisData.vendas_por_categoria.length > 0) {
+      const vendasSpec = {
+        data: [{
+          type: 'bar',
+          x: analysisData.vendas_por_categoria.map(c => c.categoria),
+          y: analysisData.vendas_por_categoria.map(c => c.vendas),
+          marker: {
+            color: '#3b82f6',
+            line: { color: '#1e40af', width: 1 }
+          },
+          text: analysisData.vendas_por_categoria.map(c => c.vendas.toLocaleString()),
+          textposition: 'outside',
+          hovertemplate: '<b>%{x}</b><br>Vendas: %{y:,}<extra></extra>'
+        }],
+        layout: {
+          title: {
+            text: 'Vendas por Categoria (Top 10)',
+            font: { size: 16, color: '#e5e7eb' }
+          },
+          xaxis: {
+            title: '',
+            tickangle: -45,
+            tickfont: { size: 10, color: '#9ca3af' },
+            gridcolor: '#374151'
+          },
+          yaxis: {
+            title: 'Vendas (30 dias)',
+            titlefont: { color: '#9ca3af' },
+            tickfont: { color: '#9ca3af' },
+            gridcolor: '#374151'
+          },
+          plot_bgcolor: '#1f2937',
+          paper_bgcolor: '#1f2937',
+          margin: { l: 60, r: 20, t: 60, b: 100 },
+          font: { color: '#e5e7eb' }
+        },
+        config: { responsive: true }
+      };
+      setVendasCategoriaChart(vendasSpec);
+    }
+
+    // 2. Giro de Estoque (Line Chart)
+    if (analysisData.giro_estoque.length > 0) {
+      const giroSpec = {
+        data: [{
+          type: 'scatter',
+          mode: 'lines+markers',
+          x: analysisData.giro_estoque.map((_, i) => i + 1),
+          y: analysisData.giro_estoque.map(p => p.giro),
+          text: analysisData.giro_estoque.map(p => p.nome),
+          marker: {
+            color: '#10b981',
+            size: 8
+          },
+          line: {
+            color: '#10b981',
+            width: 2
+          },
+          hovertemplate: '<b>%{text}</b><br>Giro: %{y:.2f}<extra></extra>'
+        }],
+        layout: {
+          title: {
+            text: 'Giro de Estoque (Top 15 Produtos)',
+            font: { size: 16, color: '#e5e7eb' }
+          },
+          xaxis: {
+            title: 'Ranking',
+            titlefont: { color: '#9ca3af' },
+            tickfont: { color: '#9ca3af' },
+            gridcolor: '#374151'
+          },
+          yaxis: {
+            title: 'Taxa de Giro',
+            titlefont: { color: '#9ca3af' },
+            tickfont: { color: '#9ca3af' },
+            gridcolor: '#374151'
+          },
+          plot_bgcolor: '#1f2937',
+          paper_bgcolor: '#1f2937',
+          margin: { l: 60, r: 20, t: 60, b: 60 },
+          font: { color: '#e5e7eb' }
+        },
+        config: { responsive: true }
+      };
+      setGiroEstoqueChart(giroSpec);
+    }
+
+    // 3. Distribuição ABC (Pie Chart)
+    const abc = analysisData.distribuicao_abc;
+    if (abc.A + abc.B + abc.C > 0) {
+      const abcSpec = {
+        data: [{
+          type: 'pie',
+          labels: ['Classe A (20%)', 'Classe B (30%)', 'Classe C (50%)'],
+          values: [abc.A, abc.B, abc.C],
+          marker: {
+            colors: ['#10b981', '#f59e0b', '#ef4444']
+          },
+          textinfo: 'label+percent+value',
+          textposition: 'inside',
+          textfont: { size: 12 },
+          hovertemplate: '<b>%{label}</b><br>Produtos: %{value}<br>%{percent}<extra></extra>'
+        }],
+        layout: {
+          title: {
+            text: 'Distribuição ABC (Curva de Pareto)',
+            font: { size: 16, color: '#e5e7eb' }
+          },
+          plot_bgcolor: '#1f2937',
+          paper_bgcolor: '#1f2937',
+          margin: { l: 20, r: 20, t: 60, b: 20 },
+          font: { color: '#e5e7eb' },
+          showlegend: true,
+          legend: {
+            orientation: 'h',
+            x: 0.5,
+            y: -0.1,
+            xanchor: 'center',
+            font: { size: 10, color: '#9ca3af' }
+          }
+        },
+        config: { responsive: true }
+      };
+      setDistribuicaoABCChart(abcSpec);
+    }
+  };
+
+  onMount(() => {
+    loadData();
+  });
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6 max-w-6xl mx-auto">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">Analytics Avançado</h2>
-        <p class="text-muted">Análise de distribuição e tendências em tempo real.</p>
+    <div class="flex flex-col h-full p-6 gap-6">
+      {/* Header */}
+      <div class="flex justify-between items-end">
+        <div>
+          <h2 class="text-2xl font-bold flex items-center gap-2">
+            <BarChart3 size={28} />
+            Analytics Avançado
+          </h2>
+          <p class="text-muted">Análise de vendas, estoque e distribuição ABC</p>
+        </div>
+        <button
+          onClick={loadData}
+          class="btn btn-outline gap-2"
+          disabled={loading()}
+        >
+          <RefreshCw size={16} class={loading() ? 'animate-spin' : ''} />
+          Atualizar
+        </button>
       </div>
 
-      <Show when={!state.isLoading && state.data.length > 0} fallback={
-        <div class="p-12 text-center border rounded-xl bg-card text-muted">Carregando dados analíticos...</div>
-      }>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Gráfico de Barras Real (Top 5 UNEs por Receita) */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm">
-            <div class="flex items-center justify-between mb-6">
-              <h3 class="font-semibold flex items-center gap-2">
-                <BarChart3 size={18} />
-                Top 5 Lojas (Receita)
-              </h3>
-              <span class="text-xs text-muted">Base: MES_01</span>
-            </div>
-            
-            <div class="h-[300px] flex items-end justify-around gap-4 pt-4">
-              <For each={chartData()}>
-                {(item) => {
-                  const height = () => `${(item.value / maxValue()) * 100}%`;
-                  
-                  return (
-                    <div class="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                      <div class="relative w-full flex items-end justify-center h-full">
-                        <div 
-                          class="w-full max-w-[60px] bg-primary/80 hover:bg-primary rounded-t-md transition-all duration-500 ease-out relative group-hover:shadow-[0_0_20px_rgba(56,189,248,0.3)]"
-                          style={{ height: height() }}
-                        >
-                          <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border px-2 py-1 rounded text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                            R$ {(item.value / 1000).toFixed(1)}k
-                          </div>
-                        </div>
-                      </div>
-                      <span class="text-xs font-medium text-muted group-hover:text-foreground transition-colors truncate max-w-[60px]">{item.name}</span>
-                    </div>
-                  );
-                }}
+      {/* Filters */}
+      <div class="card p-4 border">
+        <div class="flex items-center gap-2 mb-3">
+          <Filter size={20} />
+          <h3 class="font-semibold">Filtros</h3>
+          <Show when={categoria() || segmento()}>
+            <button
+              class="ml-auto text-sm text-muted hover:text-foreground flex items-center gap-1"
+              onClick={() => {
+                setCategoria('');
+                setSegmento('');
+                loadData();
+              }}
+            >
+              <X size={16} />
+              Limpar Filtros
+            </button>
+          </Show>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select
+            class="input"
+            value={categoria()}
+            onChange={(e) => setCategoria(e.currentTarget.value)}
+            disabled={filterOptions.loading}
+          >
+            <option value="">Todas as Categorias</option>
+            <Show when={filterOptions()}>
+              <For each={filterOptions()!.categorias}>
+                {(cat) => <option value={cat}>{cat}</option>}
               </For>
+            </Show>
+          </select>
+
+          <select
+            class="input"
+            value={segmento()}
+            onChange={(e) => setSegmento(e.currentTarget.value)}
+            disabled={filterOptions.loading}
+          >
+            <option value="">Todos os Segmentos</option>
+            <Show when={filterOptions()}>
+              <For each={filterOptions()!.segmentos}>
+                {(seg) => <option value={seg}>{seg}</option>}
+              </For>
+            </Show>
+          </select>
+
+          <button
+            class="btn btn-primary"
+            onClick={loadData}
+            disabled={loading()}
+          >
+            Aplicar Filtros
+          </button>
+        </div>
+
+        {/* Active Filters Display */}
+        <Show when={categoria() || segmento()}>
+          <div class="flex gap-2 mt-3 flex-wrap">
+            <span class="text-sm text-muted">Filtros ativos:</span>
+            <Show when={categoria()}>
+              <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm flex items-center gap-1">
+                Categoria: {categoria()}
+                <button
+                  onClick={() => {
+                    setCategoria('');
+                    loadData();
+                  }}
+                  class="hover:bg-primary/30 rounded"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            </Show>
+            <Show when={segmento()}>
+              <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm flex items-center gap-1">
+                Segmento: {segmento()}
+                <button
+                  onClick={() => {
+                    setSegmento('');
+                    loadData();
+                  }}
+                  class="hover:bg-primary/30 rounded"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            </Show>
+          </div>
+        </Show>
+      </div>
+
+      {/* Error State */}
+      <Show when={error()}>
+        <div class="card p-4 border-red-500 bg-red-500/10">
+          <p class="text-red-500">{error()}</p>
+        </div>
+      </Show>
+
+      {/* Loading State */}
+      <Show when={loading()}>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center">
+            <BarChart3 size={48} class="mx-auto mb-4 opacity-50 animate-pulse" />
+            <p class="text-muted">Carregando análise...</p>
+          </div>
+        </div>
+      </Show>
+
+      {/* Charts Grid */}
+      <Show when={!loading() && data()}>
+        <div class="space-y-6">
+          {/* Row 1: Vendas por Categoria */}
+          <div class="card p-6 border">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="font-semibold">Vendas por Categoria (Top 10)</h3>
+              <ChartDownloadButton
+                chartId="analytics-vendas-categoria-chart"
+                filename="analytics_vendas_categoria"
+                label="Baixar"
+              />
+            </div>
+            <Show
+              when={data()!.vendas_por_categoria.length > 0}
+              fallback={
+                <div class="h-[400px] flex items-center justify-center text-muted">
+                  <p>Nenhum dado de vendas por categoria disponível</p>
+                </div>
+              }
+            >
+              <PlotlyChart
+                chartSpec={vendasCategoriaChart}
+                chartId="analytics-vendas-categoria-chart"
+                enableDownload={true}
+              />
+            </Show>
+          </div>
+
+          {/* Row 2: Two columns */}
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Giro de Estoque */}
+            <div class="card p-6 border">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold">Giro de Estoque (Top 15)</h3>
+                <ChartDownloadButton
+                  chartId="analytics-giro-estoque-chart"
+                  filename="analytics_giro_estoque"
+                  label="Baixar"
+                />
+              </div>
+              <Show
+                when={data()!.giro_estoque.length > 0}
+                fallback={
+                  <div class="h-[400px] flex items-center justify-center text-muted">
+                    <p>Nenhum dado de giro de estoque disponível</p>
+                  </div>
+                }
+              >
+                <PlotlyChart
+                  chartSpec={giroEstoqueChart}
+                  chartId="analytics-giro-estoque-chart"
+                  enableDownload={true}
+                />
+              </Show>
+            </div>
+
+            {/* Distribuição ABC */}
+            <div class="card p-6 border">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold">Distribuição ABC (Curva de Pareto)</h3>
+                <ChartDownloadButton
+                  chartId="analytics-abc-chart"
+                  filename="analytics_distribuicao_abc"
+                  label="Baixar"
+                />
+              </div>
+              <Show
+                when={(data()!.distribuicao_abc.A + data()!.distribuicao_abc.B + data()!.distribuicao_abc.C) > 0}
+                fallback={
+                  <div class="h-[400px] flex items-center justify-center text-muted">
+                    <p>Nenhum dado de distribuição ABC disponível</p>
+                  </div>
+                }
+              >
+                <PlotlyChart
+                  chartSpec={distribuicaoABCChart}
+                  chartId="analytics-abc-chart"
+                  enableDownload={true}
+                />
+              </Show>
             </div>
           </div>
 
-          {/* Resumo de Inteligência */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col">
-            <h3 class="font-semibold flex items-center gap-2 mb-4">
-              <TrendingUp size={18} />
-              Insights do Sistema
-            </h3>
-            
-            <div class="space-y-4">
-              <div class="p-4 bg-secondary/30 rounded-lg border border-secondary">
-                <div class="flex items-center gap-2 text-sm font-medium text-primary mb-2">
-                  <ArrowUpRight size={16} />
-                  Crescimento de Vendas
-                </div>
-                <p class="text-xs text-muted">
-                  O faturamento total é de <b>R$ {(state.summary?.revenue || 0).toLocaleString()}</b>. 
-                  {state.summary?.salesGrowth ? 
-                    ` Isso representa uma variação de ${state.summary.salesGrowth.toFixed(1)}% comparado ao mês anterior.` : 
-                    ' Sem dados históricos suficientes para comparação.'}
-                </p>
-              </div>
-
-              <div class="p-4 bg-secondary/30 rounded-lg border border-secondary">
-                <div class="flex items-center gap-2 text-sm font-medium text-yellow-500 mb-2">
-                  <Activity size={16} />
-                  Cobertura de Lojas
-                </div>
-                <p class="text-xs text-muted">
-                  Atualmente monitorando <b>{state.summary?.totalUsers}</b> unidades de negócio (UNEs) ativas com vendas registradas nos últimos 30 dias.
-                </p>
-              </div>
-
-              <div class="p-4 bg-secondary/30 rounded-lg border border-secondary">
-                <div class="flex items-center gap-2 text-sm font-medium text-green-500 mb-2">
-                  <Zap size={16} />
-                  Eficiência
-                </div>
-                <p class="text-xs text-muted">
-                  Média de vendas por produto ativo: <b>R$ {(state.summary?.revenue / (state.summary?.productsCount || 1)).toFixed(2)}</b>.
-                </p>
-              </div>
+          {/* Info Box */}
+          <div class="card p-4 border bg-blue-500/5 border-blue-500/30">
+            <div class="text-sm">
+              <strong>📊 Sobre a Curva ABC:</strong> A classificação ABC segue o princípio de Pareto (80/20):
+              <ul class="list-disc list-inside mt-2 space-y-1 text-muted">
+                <li><strong class="text-green-500">Classe A (20%):</strong> Produtos de alto valor/rotatividade - prioridade máxima</li>
+                <li><strong class="text-yellow-500">Classe B (30%):</strong> Produtos de valor/rotatividade média</li>
+                <li><strong class="text-red-500">Classe C (50%):</strong> Produtos de baixo valor/rotatividade</li>
+              </ul>
             </div>
           </div>
         </div>

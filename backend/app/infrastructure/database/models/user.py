@@ -42,11 +42,12 @@ class User(Base):
     @property
     def segments_list(self) -> list[str]:
         """Converte a string JSON de allowed_segments para uma lista Python."""
-        import json
-        return json.loads(self.allowed_segments)
+        try:
+            return json.loads(self.allowed_segments) if self.allowed_segments else []
+        except (json.JSONDecodeError, TypeError):
+            return []
 
     @segments_list.setter
     def segments_list(self, segments: list[str]):
         """Define allowed_segments a partir de uma lista Python, convertendo para string JSON."""
-        import json
-        self.allowed_segments = json.dumps(segments)
+        self.allowed_segments = json.dumps(segments) if segments is not None else "[]"

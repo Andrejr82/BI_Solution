@@ -4,7 +4,7 @@ Este arquivo foi refatorado para usar o DataSourceManager centralizado.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 import pandas as pd
 from langchain_core.tools import tool
 
@@ -98,7 +98,7 @@ def listar_colunas_disponiveis() -> Dict[str, Any]:
 @tool
 def consultar_dados(
     coluna: Optional[str] = None,
-    valor: Optional[Any] = None,  # ✅ ACEITA QUALQUER TIPO (string, int, float)
+    valor: Optional[Union[str, int, float]] = None,  # ✅ ACEITA string, int ou float
     coluna_retorno: Optional[str] = None,
     limite: int = 100
 ) -> str:

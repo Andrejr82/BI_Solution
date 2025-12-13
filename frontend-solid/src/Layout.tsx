@@ -1,15 +1,15 @@
 import { A, useLocation } from '@solidjs/router';
 import auth from '@/store/auth';
-import { 
-  LayoutDashboard, MessageSquare, PieChart, FileText, Settings, LogOut, 
-  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield
+import {
+  LayoutDashboard, MessageSquare, PieChart, FileText, Settings, LogOut,
+  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield, Lightbulb, HelpCircle
 } from 'lucide-solid';
 import { For, Show, children } from 'solid-js';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function Layout(props: any) {
   const location = useLocation();
-  const userRole = () => auth.user()?.role || 'viewer'; // 'admin' | 'user'
+  const userRole = () => auth.user()?.role || 'user'; // fallback para 'user' garante visibilidade
 
   // Definição dos Itens de Menu com Permissões
   const menuItems = [
@@ -32,6 +32,7 @@ export default function Layout(props: any) {
       group: 'Inteligência',
       items: [
         { href: '/chat', icon: MessageSquare, label: 'Chat BI', roles: ['admin', 'user'] },
+        { href: '/examples', icon: Lightbulb, label: 'Exemplos', roles: ['admin', 'user'] },
         { href: '/learning', icon: BookOpen, label: 'Aprendizado', roles: ['admin', 'user'] },
         { href: '/playground', icon: Terminal, label: 'Playground', roles: ['admin', 'user'] },
       ]
@@ -40,6 +41,7 @@ export default function Layout(props: any) {
       group: 'Sistema',
       items: [
         { href: '/diagnostics', icon: Database, label: 'Diagnóstico DB', roles: ['admin'] },
+        { href: '/help', icon: HelpCircle, label: 'Ajuda', roles: ['admin', 'user'] },
         { href: '/profile', icon: Lock, label: 'Alterar Senha', roles: ['admin', 'user'] },
         { href: '/admin', icon: Shield, label: 'Administração', roles: ['admin', 'user'] }, // Compradores veem versão limitada
       ]
@@ -114,7 +116,7 @@ export default function Layout(props: any) {
              </div>
           </div>
         </header>
-        <main class="flex-1 overflow-hidden relative bg-background">
+        <main class="flex-1 overflow-y-auto relative bg-background">
           <ErrorBoundary>
             {props.children}
           </ErrorBoundary>

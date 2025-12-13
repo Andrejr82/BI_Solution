@@ -1,7 +1,7 @@
 @echo off
 REM ========================================
-REM   AGENT BI - SISTEMA COMPLETO
-REM   Backend FastAPI + Frontend SolidJS
+REM   AGENT BI - SISTEMA SIMPLIFICADO
+REM   Usa concurrently para um único terminal
 REM ========================================
 
 echo.
@@ -10,86 +10,116 @@ echo   AGENT BI - INICIANDO SISTEMA
 echo ========================================
 echo.
 
+REM Verificar se Node.js está instalado
+where node >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERRO] Node.js nao encontrado!
+    echo [INFO] Por favor, instale Node.js de https://nodejs.org/
+    pause
+    exit /b 1
+)
+
+REM Verificar se Python está instalado
+where python >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERRO] Python nao encontrado!
+    echo [INFO] Por favor, instale Python de https://python.org/
+    pause
+    exit /b 1
+)
+
 REM Limpar processos antigos
-echo [1/7] Limpando processos antigos...
+echo [1/5] Limpando processos antigos...
 taskkill /F /IM python.exe 2>nul
 taskkill /F /IM node.exe 2>nul
 timeout /t 2 /nobreak >nul
 echo [OK] Processos limpos.
 echo.
 
-REM Verificar e limpar porta 8000
-echo [2/7] Verificando porta 8000...
-setlocal enabledelayedexpansion
-set "PORT_CLEARED=0"
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do (
-    echo [AVISO] Processo %%a encontrado na porta 8000
-    echo [INFO] Encerrando processo %%a...
-    taskkill /F /PID %%a >nul 2>&1
-    if !errorlevel! equ 0 (
-        echo [OK] Processo %%a encerrado com sucesso
-        set "PORT_CLEARED=1"
-    ) else (
-        echo [ERRO] Falha ao encerrar processo %%a
+REM Limpar cache Python
+echo [2/5] Limpando cache Python...
+cd /d "%~dp0backend"
+for /d /r %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d" 2>nul
+del /s /q *.pyc 2>nul >nul
+cd /d "%~dp0"
+echo [OK] Cache limpo.
+echo.
+
+REM Instalar/Verificar dependências
+echo [3/5] Verificando dependencias...
+
+REM Verificar concurrently
+if not exist node_modules\concurrently (
+    echo [INFO] Instalando concurrently...
+    call npm install --silent
+    if %errorlevel% neq 0 (
+        echo [ERRO] Falha ao instalar concurrently
+        pause
+        exit /b 1
     )
 )
-if !PORT_CLEARED! equ 1 (
-    echo [INFO] Aguardando liberacao da porta...
-    timeout /t 2 /nobreak >nul
-)
-echo [OK] Porta 8000 livre.
-echo.
 
-
-REM Iniciar Backend
-echo [3/7] Iniciando Backend FastAPI (porta 8000)...
-cd /d "%~dp0backend"
-start "Agent BI - Backend" cmd /k "python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload"
-timeout /t 5 /nobreak >nul
-echo [OK] Backend iniciado.
-echo.
-
-REM Verificar Backend
-echo [4/7] Verificando Backend...
-curl -s http://127.0.0.1:8000/health >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] Backend online e respondendo!
+REM Verificar frontend dependencies
+if not exist frontend-solid\node_modules (
+    echo [INFO] Instalando dependencias do Frontend...
+    cd frontend-solid
+    call npm install
+    if %errorlevel% neq 0 (
+        echo [ERRO] Falha ao instalar dependencias do frontend
+        cd ..
+        pause
+        exit /b 1
+    )
+    cd ..
 ) else (
-    echo [AVISO] Backend ainda inicializando...
+    echo [OK] Dependencias do frontend ja instaladas
 )
+
+echo [OK] Dependencias verificadas.
 echo.
 
-REM Iniciar Frontend SolidJS
-echo [5/7] Iniciando Frontend SolidJS (porta 3000)...
-cd /d "%~dp0frontend-solid"
-start "Agent BI - Frontend" cmd /k "pnpm dev"
-timeout /t 5 /nobreak >nul
-echo [OK] Frontend iniciado.
+REM Verificar backend setup
+echo [4/6] Verificando backend Python...
+cd /d "%~dp0backend"
+if not exist ".venv\Scripts\python.exe" (
+    echo [INFO] Backend virtual environment nao encontrado
+    echo [INFO] Sera criado automaticamente na primeira execucao
+) else (
+    echo [OK] Backend virtual environment encontrado
+)
+cd /d "%~dp0"
 echo.
 
-REM Abrir navegador
-echo [6/7] Abrindo navegador...
-timeout /t 3 /nobreak >nul
-start http://localhost:3000
+REM Limpar portas
+echo [5/6] Limpando portas 8000 e 3000...
+node scripts/clean-port.js
+echo [OK] Portas limpas.
 echo.
 
-REM Resumo
-echo [7/7] Sistema iniciado com sucesso!
+REM Iniciar sistema com concurrently
+echo [6/6] Iniciando sistema...
 echo.
 echo ========================================
-echo   SISTEMA ONLINE
+echo   SISTEMA RODANDO
 echo ========================================
 echo.
 echo Backend:  http://localhost:8000
 echo Frontend: http://localhost:3000
 echo API Docs: http://localhost:8000/docs
 echo.
-echo Credenciais de teste:
-echo   Admin:     admin / Admin@2024
-echo   Comprador: comprador / comprador123
+echo Credenciais:
+echo   Username: admin
+echo   Senha:    Admin@2024
 echo.
 echo ========================================
 echo.
-echo Pressione qualquer tecla para fechar...
-pause >nul
+echo [INFO] Backend e Frontend rodando no mesmo terminal
+echo [INFO] Logs coloridos por servico:
+echo        - BACKEND  (azul)
+echo        - FRONTEND (verde)
+echo.
+echo [DICA] Pressione Ctrl+C para encerrar todos os processos
+echo.
 
+REM Iniciar com concurrently
+call npm run dev

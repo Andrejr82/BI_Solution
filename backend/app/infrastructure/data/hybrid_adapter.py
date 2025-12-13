@@ -47,8 +47,9 @@ class HybridDataAdapter(DatabaseAdapter):
     def _init_adapters(self):
         """Inicializa adapters."""
         # 1. Inicializar Parquet (sempre necessário como fallback)
-        # Caminho do arquivo parquet deve vir de config ou ser descoberto
-        parquet_path = os.getenv("PARQUET_FILE_PATH", "data/parquet/*.parquet")
+        # Usar configuração centralizada do settings.py
+        parquet_path = settings.PARQUET_FILE_PATH
+        logger.info(f"📂 Usando arquivo Parquet: {parquet_path}")
         self.parquet_adapter = ParquetAdapter(parquet_path)
 
         # 2. Inicializar SQL Server se habilitado
@@ -88,12 +89,13 @@ class HybridDataAdapter(DatabaseAdapter):
         if self.parquet_adapter:
             await self.parquet_adapter.disconnect()
 
-    async def execute_query(self, query_filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def execute_query(self, query_filters: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
         """
         Executa query EXCLUSIVAMENTE no Parquet.
+        Aceita kwargs (ex: required_columns, query_text)
         """
         if self.parquet_adapter:
-            return await self.parquet_adapter.execute_query(query_filters)
+            return await self.parquet_adapter.execute_query(query_filters, **kwargs)
         
         return []
 

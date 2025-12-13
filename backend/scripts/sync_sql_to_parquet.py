@@ -11,8 +11,14 @@ import time
 import os
 from pathlib import Path
 
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+
 # Configurações
-PARQUET_FILE = Path(r"C:\Users\André\Documents\Agent_Solution_BI\data\parquet\admmat.parquet")
+PARQUET_FILE = Path(__file__).parent.parent / "data" / "parquet" / "admmat.parquet"
 SERVER = r"FAMILIA\SQLJR,1433"
 DATABASE = "Projeto_Caculinha" # Alterado para o banco correto
 USERNAME = "AgenteVirtual"

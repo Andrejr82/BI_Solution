@@ -41,12 +41,24 @@ class UserResponse(UserBase):
     id: uuid.UUID
     role: str
     is_active: bool
-    allowed_segments: list[str] # Novo Campo
+    allowed_segments: list[str] = Field(default_factory=list) # Novo Campo com default
     last_login: datetime | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Custom validation to handle allowed_segments conversion from JSON string"""
+        if hasattr(obj, 'allowed_segments') and isinstance(obj.allowed_segments, str):
+            # Convert JSON string to list
+            import json
+            try:
+                obj.allowed_segments = json.loads(obj.allowed_segments) if obj.allowed_segments else []
+            except (json.JSONDecodeError, TypeError):
+                obj.allowed_segments = []
+        return super().model_validate(obj, **kwargs)
 
 
 class UserInDB(UserResponse):

@@ -6,18 +6,22 @@ Combines all v1 endpoints
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
-    admin, 
-    analytics, 
-    auth, 
-    reports, 
-    auth_alt, 
-    metrics, 
+    admin,
+    analytics,
+    auth,
+    reports,
+    auth_alt,
+    metrics,
     chat,
     rupturas,
     transfers,
     diagnostics,
     learning,
-    playground
+    playground,
+    frontend_logs,
+    shared,
+    preferences,
+    insights
 )
 
 api_router = APIRouter()
@@ -37,3 +41,9 @@ api_router.include_router(transfers.router)
 api_router.include_router(diagnostics.router)
 api_router.include_router(learning.router)
 api_router.include_router(playground.router)
+api_router.include_router(shared.router)
+api_router.include_router(preferences.router)
+api_router.include_router(insights.router)
+
+# Frontend Logs
+api_router.include_router(frontend_logs.router)

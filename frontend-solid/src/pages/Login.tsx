@@ -30,7 +30,8 @@ export default function Login() {
       
       if (success) {
         console.log('🎉 Login successful! Navigating to dashboard...');
-        navigate('/dashboard');
+        // Usar window.location.href para forçar reload completo e garantir que o estado seja propagado
+        window.location.href = '/dashboard';
       } else {
         console.error('❌ Login failed');
       }

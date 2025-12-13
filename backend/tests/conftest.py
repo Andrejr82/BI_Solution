@@ -1,7 +1,12 @@
 """Test configuration"""
 
 import pytest
+import sys
+import os
 from httpx import AsyncClient
+
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from main import app
 

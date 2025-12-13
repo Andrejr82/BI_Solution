@@ -191,3 +191,104 @@ async def get_top_products(
         logger.error(f"Error fetching top products: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching top products: {str(e)}")
 
+
+class BusinessKPIs(BaseModel):
+    total_produtos: int
+    total_unes: int
+    produtos_ruptura: int
+    valor_estoque: float
+    top_produtos: list[dict]
+    vendas_por_categoria: list[dict]
+
+
+@router.get("/business-kpis", response_model=BusinessKPIs)
+async def get_business_kpis(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> BusinessKPIs:
+    """
+    Get business KPIs for Dashboard
+
+    Returns key business metrics including products, UNEs, stock ruptures, and top sellers.
+    Uses FULL dataset without limits for accurate counts.
+    """
+    import polars as pl
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Usar TODOS os dados sem limite para contagens precisas
+        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=None)
+        
+        logger.info(f"📊 KPIs: Processando {df.height} linhas do DataFrame completo")
+
+        # 1. Total de Produtos (únicos)
+        total_produtos = df.select(pl.col("PRODUTO")).n_unique()
+        logger.info(f"📊 Total produtos únicos: {total_produtos}")
+
+        # 2. Total de UNEs (unidades/lojas únicas)
+        total_unes = df.select(pl.col("UNE")).n_unique() if "UNE" in df.columns else 0
+        logger.info(f"📊 Total UNEs: {total_unes}")
+
+        # 3. Produtos em Ruptura (CD=0 E Loja < Linha Verde/MC)
+        # Ruptura crítica: estoque CD zerado E estoque loja abaixo da Linha Verde (MC)
+        df_ruptura = df.filter(
+            (pl.col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0) == 0) &
+            (pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0) < pl.col("ESTOQUE_LV").cast(pl.Float64, strict=False).fill_null(0)) &
+            (pl.col("VENDA_30DD").cast(pl.Float64, strict=False).fill_null(0) > 0)  # Apenas produtos com vendas
+        )
+        produtos_ruptura = len(df_ruptura)
+        logger.info(f"📊 Produtos em ruptura: {produtos_ruptura}")
+
+        # 4. Valor do Estoque Total (usando estoque loja + CD)
+        estoque_loja = float(df.select(pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0).sum()).item())
+        estoque_cd = float(df.select(pl.col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0).sum()).item())
+        valor_estoque = estoque_loja + estoque_cd
+        logger.info(f"📊 Valor estoque total: {valor_estoque}")
+
+        # 5. Top 10 Produtos Mais Vendidos (baseado em VENDA_30DD)
+        df_top = df.filter(pl.col("VENDA_30DD") > 0).group_by(["PRODUTO", "NOME"]).agg([
+            pl.col("VENDA_30DD").sum().alias("vendas")
+        ]).sort("vendas", descending=True).head(10)
+
+        top_produtos = []
+        for row in df_top.iter_rows(named=True):
+            top_produtos.append({
+                "produto": str(row["PRODUTO"]),
+                "nome": str(row["NOME"])[:40],
+                "vendas": int(row["vendas"])
+            })
+
+        # 6. Vendas por Categoria (usando NOMESEGMENTO que é mais descritivo)
+        vendas_por_categoria = []
+        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else "SEGMENTO"
+        if segmento_col in df.columns:
+            df_categoria = df.group_by(segmento_col).agg([
+                pl.col("VENDA_30DD").sum().alias("vendas"),
+                pl.col("PRODUTO").n_unique().alias("produtos")
+            ]).sort("vendas", descending=True).head(8)
+
+            for row in df_categoria.iter_rows(named=True):
+                segmento = str(row[segmento_col]).strip()
+                if segmento and segmento != "null" and segmento != "None" and segmento != "":
+                    vendas_por_categoria.append({
+                        "categoria": segmento[:30],
+                        "vendas": int(row["vendas"]),
+                        "produtos": int(row["produtos"])
+                    })
+
+        logger.info(f"📊 KPIs calculados com sucesso - Produtos: {total_produtos}, UNEs: {total_unes}, Rupturas: {produtos_ruptura}")
+
+        return BusinessKPIs(
+            total_produtos=total_produtos,
+            total_unes=total_unes,
+            produtos_ruptura=produtos_ruptura,
+            valor_estoque=valor_estoque,
+            top_produtos=top_produtos,
+            vendas_por_categoria=vendas_por_categoria
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching business KPIs: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching business KPIs: {str(e)}")
+

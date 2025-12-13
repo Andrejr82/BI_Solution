@@ -1,13 +1,13 @@
-import { createRoot, batch } from 'solid-js';
+import { createRoot, batch, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { metricsApi, analyticsApi, MetricsSummary, AnalyticsDataPoint } from '@/lib/api';
+import { analyticsApi, KpiMetrics, TopQueryItem } from '@/lib/api';
 
 interface DashboardState {
   // Grid Data
-  data: AnalyticsDataPoint[];
+  data: TopQueryItem[]; // Now uses TopQueryItem
   
   // KPI Data
-  summary: MetricsSummary | null;
+  summary: KpiMetrics | null; // Now uses KpiMetrics
   
   // System State
   isLoading: boolean;
@@ -32,15 +32,15 @@ function createDashboardStore() {
     if (!state.data.length) setState('isLoading', true); // Só mostra loading no primeiro load
     
     try {
-      // Buscar dados em paralelo
-      const [summaryRes, analyticsRes] = await Promise.all([
-        metricsApi.getSummary(),
-        analyticsApi.getData(100) // Top 100 registros para a grid
+      // Buscar dados em paralelo dos novos endpoints
+      const [kpisRes, topQueriesRes] = await Promise.all([
+        analyticsApi.getKpis(),
+        analyticsApi.getTopQueries(7, 10) // Top 10 queries dos últimos 7 dias para a grid
       ]);
 
       batch(() => {
-        setState('summary', summaryRes.data);
-        setState('data', analyticsRes.data.data); // Dados reais do backend
+        setState('summary', kpisRes.data); // KpiMetrics
+        setState('data', topQueriesRes.data); // TopQueryItem[]
         setState('lastUpdate', new Date());
         setState('error', null);
         setState('isLoading', false);
@@ -72,6 +72,12 @@ function createDashboardStore() {
   };
 
   // Iniciar polling automaticamente apenas se estiver logado (verificação feita na view)
+  createEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && !state.isLive) {
+        startPolling();
+    }
+  });
   
   return { state, startPolling, stopPolling, togglePolling, fetchData };
 }

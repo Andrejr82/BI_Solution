@@ -1,0 +1,158 @@
+/* BACKUP DO INDEX.TSX ORIGINAL */
+/* src/index.tsx - Ponto de Entrada da Aplicação SolidJS */
+import { render } from 'solid-js/web';
+import { Router, Route, Navigate } from '@solidjs/router';
+import { Show } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import './index.css';
+
+// Importar Layout e Páginas
+import Layout from './Layout';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Chat from './pages/Chat';
+import Analytics from './pages/Analytics';
+import Reports from './pages/Reports';
+import Learning from './pages/Learning';
+import Playground from './pages/Playground';
+import Profile from './pages/Profile';
+import Admin from './pages/Admin';
+import Rupturas from './pages/Rupturas';
+import Transfers from './pages/Transfers';
+import Diagnostics from './pages/Diagnostics';
+import Examples from './pages/Examples';
+import Help from './pages/Help';
+import SharedConversation from './pages/SharedConversation';
+
+// Importar Store de Autenticação
+import auth from './store/auth';
+
+// Componente de Proteção de Rotas
+function PrivateRoute(props: { component: any }) {
+  return (
+    <Show
+      when={auth.isAuthenticated()}
+      fallback={<Navigate href="/login" />}
+    >
+      {props.component}
+    </Show>
+  );
+}
+
+// Componente de Proteção de Rotas com RBAC
+function RoleRoute(props: { component: any; requiredRole: string }) {
+  return (
+    <Show
+      when={auth.isAuthenticated()}
+      fallback={<Navigate href="/login" />}
+    >
+      <Show
+        when={auth.user()?.role === props.requiredRole}
+        fallback={
+          <div class="flex items-center justify-center min-h-screen flex-col gap-4 p-8">
+            <h1 class="text-4xl font-bold text-destructive">Acesso Negado</h1>
+            <p class="text-lg text-muted-foreground">Você não tem permissão para acessar esta página.</p>
+            <p class="text-sm text-muted-foreground">403 - Forbidden</p>
+          </div>
+        }
+      >
+        {props.component}
+      </Show>
+    </Show>
+  );
+}
+
+// Componente Principal da Aplicação
+function App() {
+  return (
+    <Router>
+      {/* Rotas Públicas */}
+      <Route path="/login" component={Login} />
+      <Route path="/shared/:share_id" component={SharedConversation} />
+      
+      {/* Rota raiz - redireciona baseado em autenticação ANTES do Layout */}
+      <Route path="/" component={() => {
+        console.log('🔄 Root route hit. Auth state:', auth.isAuthenticated());
+        return (
+          <Show
+            when={auth.isAuthenticated()}
+            fallback={() => {
+              console.log('➡️ Redirecting to /login');
+              return <Navigate href="/login" />;
+            }}
+          >
+            {() => {
+              console.log('➡️ Redirecting to /dashboard');
+              return <Navigate href="/dashboard" />;
+            }}
+          </Show>
+        );
+      }} />
+      
+      {/* Rotas Protegidas - Dentro do Layout */}
+      <Route path="/" component={Layout}>
+        
+        {/* Dashboards */}
+        <Route path="/dashboard" component={() => <PrivateRoute component={<Dashboard />} />} />
+        <Route path="/metrics" component={() => <PrivateRoute component={<Analytics />} />} />
+        <Route path="/rupturas" component={() => <PrivateRoute component={<Rupturas />} />} />
+        
+        {/* Operacional */}
+        <Route path="/transfers" component={() => <PrivateRoute component={<Transfers />} />} />
+        <Route path="/reports" component={() => <PrivateRoute component={<Reports />} />} />
+        
+        {/* Inteligência */}
+        <Route path="/chat" component={() => <PrivateRoute component={<Chat />} />} />
+        <Route path="/examples" component={() => <PrivateRoute component={<Examples />} />} />
+        <Route path="/learning" component={() => <PrivateRoute component={<Learning />} />} />
+        <Route path="/playground" component={() => <PrivateRoute component={<Playground />} />} />
+
+        {/* Sistema */}
+        <Route path="/diagnostics" component={() => <PrivateRoute component={<Diagnostics />} />} />
+        <Route path="/help" component={() => <PrivateRoute component={<Help />} />} />
+        <Route path="/profile" component={() => <PrivateRoute component={<Profile />} />} />
+        <Route path="/admin" component={() => <RoleRoute component={<Admin />} requiredRole="admin" />} />
+      </Route>
+      
+      {/* Fallback - Redirecionar baseado em autenticação */}
+      <Route path="*" component={() => (
+        <Show
+          when={auth.isAuthenticated()}
+          fallback={<Navigate href="/login" />}
+        >
+          <Navigate href="/dashboard" />
+        </Show>
+      )} />
+    </Router>
+  );
+}
+
+// Renderizar a Aplicação no DOM
+const root = document.getElementById('root');
+
+if (!root) {
+  throw new Error('Root element not found. Make sure there is a <div id="root"></div> in your index.html');
+}
+
+// Create a client
+const queryClient = new QueryClient();
+
+// --- VERSION CHECK & AUTO-CLEANUP ---
+const APP_VERSION = '1.0.1';
+const STORED_VERSION = localStorage.getItem('app_version');
+
+if (STORED_VERSION !== APP_VERSION) {
+  console.warn(`⚠️ Version mismatch: Stored ${STORED_VERSION} vs Current ${APP_VERSION}. Clearing storage.`);
+  localStorage.clear();
+  sessionStorage.clear();
+  localStorage.setItem('app_version', APP_VERSION);
+  if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+  }
+}
+
+render(() => (
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>
+), root);

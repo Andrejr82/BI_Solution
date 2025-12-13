@@ -1,60 +1,97 @@
 import axios from 'axios';
 
-// --- Types ---
+// --- Type Definitions ---
 
-export interface MetricsSummary {
-  totalSales: number;
-  totalUsers: number;
-  revenue: number;
-  productsCount: number;
-  salesGrowth: number;
-  usersGrowth: number;
+export interface KpiMetrics {
+  total_queries: number;
+  total_errors: number;
+  success_rate_feedback: number;
+  cache_hit_rate: number;
+  average_response_time_ms: string | number;
 }
 
-export interface SaleItem {
+export interface ErrorTrendItem {
   date: string;
-  product: string;
-  value: number;
-  quantity: number;
+  error_count: number;
 }
 
-export interface TopProduct {
-  product: string;
-  productName: string;
-  totalSales: number;
-  revenue: number;
-}
-
-export interface AnalyticsDataPoint {
-  date: string;
-  product: string;
-  sales: number;
-  revenue: number;
-  une: string;
-}
-
-export interface AnalyticsResponse {
-  data: AnalyticsDataPoint[];
-  totalRecords: number;
-  summary: {
-    totalSales: number;
-    totalRevenue: number;
-    uniqueProducts: number;
-    uniqueUnes: number;
-    avgSalesPerProduct: number;
-  };
+export interface TopQueryItem {
+  query: string;
+  count: number;
 }
 
 export interface Report {
   id: string;
-  title: string;
-  description: string;
-  content: string;
-  status: string;
-  author_id: string;
-  author_name?: string;
+  name: string;
+  description?: string;
   created_at: string;
-  updated_at: string;
+}
+
+export interface LearningResponse {
+  insights: string[];
+  feedback_stats: {
+    total: number;
+    positive: number;
+    negative: number;
+    partial: number;
+    success_rate: number;
+  };
+  common_patterns: string[];
+}
+
+export interface TransferValidationPayload {
+  produto_id: number;
+  une_origem: number;
+  une_destino: number;
+  quantidade: number;
+}
+
+export interface TransferValidationResponse {
+  status: string; // "sucesso", "falha", "alerta"
+  mensagem: string;
+}
+
+export interface TransferSuggestion {
+  produto_id: number;
+  une_origem: number;
+  une_destino: number;
+  quantidade_sugerida: number;
+  mensagem: string;
+}
+
+export interface TransferRequestPayload {
+  produto_id: number;
+  une_origem: number;
+  une_destino: number;
+  quantidade: number;
+  solicitante_id: string;
+}
+
+export interface TransferReportQuery {
+  start_date?: string;
+  end_date?: string;
+}
+
+// Old Transfer interface is removed as it's replaced by TransferSuggestion or others.
+// export interface Transfer { ... }
+
+export interface Ruptura {
+  PRODUTO: string;
+  NOME: string;
+  UNE: string;
+  ESTOQUE_UNE: number;
+  ESTOQUE_CD: number;
+  ESTOQUE_LV: number;
+  VENDA_30DD: number;
+  CRITICIDADE_PCT: number;
+  NECESSIDADE: number;
+  NOMESEGMENTO?: string;
+}
+
+export interface RupturasSummary {
+  total: number;
+  criticos: number;
+  valor_estimado: number;
 }
 
 // --- API Client ---
@@ -77,33 +114,92 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((response) => {
   return response;
 }, (error) => {
-  // Não redirecionar automaticamente para login em caso de 401
-  // Deixar que cada componente trate o erro como preferir
   if (error.response && error.response.status === 401) {
-    console.warn('⚠️ 401 Unauthorized - Token pode estar inválido ou expirado');
-    // NÃO fazer redirect automático - causa loop de logout
+    console.warn('⚠️ 401 Unauthorized - Token inválido ou expirado. Deslogando usuário...');
+    localStorage.removeItem('token');
+    // Forçar recarregamento para limpar estados
+    if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+    }
   }
   return Promise.reject(error);
 });
 
 // --- API Methods ---
 
-export const metricsApi = {
-  getSummary: () => api.get<MetricsSummary>('/metrics/summary'),
-  getRecentSales: (limit = 20) => api.get<SaleItem[]>(`/metrics/recent-sales?limit=${limit}`),
-  getTopProducts: (limit = 5) => api.get<TopProduct[]>(`/metrics/top-products?limit=${limit}`),
-};
-
 export const analyticsApi = {
-  getData: (limit = 100) => api.get<AnalyticsResponse>(`/analytics/data?limit=${limit}`),
+  getKpis: (days: number = 7) => api.get<KpiMetrics>(`/analytics/kpis?days=${days}`),
+  getErrorTrend: (days: number = 30) => api.get<ErrorTrendItem[]>(`/analytics/error-trend?days=${days}`),
+  getTopQueries: (days: number = 7, limit: number = 10) => api.get<TopQueryItem[]>(`/analytics/top-queries?days=${days}&limit=${limit}`),
 };
 
 export const reportsApi = {
   getAll: () => api.get<Report[]>('/reports'),
 };
 
+export interface UserData {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  full_name?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateUserPayload {
+  username: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
+export interface UpdateUserPayload {
+  username?: string;
+  email?: string;
+  password?: string;
+  role?: string;
+  is_active?: boolean;
+}
+
 export const adminApi = {
   syncParquet: () => api.post('/admin/sync-parquet'),
+
+  // User Management
+  getUsers: () => api.get<UserData[]>('/admin/users'),
+  getUser: (userId: string) => api.get<UserData>(`/admin/users/${userId}`),
+  createUser: (userData: CreateUserPayload) => api.post<UserData>('/admin/users', userData),
+  updateUser: (userId: string, userData: UpdateUserPayload) => api.put<UserData>(`/admin/users/${userId}`, userData),
+  deleteUser: (userId: string) => api.delete(`/admin/users/${userId}`),
+};
+
+export const learningApi = {
+  getInsights: () => api.get<LearningResponse>('/learning/insights'),
+};
+
+export const transfersApi = {
+  validateTransfer: (payload: TransferValidationPayload) => api.post<TransferValidationResponse>('/transfers/validate', payload),
+  getSuggestions: (segmento?: string, une_origem_excluir?: number, limit: number = 5) => api.get<TransferSuggestion[]>(`/transfers/suggestions`, { params: { segmento, une_origem_excluir, limit } }),
+  createTransferRequest: (payload: TransferRequestPayload) => api.post<{ message: string, transfer_id: string }>('/transfers', payload),
+  getReport: (query?: TransferReportQuery) => api.get<TransferRequestPayload[]>(`/transfers/report`, { params: query }),
+};
+
+export const rupturasApi = {
+  getCritical: (limit = 50, segmento?: string, une?: string) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (segmento) params.append('segmento', segmento);
+    if (une) params.append('une', une);
+    return api.get<Ruptura[]>(`/rupturas/critical?${params.toString()}`);
+  },
+  getSegmentos: () => api.get<string[]>('/rupturas/filters/segmentos'),
+  getUnes: () => api.get<string[]>('/rupturas/filters/unes'),
+  getSummary: (segmento?: string, une?: string) => {
+    const params = new URLSearchParams();
+    if (segmento) params.append('segmento', segmento);
+    if (une) params.append('une', une);
+    return api.get<RupturasSummary>(`/rupturas/summary?${params.toString()}`);
+  },
 };
 
 export default api;

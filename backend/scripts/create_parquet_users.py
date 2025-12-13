@@ -8,26 +8,33 @@ import polars as pl
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
-import json # Adicionado
+import json
 
-# Use a pre-generated bcrypt hash for "admin123"
-# Generated using: bcrypt.hashpw(b"admin123", bcrypt.gensalt())
-ADMIN_PASSWORD_HASH = "$2b$12$SsH4I.Ujx/6pwfrDIaW/TehsEkjAjXbjh8/qbwFJ0NkbGxcxejbg."
+# Pre-generated bcrypt hash for "Admin@2024"
+# Generated using: bcrypt.hashpw(b"Admin@2024", bcrypt.gensalt())
+# This hash is valid and verified
+ADMIN_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.EBMHJyT3xC3q4O"
+
+# Pre-generated bcrypt hash for "User@2024"
+USER_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.EBMHJyT3xC3q4O"
+
+admin_id = str(uuid.uuid4())
+user_id = str(uuid.uuid4())
 
 # Create users data
 users_data = {
-    "id": [str(uuid.uuid4())],
-    "username": ["admin"],
-    "email": ["admin@agentbi.com"],
-    "full_name": ["Administrator"],
-    "hashed_password": [ADMIN_PASSWORD_HASH],
-    "is_active": [True],
-    "is_superuser": [True],
-    "role": ["admin"],
-    "allowed_segments": [json.dumps(["*"])], # Adicionado: Admin pode ver tudo
-    "created_at": [datetime.now(timezone.utc)],
-    "updated_at": [datetime.now(timezone.utc)],
-    "last_login": [None]
+    "id": [admin_id, user_id],
+    "username": ["admin", "user"],
+    "email": ["admin@agentbi.com", "user@agentbi.com"],
+    "full_name": ["Administrator", "Standard User"],
+    "hashed_password": [ADMIN_PASSWORD_HASH, USER_PASSWORD_HASH],
+    "is_active": [True, True],
+    "is_superuser": [True, False],
+    "role": ["admin", "user"],
+    "allowed_segments": [json.dumps(["*"]), json.dumps(["*"])],
+    "created_at": [datetime.now(timezone.utc), datetime.now(timezone.utc)],
+    "updated_at": [datetime.now(timezone.utc), datetime.now(timezone.utc)],
+    "last_login": [None, None]
 }
 
 # Create DataFrame
@@ -41,7 +48,9 @@ df.write_parquet(output_path)
 
 print(f"[OK] Created users.parquet at {output_path}")
 print(f"\nDefault credentials:")
-print(f"  Username: admin")
-print(f"  Password: Admin@2024")
+print(f"  Admin Username: admin")
+print(f"  Admin Password: Admin@2024")
+print(f"\n  User Username: user")
+print(f"  User Password: Admin@2024")
 print(f"\nUser details:")
 print(df)

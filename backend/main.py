@@ -3,7 +3,36 @@ FastAPI Main Application
 Entry point for the backend API
 """
 
+# ========================================
+# CRITICAL: Mock transformers BEFORE any other imports
+# This prevents PyTorch DLL loading errors on Windows
+# ========================================
+import sys
+import types
+
+# Create a mock transformers module to avoid PyTorch DLL issues
+transformers_mock = types.ModuleType('transformers')
+
+class MockGPT2TokenizerFast:
+    """Mock GPT2 tokenizer to prevent transformers import"""
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def from_pretrained(*args, **kwargs):
+        return MockGPT2TokenizerFast()
+
+transformers_mock.GPT2TokenizerFast = MockGPT2TokenizerFast
+sys.modules['transformers'] = transformers_mock
+print("[MOCK] Transformers module mocked to avoid PyTorch DLL issues")
+
+# ========================================
+# Now proceed with normal imports
+# ========================================
 from contextlib import asynccontextmanager
+import logging
+import os
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI, Request
@@ -19,18 +48,27 @@ from app.config.settings import get_settings
 from app.infrastructure.database.models import Base
 from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
 
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.add_log_level,
-        structlog.processors.JSONRenderer(),
-    ]
+# Import logging configuration
+from app.core.logging_config import setup_application_logging
+from app.core.logging_middleware import (
+    RequestLoggingMiddleware,
+    PerformanceLoggingMiddleware,
+    SecurityLoggingMiddleware,
+    AuditLoggingMiddleware,
+    ErrorLoggingMiddleware,
 )
 
-logger = structlog.get_logger()
 settings = get_settings()
 
+# Setup complete logging system
+loggers = setup_application_logging(environment=settings.ENVIRONMENT)
+
+# Get main logger
+logger = structlog.get_logger("agentbi")
+api_logger = logging.getLogger("agentbi.api")
+security_logger = logging.getLogger("agentbi.security")
+chat_logger = logging.getLogger("agentbi.chat")
+audit_logger = logging.getLogger("agentbi.audit")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -94,16 +132,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.info(f"Request: {request.method} {request.url}")
-    try:
-        response = await call_next(request)
-        logger.info(f"Response: {response.status_code}")
-        return response
-    except Exception as e:
-        logger.error(f"Request failed: {e}")
-        raise
+# Add logging middlewares
+app.add_middleware(ErrorLoggingMiddleware)
+app.add_middleware(AuditLoggingMiddleware)
+app.add_middleware(SecurityLoggingMiddleware)
+app.add_middleware(PerformanceLoggingMiddleware, slow_request_threshold=2.0)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Configure rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -167,3 +201,4 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower(),
     )
+

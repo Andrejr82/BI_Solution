@@ -93,3 +93,16 @@ data/token.json
 
 # Arquivo inválido do Windows
 nul
+node_modules
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+venv/
+node_modules/
+__pycache__/
+.venv/
+*.pyc

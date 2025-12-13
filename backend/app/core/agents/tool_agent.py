@@ -1,7 +1,12 @@
 # core/agents/tool_agent.py
 import logging
 import sys
+import os
 from typing import Any, Dict, List  # Import List for chat_history type hint
+
+# Suppress transformers warnings about torch
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
+os.environ['HF_HUB_OFFLINE'] = '1'
 
 try:
     from langchain.agents import AgentExecutor, create_tool_calling_agent
