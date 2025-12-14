@@ -21,12 +21,17 @@ from app.api.v1.endpoints import (
     frontend_logs,
     shared,
     preferences,
-    insights
+    insights,
+    health
 )
 
 api_router = APIRouter()
 
 # Include all endpoint routers
+# Health check endpoints (no auth required)
+api_router.include_router(health.router)
+
+# Authentication endpoints
 api_router.include_router(auth.router)
 api_router.include_router(auth_alt.router_alt)  # Login alternativo
 api_router.include_router(analytics.router)

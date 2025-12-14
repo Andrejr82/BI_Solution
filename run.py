@@ -76,6 +76,8 @@ class ProcessManager:
         self.processes: List[subprocess.Popen] = []
         self.dev_mode = dev_mode
         self.start_time = datetime.now()
+        self.temp_files: List[str] = []  # Track temporary files for cleanup
+        self.stream_threads: List = []  # Track streaming threads
 
         # Registra handler de sinais
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -131,7 +133,7 @@ class ProcessManager:
                     if pid:
                         self.log(f"Liberando porta {port} (Matando PID {pid})...", "WARNING")
                         subprocess.run(f"kill -9 {pid}", shell=True)
-                except:
+                except subprocess.CalledProcessError:
                     pass
                     
             # Aguarda 1 segundo para o SO liberar a porta
@@ -160,7 +162,7 @@ class ProcessManager:
                     if s.connect_ex(('localhost', port)) == 0:
                         self.log(f"{service} está respondendo na porta {port}", "SUCCESS")
                         return True
-            except:
+            except (socket.error, OSError):
                 pass
             time.sleep(0.5)
 
@@ -170,14 +172,77 @@ class ProcessManager:
     def _stream_output(self, process: subprocess.Popen, prefix: str):
         """Streams output from a process to stdout in a separate thread"""
         def reader():
-            for line in iter(process.stdout.readline, ''):
-                if line:
-                    print(f"[{prefix}] {line.strip()}")
-            process.stdout.close()
+            try:
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        break
+                    if line.strip():
+                        print(f"[{prefix}] {line.strip()}")
+            except Exception as e:
+                self.log(f"Erro ao ler output de {prefix}: {e}", "WARNING")
+            finally:
+                if process.stdout and not process.stdout.closed:
+                    try:
+                        process.stdout.close()
+                    except Exception:
+                        pass
 
         import threading
         t = threading.Thread(target=reader, daemon=True)
         t.start()
+        self.stream_threads.append(t)
+        return t
+
+    def _setup_backend_venv(self, backend_dir: Path) -> bool:
+        """Configura o ambiente virtual do backend se necessário"""
+        backend_venv = backend_dir / ".venv"
+        
+        if platform.system() == 'Windows':
+            venv_python = backend_venv / "Scripts" / "python.exe"
+            venv_pip = backend_venv / "Scripts" / "pip.exe"
+        else:
+            venv_python = backend_venv / "bin" / "python"
+            venv_pip = backend_venv / "bin" / "pip"
+        
+        # Verifica se o venv já existe e está funcional
+        if venv_python.exists():
+            self.log("Ambiente virtual do backend encontrado", "SUCCESS")
+            return True
+        
+        # Cria o ambiente virtual
+        self.log("Criando ambiente virtual do backend...", "INFO")
+        try:
+            import venv
+            venv.create(backend_venv, with_pip=True)
+            self.log("Ambiente virtual criado com sucesso", "SUCCESS")
+        except Exception as e:
+            self.log(f"Erro ao criar ambiente virtual: {e}", "ERROR")
+            return False
+        
+        # Verifica se requirements.txt existe
+        requirements_file = backend_dir / "requirements.txt"
+        if not requirements_file.exists():
+            self.log("Arquivo requirements.txt não encontrado", "WARNING")
+            return True
+        
+        # Instala dependências
+        self.log("Instalando dependências do backend...", "INFO")
+        try:
+            cmd = [str(venv_pip), "install", "-r", "requirements.txt"]
+            result = subprocess.run(
+                cmd,
+                cwd=backend_dir,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.log("Dependências instaladas com sucesso", "SUCCESS")
+            return True
+        except subprocess.CalledProcessError as e:
+            self.log(f"Erro ao instalar dependências: {e.stderr}", "ERROR")
+            return False
+
 
     def start_backend(self) -> Optional[subprocess.Popen]:
         """Inicia o backend FastAPI"""
@@ -197,7 +262,12 @@ class ProcessManager:
             self.kill_process_on_port(8000)
             # Continua mesmo se não conseguir liberar (uvicorn pode forçar)
 
-        # Comando para iniciar backend usando Python do venv Poetry
+        # Configura ambiente virtual do backend
+        if not self._setup_backend_venv(backend_dir):
+            self.log("Falha ao configurar ambiente virtual do backend", "ERROR")
+            return None
+
+        # Comando para iniciar backend usando Python do venv
         backend_venv = backend_dir / ".venv"
         if platform.system() == 'Windows':
             venv_python = backend_venv / "Scripts" / "python.exe"
@@ -205,8 +275,6 @@ class ProcessManager:
             venv_python = backend_venv / "bin" / "python"
 
         if venv_python.exists():
-            # Removido --reload para evitar problemas com subprocess em alguns ambientes, 
-            # ou manter se for essencial. Manteremos --reload mas capturando output.
             cmd = [str(venv_python), '-m', 'uvicorn', 'main:app', '--reload', '--host', '127.0.0.1', '--port', '8000']
         else:
             # Fallback para python global (não recomendado)
@@ -284,16 +352,21 @@ class ProcessManager:
             install_cmd = ['pnpm', 'install'] if has_pnpm else ['npm', 'install']
 
             try:
-                subprocess.run(install_cmd, cwd=frontend_dir, check=True, shell=True)
+                subprocess.run(install_cmd, cwd=frontend_dir, check=True)
                 self.log("Dependências instaladas com sucesso", "SUCCESS")
-            except subprocess.CalledProcessError:
-                self.log("Erro ao instalar dependências do frontend", "ERROR")
+            except subprocess.CalledProcessError as e:
+                self.log(f"Erro ao instalar dependências do frontend: {e}", "ERROR")
                 return None
 
         # Verifica se porta 3000 está livre
         if not self.check_port(3000):
-            self.log("Porta 3000 já está em uso!", "ERROR")
-            return None
+            self.log("Porta 3000 ocupada, tentando liberar...", "WARNING")
+            self.kill_process_on_port(3000)
+            
+        # Verifica novamente se liberou
+        if not self.check_port(3000):
+             self.log("Porta 3000 ainda está em uso! O frontend pode falhar ao iniciar.", "ERROR")
+             # Tentamos iniciar mesmo assim, pois o Next.js pode tentar outra porta ou o kill pode ter demorado
 
         # Comando para iniciar frontend
         cmd = ['pnpm', 'dev'] if has_pnpm else ['npm', 'run', 'dev']
@@ -304,17 +377,20 @@ class ProcessManager:
         try:
             # Define variável de ambiente para o frontend usar a URL correta
             env = os.environ.copy()
-            env['NEXT_PUBLIC_API_URL'] = 'http://127.0.0.1:8000'
+            env['VITE_API_URL'] = 'http://127.0.0.1:8000'  # Correto para SolidJS/Vite
+            
+            # No Windows, usa shell=True apenas se necessário para encontrar npm/pnpm
+            use_shell = platform.system() == 'Windows'
+            
             process = subprocess.Popen(
                 cmd,
                 cwd=frontend_dir,
                 env=env,
                 stdout=subprocess.PIPE if not self.dev_mode else None,
-                stderr=subprocess.PIPE if not self.dev_mode else None,
+                stderr=subprocess.STDOUT if not self.dev_mode else None,
                 text=True,
                 bufsize=1,
-                universal_newlines=True,
-                shell=True  # Necessário no Windows para encontrar npm/pnpm no PATH
+                shell=use_shell
             )
 
             self.processes.append(process)
@@ -355,7 +431,7 @@ class ProcessManager:
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL,
                          check=True,
-                         shell=True)
+                         shell=platform.system() == 'Windows')
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
@@ -367,7 +443,7 @@ class ProcessManager:
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL,
                          check=True,
-                         shell=True)
+                         shell=platform.system() == 'Windows')
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
@@ -379,7 +455,7 @@ class ProcessManager:
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL,
                          check=True,
-                         shell=True)
+                         shell=platform.system() == 'Windows')
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
@@ -450,6 +526,9 @@ class ProcessManager:
                 f.write(html_content)
                 temp_file = f.name
 
+            # Rastreia arquivo temporário para limpeza posterior
+            self.temp_files.append(temp_file)
+            
             self.log("Cache do navegador será limpo automaticamente", "INFO")
 
             # Abre o arquivo temporário ao invés da URL direta
@@ -459,9 +538,12 @@ class ProcessManager:
             def cleanup_temp_file():
                 time.sleep(10)
                 try:
-                    os.unlink(temp_file)
-                except:
-                    pass
+                    if os.path.exists(temp_file):
+                        os.unlink(temp_file)
+                        if temp_file in self.temp_files:
+                            self.temp_files.remove(temp_file)
+                except Exception as e:
+                    self.log(f"Erro ao limpar arquivo temporário: {e}", "WARNING")
 
             import threading
             cleanup_thread = threading.Thread(target=cleanup_temp_file, daemon=True)
@@ -482,17 +564,27 @@ class ProcessManager:
         self.log("Pressione Ctrl+C para encerrar todos os processos", "WARNING")
         self.log("", "INFO")
 
-        try:
-            while True:
-                time.sleep(1)
-
-                # Verifica se algum processo morreu
+        import threading
+        shutdown_event = threading.Event()
+        
+        def check_processes():
+            """Thread que monitora o status dos processos"""
+            while not shutdown_event.is_set():
                 for i, proc in enumerate(self.processes):
                     if proc.poll() is not None:
                         self.log(f"Processo {i} (PID {proc.pid}) encerrou inesperadamente!", "ERROR")
-                        self.shutdown()
-                        sys.exit(1)
-
+                        shutdown_event.set()
+                        return
+                shutdown_event.wait(timeout=1)
+        
+        monitor_thread = threading.Thread(target=check_processes, daemon=True)
+        monitor_thread.start()
+        
+        try:
+            shutdown_event.wait()
+            if shutdown_event.is_set():
+                self.shutdown()
+                sys.exit(1)
         except KeyboardInterrupt:
             pass
 
@@ -519,6 +611,15 @@ class ProcessManager:
 
             except Exception as e:
                 self.log(f"Erro ao encerrar processo {i}: {e}", "ERROR")
+
+        # Limpa arquivos temporários
+        for temp_file in self.temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    self.log(f"Arquivo temporário removido: {temp_file}", "INFO")
+            except Exception as e:
+                self.log(f"Erro ao limpar arquivo temporário {temp_file}: {e}", "WARNING")
 
         uptime = (datetime.now() - self.start_time).total_seconds()
         self.log(f"Sistema rodou por {uptime:.2f}s", "INFO")

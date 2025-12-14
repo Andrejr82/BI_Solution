@@ -214,10 +214,10 @@ export default function Dashboard() {
         {/* KPI Cards */}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Produtos */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm">
+          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm border-l-4 border-l-primary hover:shadow-lg transition-shadow">
             <div class="flex flex-row items-center justify-between space-y-0 pb-2">
               <span class="text-sm font-medium text-muted">Total de Produtos</span>
-              <Package size={16} class="text-blue-500" />
+              <Package size={16} class="text-primary" />
             </div>
             <div class="text-2xl font-bold">
               {kpis()!.total_produtos.toLocaleString()}
@@ -226,10 +226,10 @@ export default function Dashboard() {
           </div>
 
           {/* Total UNEs */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm">
+          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm border-l-4 border-l-primary hover:shadow-lg transition-shadow">
             <div class="flex flex-row items-center justify-between space-y-0 pb-2">
               <span class="text-sm font-medium text-muted">Total de UNEs</span>
-              <ShoppingCart size={16} class="text-green-500" />
+              <ShoppingCart size={16} class="text-accent" />
             </div>
             <div class="text-2xl font-bold">
               {kpis()!.total_unes.toLocaleString()}
@@ -238,22 +238,22 @@ export default function Dashboard() {
           </div>
 
           {/* Produtos em Ruptura */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm">
+          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm border-l-4 border-l-primary hover:shadow-lg transition-shadow">
             <div class="flex flex-row items-center justify-between space-y-0 pb-2">
               <span class="text-sm font-medium text-muted">Produtos em Ruptura</span>
-              <AlertTriangle size={16} class="text-red-500" />
+              <AlertTriangle size={16} class="text-destructive" />
             </div>
-            <div class="text-2xl font-bold text-red-500">
+            <div class="text-2xl font-bold text-destructive">
               {kpis()!.produtos_ruptura.toLocaleString()}
             </div>
             <p class="text-xs text-muted mt-1">CD zerado + Loja abaixo da LV</p>
           </div>
 
           {/* Valor do Estoque */}
-          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm">
+          <div class="p-6 rounded-xl border bg-card text-card-foreground shadow-sm border-l-4 border-l-primary hover:shadow-lg transition-shadow">
             <div class="flex flex-row items-center justify-between space-y-0 pb-2">
               <span class="text-sm font-medium text-muted">Valor do Estoque</span>
-              <DollarSign size={16} class="text-purple-500" />
+              <DollarSign size={16} class="text-accent" />
             </div>
             <div class="text-2xl font-bold">
               {kpis()!.valor_estoque.toLocaleString('pt-BR')}

@@ -1,19 +1,25 @@
 /**
- * Script para limpar portas específicas no Windows
- * Mata processos que estão usando as portas 8000 e 3000
+ * Cross-platform script to kill processes on specific ports
+ * Works on Windows, Linux, and macOS
+ * Ports: 8000 (Backend), 3000 (Frontend)
  */
 
 const { execSync } = require('child_process');
+const os = require('os');
 
 const PORTS = [8000, 3000];
+const platform = os.platform();
 
-console.log('🧹 Limpando portas...\n');
+console.log(`🧹 Limpando portas... (${platform})\n`);
 
-PORTS.forEach(port => {
+/**
+ * Kill process on Windows
+ */
+function killPortWindows(port) {
   try {
     console.log(`[${port}] Verificando porta ${port}...`);
 
-    // Encontra o PID usando a porta
+    // Find PID using the port
     const result = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'ignore']
@@ -24,7 +30,7 @@ PORTS.forEach(port => {
       return;
     }
 
-    // Extrai PIDs únicos
+    // Extract unique PIDs
     const pids = [...new Set(
       result
         .split('\n')
@@ -41,7 +47,7 @@ PORTS.forEach(port => {
       return;
     }
 
-    // Mata cada processo
+    // Kill each process
     pids.forEach(pid => {
       try {
         console.log(`[${port}] 🔪 Encerrando processo ${pid}...`);
@@ -55,8 +61,74 @@ PORTS.forEach(port => {
     console.log(`[${port}] ✅ Porta ${port} liberada\n`);
 
   } catch (err) {
-    // Porta já está livre
+    // Port already free
     console.log(`[${port}] ✅ Porta livre\n`);
+  }
+}
+
+/**
+ * Kill process on Unix-like systems (Linux, macOS)
+ */
+function killPortUnix(port) {
+  try {
+    console.log(`[${port}] Verificando porta ${port}...`);
+
+    // Find PID using lsof
+    let result;
+    try {
+      result = execSync(`lsof -ti :${port}`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+    } catch (err) {
+      // No process found (port is free)
+      console.log(`[${port}] ✅ Porta livre\n`);
+      return;
+    }
+
+    if (!result || !result.trim()) {
+      console.log(`[${port}] ✅ Porta livre\n`);
+      return;
+    }
+
+    // Extract PIDs
+    const pids = result
+      .trim()
+      .split('\n')
+      .filter(pid => pid && pid.trim());
+
+    if (pids.length === 0) {
+      console.log(`[${port}] ✅ Porta livre\n`);
+      return;
+    }
+
+    // Kill each process
+    pids.forEach(pid => {
+      try {
+        console.log(`[${port}] 🔪 Encerrando processo ${pid}...`);
+        execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+        console.log(`[${port}] ✅ Processo ${pid} encerrado`);
+      } catch (err) {
+        console.log(`[${port}] ⚠️  Não foi possível encerrar processo ${pid}`);
+      }
+    });
+
+    console.log(`[${port}] ✅ Porta ${port} liberada\n`);
+
+  } catch (err) {
+    // Port already free
+    console.log(`[${port}] ✅ Porta livre\n`);
+  }
+}
+
+/**
+ * Main execution
+ */
+PORTS.forEach(port => {
+  if (platform === 'win32') {
+    killPortWindows(port);
+  } else {
+    killPortUnix(port);
   }
 });
 

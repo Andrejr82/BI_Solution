@@ -19,7 +19,19 @@ class SupabaseUserService:
     """Service for managing users in Supabase"""
 
     def __init__(self):
-        self.client = get_supabase_client()
+        self._client = None
+
+    @property
+    def client(self):
+        """Lazy load Supabase client only when needed"""
+        if self._client is None:
+            if not settings.USE_SUPABASE_AUTH:
+                raise ValueError(
+                    "Supabase authentication is disabled. "
+                    "This service requires USE_SUPABASE_AUTH=true in .env"
+                )
+            self._client = get_supabase_client()
+        return self._client
 
     def create_user(
         self,

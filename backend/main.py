@@ -3,32 +3,6 @@ FastAPI Main Application
 Entry point for the backend API
 """
 
-# ========================================
-# CRITICAL: Mock transformers BEFORE any other imports
-# This prevents PyTorch DLL loading errors on Windows
-# ========================================
-import sys
-import types
-
-# Create a mock transformers module to avoid PyTorch DLL issues
-transformers_mock = types.ModuleType('transformers')
-
-class MockGPT2TokenizerFast:
-    """Mock GPT2 tokenizer to prevent transformers import"""
-    def __init__(self, *args, **kwargs):
-        pass
-
-    @staticmethod
-    def from_pretrained(*args, **kwargs):
-        return MockGPT2TokenizerFast()
-
-transformers_mock.GPT2TokenizerFast = MockGPT2TokenizerFast
-sys.modules['transformers'] = transformers_mock
-print("[MOCK] Transformers module mocked to avoid PyTorch DLL issues")
-
-# ========================================
-# Now proceed with normal imports
-# ========================================
 from contextlib import asynccontextmanager
 import logging
 import os
@@ -123,10 +97,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS - Permissive for debugging
+# Configure CORS
+origins = settings.BACKEND_CORS_ORIGINS.split(",") if isinstance(settings.BACKEND_CORS_ORIGINS, str) else settings.BACKEND_CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for debugging
+    allow_origins=origins,  # Use configured origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

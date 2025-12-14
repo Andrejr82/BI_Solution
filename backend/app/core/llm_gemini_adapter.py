@@ -32,7 +32,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
     Implementa padrão similar ao OpenAI com retry automático e tratamento de erros.
     """
 
-    def __init__(self, model_name: Optional[str] = None, gemini_api_key: Optional[str] = None):
+    def __init__(self, model_name: Optional[str] = None, gemini_api_key: Optional[str] = None, system_instruction: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
 
         if not GEMINI_AVAILABLE:
@@ -53,6 +53,9 @@ class GeminiLLMAdapter(BaseLLMAdapter):
         self.model_name = model_name or settings.LLM_MODEL_NAME or "gemini-1.5-flash"
         self.max_retries = 3  # ✅ Increased to 3 attempts
         self.retry_delay = 0.5  # ✅ 500ms entre tentativas
+
+        # Store configurable system instruction (default None)
+        self.system_instruction = system_instruction
 
         self.logger.info(f"Gemini adapter inicializado com modelo: {self.model_name}")
 
@@ -159,15 +162,8 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             model_name=self.model_name,
                             tools=gemini_tools if gemini_tools else None,
                             generation_config=generation_config,
-                            # Sistema de instruções para melhor raciocínio
-                            system_instruction="""Você é um assistente de BI altamente preciso.
-Antes de responder, analise a pergunta cuidadosamente.
-Para perguntas sobre dados:
-1. Primeiro identifique qual ferramenta usar
-2. Execute a consulta com os parâmetros corretos
-3. Analise os resultados antes de responder
-4. Formate a resposta de forma clara e organizada
-5. Se não encontrar dados, explique o motivo"""
+                            # Use configurable system instruction (set during __init__)
+                            system_instruction=self.system_instruction
                         )
 
                         chat_session = model.start_chat(history=gemini_messages[:-1])

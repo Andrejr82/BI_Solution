@@ -1,6 +1,6 @@
 # Agent Solution BI Project Overview
 
-This document provides an overview of the Agent Solution BI project, its architecture, how to set up the development environment, and how to build/run the application.
+This document provides an overview of the Agent Solution BI project. It reflects the current system status as of December 2025, following a migration to SolidJS and a modernized build system.
 
 ## Project Purpose
 
@@ -8,102 +8,85 @@ The Agent Solution BI project is a full-stack application that provides a conver
 
 ## Technologies Used
 
-*   **Frontend**: React (Next.js) with TypeScript, using Axios for API communication.
-*   **Backend**: FastAPI with Python, Pydantic for data validation, and SQLAlchemy for database interaction.
-*   **Database**: SQL Server for authentication and metadata, and Parquet files for main analytical data.
+*   **Frontend**: SolidJS with Vite and TailwindCSS (located in `frontend-solid`).
+*   **Backend**: FastAPI with Python 3.11+.
+*   **Database/Storage**:
+    *   **Authentication**: Hybrid system using Supabase (primary) with a Parquet file fallback (`users.parquet`) for local/offline development.
+    *   **Business Data**: SQL Server (structured data) and Parquet files (analytical data).
 *   **Language Model**: Google Gemini 2.5 Flash.
+*   **Orchestration**: Node.js scripts (`npm run dev`) and `concurrently` for managing processes.
 
 ## Architecture
 
-The project follows a full-stack architecture with a clear separation of concerns:
-*   **Frontend**: Built with React (Next.js), responsible for the user interface and interaction. It communicates with the backend via REST API calls.
-*   **Backend**: Implemented using FastAPI, handling business logic, data processing, database interactions, and integration with the Gemini language model.
-*   **Data Storage**: Utilizes SQL Server for structured data (authentication, metadata) and Parquet files for high-performance analytical data.
+The project follows a full-stack architecture:
+*   **Frontend (`frontend-solid`)**: Built with SolidJS for high performance. It communicates with the backend via REST API calls.
+*   **Backend (`backend`)**: A FastAPI application handling business logic, data processing, and LLM integration. It supports a "lazy loading" architecture to prevent crashes if external services (like Supabase or SQL Server) are unavailable.
+*   **Data Layer**:
+    *   **SQL Server**: Used for production data (can be disabled via `USE_SQL_SERVER=false`).
+    *   **Parquet**: Used for high-performance analytical data and as a fallback for authentication.
+    *   **Supabase**: Managed service for authentication and user profiles.
 
 ## Development Environment Setup
 
 ### Prerequisites
 
-*   Python 3.11+
-*   Node.js 20+
-*   SQL Server with the "ODBC Driver 17 for SQL Server" installed.
+*   **Python**: 3.11+
+*   **Node.js**: 18+ (20+ recommended)
+*   **Package Managers**: `npm` and `pnpm` (for frontend).
 
-### Virtual Environment Setup
+### Initial Setup
 
-It is highly recommended to use a Python virtual environment to manage backend dependencies.
-
-1.  **Create the virtual environment:**
+1.  **Install Root Dependencies:**
     ```bash
-    python -m venv .venv
+    npm install
     ```
-2.  **Activate the virtual environment:**
-    *   **Windows (PowerShell):**
-        ```powershell
-        .venv\Scripts\Activate.ps1
-        ```
-    *   **macOS and Linux:**
-        ```bash
-        source .venv/bin/activate
-        ```
 
-### Dependency Installation
+2.  **Environment Configuration:**
+    *   Ensure `backend/.env` exists (created automatically by validation scripts if missing).
+    *   **Critical**: Add your `GEMINI_API_KEY` to `backend/.env`.
 
-1.  **Backend Dependencies:**
-    With the virtual environment active, navigate to the `backend` directory and install:
+3.  **Install Sub-project Dependencies:**
     ```bash
-    pip install -r requirements.txt
+    # Installs both backend (pip) and frontend (pnpm) dependencies
+    npm run install
     ```
-2.  **Frontend Dependencies:**
-    Navigate to the `frontend-react` directory and install:
-    ```bash
-    pnpm install
-    ```
-
-### Important: DATABASE_URL Environment Variable
-
-A known issue involves the `DATABASE_URL` environment variable. Ensure it is *not* set in your terminal session to prevent conflicts with SQLite configurations.
-
-*   **Check (Windows PowerShell):**
-    ```powershell
-    $env:DATABASE_URL
-    ```
-*   **Clear for current session (Windows PowerShell):**
-    ```powershell
-    $env:DATABASE_URL = ""
-    # Or more explicitly:
-    Remove-Item Env:DATABASE_URL
-    ```
-*   **To remove permanently (Windows, requires admin):**
-    ```powershell
-    [System.Environment]::SetEnvironmentVariable("DATABASE_URL", $null, "Machine")
-    ```
-    *Restart your terminal after permanent removal.*
-
-## Configuration
-
-1.  **Backend Configuration:**
-    *   Navigate to the `backend` folder.
-    *   Create a `.env` file (e.g., copy from `.env.example`).
-    *   Ensure `USE_SQL_SERVER=True` is set in this `.env` file.
-    *   Verify that `DATABASE_URL` in `backend/app/config/settings.py` points correctly to your SQL Server instance with the right credentials.
+    *Alternatively:*
+    *   Backend: `npm run install:backend`
+    *   Frontend: `npm run install:frontend`
 
 ## Building and Running the Application
 
-The project provides a convenience script `run.bat` (for Windows) to start both the backend and frontend.
+The project now uses standard `npm` scripts for orchestration.
 
-1.  **From the project root directory, execute:**
-    ```bash
-    run.bat
-    ```
+### Start All Services (Recommended)
+```bash
+npm run dev
+```
+This command:
+1.  Cleans ports 8000 and 3000.
+2.  Starts the FastAPI backend (port 8000).
+3.  Starts the SolidJS frontend (port 3000).
+4.  Displays combined logs in the terminal.
 
-This script performs the following actions:
-*   Checks dependencies.
-*   Clears processes on port 8000.
-*   Starts the FastAPI backend on port 8000.
-*   Starts the React frontend on port 3000.
-*   Opens the browser automatically to `http://localhost:3000`.
+### Start Individually
+*   **Backend only**: `npm run dev:backend`
+*   **Frontend only**: `npm run dev:frontend`
+
+### Other Useful Commands
+*   **Clean Ports**: `npm run clean:ports` (Kills processes on 8000/3000)
+*   **Health Check**: `curl http://localhost:8000/health`
+
+## Documentation References
+
+For detailed information, refer to:
+*   **`README_NEW_SYSTEM.md`**: Quick start guide and system overview.
+*   **`MIGRATION_GUIDE.md`**: Details on the migration from `run.py`/React to `npm`/SolidJS.
+*   **`SYSTEM_STATUS.md`**: Current operational status and certification.
 
 ## Development Conventions
 
-*   **Code Formatting**: While specific tools aren't explicitly detailed in the main `README`, the presence of `.prettierrc` in `frontend-react` suggests Prettier is used for frontend code formatting. For Python backend, common practices like `black` or `ruff format` are likely followed, though not explicitly stated.
-*   **Testing**: The project includes a `backend/tests` directory and `frontend-react/jest.config.ts`, indicating a commitment to testing. The `README` also mentions a TODO for "more integration tests," suggesting an ongoing effort in this area.
+*   **Frontend**: SolidJS components, TailwindCSS for styling.
+*   **Backend**: Python FastAPI, strictly typed (Pydantic).
+*   **Testing**:
+    *   Backend: `pytest` (in `backend/tests`).
+    *   Frontend: `vitest` (configured in `frontend-solid`).

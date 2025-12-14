@@ -12,6 +12,10 @@ import json
 import asyncio
 import logging
 import sys
+import numpy as np
+import pandas as pd
+from decimal import Decimal
+from datetime import datetime, date
 
 # Import core dependencies
 from app.api.dependencies import get_current_active_user
@@ -32,6 +36,67 @@ from app.core.utils.response_validator import validate_response, validator_stats
 
 logger = logging.getLogger(__name__)
 
+
+def safe_json_dumps(obj: Any, **kwargs) -> str:
+    """
+    Safely serialize any Python object to JSON string.
+    Handles MapComposite, numpy types, pandas types, datetime, and other non-serializable objects.
+    """
+    def default_handler(o):
+        # Handle numpy types
+        if isinstance(o, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(o)
+        elif isinstance(o, (np.floating, np.float64, np.float32, np.float16)):
+            if np.isnan(o) or np.isinf(o):
+                return None
+            return float(o)
+        elif isinstance(o, np.ndarray):
+            return o.tolist()
+        elif isinstance(o, np.bool_):
+            return bool(o)
+
+        # Handle pandas types
+        elif isinstance(o, pd.Timestamp):
+            return o.isoformat()
+        elif isinstance(o, pd.Timedelta):
+            return str(o)
+        elif pd.isna(o):
+            return None
+
+        # Handle datetime types
+        elif isinstance(o, (datetime, date)):
+            return o.isoformat()
+
+        # Handle Decimal
+        elif isinstance(o, Decimal):
+            return float(o)
+
+        # Handle bytes
+        elif isinstance(o, bytes):
+            return o.decode('utf-8', errors='ignore')
+
+        # Handle SQLAlchemy Row/MapComposite and similar mapping types
+        elif hasattr(o, '_mapping'):
+            return dict(o._mapping)
+        elif hasattr(o, '__dict__') and not isinstance(o, type):
+            # Generic object with __dict__
+            return {k: v for k, v in o.__dict__.items() if not k.startswith('_')}
+
+        # Last resort: convert to string
+        else:
+            return str(o)
+
+    try:
+        # Merge default handler with any custom kwargs
+        if 'default' not in kwargs:
+            kwargs['default'] = default_handler
+        return json.dumps(obj, **kwargs)
+    except Exception as e:
+        logger.error(f"Failed to serialize object: {e}", exc_info=True)
+        # Ultimate fallback: return error as JSON
+        return json.dumps({"error": f"Serialization failed: {str(e)}"}, ensure_ascii=False)
+
+
 # Initialize agents and LLM globally for performance.
 llm = None
 field_mapper = None
@@ -51,7 +116,17 @@ def _initialize_agents_and_llm():
             logger.error("GEMINI_API_KEY is not set. LLM will not be initialized.")
             raise ValueError("GEMINI_API_KEY must be set in environment variables.")
 
-        llm = GeminiLLMAdapter(model_name=settings.LLM_MODEL_NAME, gemini_api_key=settings.GEMINI_API_KEY).get_llm()
+        # System instruction for conversational ChatBI
+        chatbi_system_instruction = """Você é um assistente conversacional inteligente com expertise em Business Intelligence.
+Responda a qualquer pergunta de forma útil e precisa.
+Para perguntas sobre dados de BI (estoque, vendas, produtos, etc.), use as ferramentas disponíveis.
+Seja conversacional, amigável e preciso."""
+
+        llm = GeminiLLMAdapter(
+            model_name=settings.LLM_MODEL_NAME,
+            gemini_api_key=settings.GEMINI_API_KEY,
+            system_instruction=chatbi_system_instruction
+        ).get_llm()
         
         field_mapper = FieldMapper()
         query_retriever = QueryRetriever(
@@ -111,7 +186,7 @@ async def stream_chat(
     except Exception as e:
         logger.error(f"SSE authentication failed: {e}")
         async def error_generator():
-            yield f"data: {json.dumps({'error': 'Não autenticado'})}\n\n"
+            yield f"data: {safe_json_dumps({'error': 'Não autenticado'})}\n\n"
         return StreamingResponse(error_generator(), media_type="text/event-stream")
 
     last_event_id = request.headers.get("Last-Event-ID")
@@ -122,7 +197,7 @@ async def stream_chat(
             event_counter = int(last_event_id) if last_event_id else 0
             
             if caculinha_bi_agent is None:
-                yield f"data: {json.dumps({'error': 'Agent system not initialized'})}\n\n"
+                yield f"data: {safe_json_dumps({'error': 'Agent system not initialized'})}\n\n"
                 return
 
             # Retrieve History
@@ -138,7 +213,7 @@ async def stream_chat(
                 logger.info(f"✅ CACHE HIT: Resposta encontrada em cache para: {q[:50]}...")
                 event_counter += 1
                 yield f"id: {event_counter}\n"
-                yield f"data: {json.dumps({'type': 'cache_hit', 'done': False})}\n\n"
+                yield f"data: {safe_json_dumps({'type': 'cache_hit', 'done': False})}\n\n"
                 agent_response = cached_response
             else:
                 # Run Agent with History (cache miss)
@@ -168,7 +243,7 @@ async def stream_chat(
                 if validation.confidence < 0.5:
                     event_counter += 1
                     yield f"id: {event_counter}\n"
-                    yield f"data: {json.dumps({'type': 'warning', 'message': 'Resposta com baixa confiança. Verifique os dados.', 'done': False})}\n\n"
+                    yield f"data: {safe_json_dumps({'type': 'warning', 'message': 'Resposta com baixa confiança. Verifique os dados.', 'done': False})}\n\n"
             else:
                 logger.info(f"✅ Validação OK: confidence={validation.confidence:.2f}")
 
@@ -196,20 +271,20 @@ async def stream_chat(
                         event_counter += 1
                         yield f"id: {event_counter}\n"
                         columns = list(table_data[0].keys())
-                        yield f"data: {json.dumps({'type': 'table', 'data': table_data, 'columns': columns, 'done': False})}\n\n"
+                        yield f"data: {safe_json_dumps({'type': 'table', 'data': table_data, 'columns': columns, 'done': False})}\n\n"
                         logger.info(f"Streaming table data with {len(table_data)} rows...")
                         response_text = f"Análise concluída com {len(table_data)} registros."
                     else:
-                        response_text = f"Resultados da sua análise:\n```json\n{json.dumps(response_content, indent=2, ensure_ascii=False)}\n```"
+                        response_text = f"Resultados da sua análise:\n```json\n{safe_json_dumps(response_content, indent=2, ensure_ascii=False)}\n```"
                 elif response_content:
-                    response_text = f"Resultados da sua análise:\n```json\n{json.dumps(response_content, indent=2, ensure_ascii=False)}\n```"
+                    response_text = f"Resultados da sua análise:\n```json\n{safe_json_dumps(response_content, indent=2, ensure_ascii=False)}\n```"
                 else:
                     response_text = "Sua análise foi processada."
 
                 if chart_spec:
                     event_counter += 1
                     yield f"id: {event_counter}\n"
-                    yield f"data: {json.dumps({'type': 'chart', 'chart_spec': chart_spec, 'done': False})}\n\n"
+                    yield f"data: {safe_json_dumps({'type': 'chart', 'chart_spec': chart_spec, 'done': False})}\n\n"
                     logger.info("Streaming chart spec...")
             
             # Save Assistant Response to History
@@ -228,25 +303,25 @@ async def stream_chat(
                 chunk_text = prefix + " ".join(chunk_words)
                 
                 event_counter += 1
-                
+
                 yield f"id: {event_counter}\n"
-                yield f"data: {json.dumps({'type': 'text', 'text': chunk_text, 'done': False})}\n\n"
+                yield f"data: {safe_json_dumps({'type': 'text', 'text': chunk_text, 'done': False})}\n\n"
                 
                 # Small delay to simulate typing speed if needed, but usually network latency is enough
                 # await asyncio.sleep(0.01)
 
             logger.info("Text streaming complete. Sending done signal.")
             yield f"id: {event_counter + 1}\n"
-            yield f"data: {json.dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
-            
+            yield f"data: {safe_json_dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
+
         except APIError as e:
             logger.error(f"Agent API Error in stream: {e.message}", exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'error': e.message, 'details': e.details})}\n\n"
-            yield f"data: {json.dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
+            yield f"data: {safe_json_dumps({'type': 'error', 'error': e.message, 'details': e.details})}\n\n"
+            yield f"data: {safe_json_dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
         except Exception as e:
             logger.error(f"Unexpected error in stream: {e}", exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'error': 'Um erro inesperado ocorreu. Tente novamente mais tarde.'})}\n\n"
-            yield f"data: {json.dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
+            yield f"data: {safe_json_dumps({'type': 'error', 'error': 'Um erro inesperado ocorreu. Tente novamente mais tarde.'})}\n\n"
+            yield f"data: {safe_json_dumps({'type': 'final', 'text': '', 'done': True})}\n\n"
     
     return StreamingResponse(
         event_generator(),
@@ -284,7 +359,7 @@ async def submit_feedback(
     os.makedirs(Path(settings.LEARNING_FEEDBACK_PATH), exist_ok=True)
     try:
         with open(feedback_file_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(feedback_entry, ensure_ascii=False) + "\n")
+            f.write(safe_json_dumps(feedback_entry, ensure_ascii=False) + "\n")
         logger.info(f"Feedback submitted by {current_user.username}: {feedback_entry}")
     except OSError as e:
         logger.error(f"Failed to write feedback to file: {e}", exc_info=True)

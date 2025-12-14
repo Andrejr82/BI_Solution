@@ -28,9 +28,11 @@ COLUMN_MAPPING = {
     'codigo': 'PRODUTO',
     'nome': 'NOME',
     'estoque_une': 'ESTOQUE_UNE',
+    'estoque_atual': 'ESTOQUE_UNE',  # Alias para estoque_atual
     'estoque_lv': 'ESTOQUE_LV',
     'estoque_cd': 'ESTOQUE_CD',
     'venda_30dd': 'VENDA_30DD',
+    'venda_30_d': 'VENDA_30DD',  # Alias para venda_30_d (compatibilidade com une_tools)
     'preco_venda': 'PRECO_VENDA',
     'preco_custo': 'PRECO_CUSTO',
 }

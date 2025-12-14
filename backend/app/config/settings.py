@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # Database - SQL Server
     # Usando aioodbc para suporte assíncrono com SQLAlchemy
     DATABASE_URL: str = Field(
-        default="mssql+aioodbc://AgenteVirtual:Cacula@2020@FAMILIA\\SQLJR,1433/Projeto_Caculinha?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+        default=""
     )
     DB_ECHO: bool = False
     DB_POOL_SIZE: int = 10
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # Connection string para aioodbc (SQLServerAdapter)
     # Deve corresponder aos mesmos parâmetros do DATABASE_URL
     PYODBC_CONNECTION_STRING: str = Field(
-        default="DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=Projeto_Caculinha;UID=AgenteVirtual;PWD=Cacula@2020;TrustServerCertificate=yes"
+        default=""
     )
     
     # Hybrid Architecture Flags

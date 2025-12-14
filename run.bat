@@ -10,6 +10,9 @@ echo   AGENT BI - INICIANDO SISTEMA
 echo ========================================
 echo.
 
+REM Prevenir conflitos de variaveis de ambiente (ver GEMINI.md)
+set "DATABASE_URL="
+
 REM Verificar se Node.js está instalado
 where node >nul 2>nul
 if %errorlevel% neq 0 (
@@ -29,11 +32,8 @@ if %errorlevel% neq 0 (
 )
 
 REM Limpar processos antigos
-echo [1/5] Limpando processos antigos...
-taskkill /F /IM python.exe 2>nul
-taskkill /F /IM node.exe 2>nul
-timeout /t 2 /nobreak >nul
-echo [OK] Processos limpos.
+echo [1/5] Verificando ambiente...
+REM A limpeza de portas sera feita pelo script Python ou JS de forma mais segura.
 echo.
 
 REM Limpar cache Python
@@ -47,17 +47,6 @@ echo.
 
 REM Instalar/Verificar dependências
 echo [3/5] Verificando dependencias...
-
-REM Verificar concurrently
-if not exist node_modules\concurrently (
-    echo [INFO] Instalando concurrently...
-    call npm install --silent
-    if %errorlevel% neq 0 (
-        echo [ERRO] Falha ao instalar concurrently
-        pause
-        exit /b 1
-    )
-)
 
 REM Verificar frontend dependencies
 if not exist frontend-solid\node_modules (
@@ -96,7 +85,7 @@ node scripts/clean-port.js
 echo [OK] Portas limpas.
 echo.
 
-REM Iniciar sistema com concurrently
+REM Iniciar sistema com Python Orchestrator
 echo [6/6] Iniciando sistema...
 echo.
 echo ========================================
@@ -113,13 +102,11 @@ echo   Senha:    Admin@2024
 echo.
 echo ========================================
 echo.
-echo [INFO] Backend e Frontend rodando no mesmo terminal
-echo [INFO] Logs coloridos por servico:
-echo        - BACKEND  (azul)
-echo        - FRONTEND (verde)
+echo [INFO] O Python gerenciara os processos do Backend e Frontend.
+echo [INFO] Logs serao exibidos neste terminal.
 echo.
 echo [DICA] Pressione Ctrl+C para encerrar todos os processos
 echo.
 
-REM Iniciar com concurrently
-call npm run dev
+REM Iniciar com run.py
+python run.py

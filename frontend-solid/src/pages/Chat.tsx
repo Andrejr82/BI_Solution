@@ -380,7 +380,7 @@ export default function Chat() {
             <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 class={`max-w-[80%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary/10 border border-primary/20 text-foreground'
                     : 'bg-card border text-card-foreground'
                   }`}
               >

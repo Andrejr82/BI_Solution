@@ -1,5 +1,9 @@
 import json
 import logging
+import numpy as np
+import pandas as pd
+from decimal import Decimal
+from datetime import datetime, date
 from typing import Any, Dict, List, Optional
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
@@ -15,11 +19,68 @@ from app.core.tools.une_tools import (
 )
 from app.core.tools.flexible_query_tool import consultar_dados_flexivel
 
-# Optional: Import CodeGenAgent just for type hinting if needed, 
+# Optional: Import CodeGenAgent just for type hinting if needed,
 # but we won't use it for logic anymore.
 from app.core.utils.field_mapper import FieldMapper
 
 logger = logging.getLogger(__name__)
+
+
+def safe_json_serialize(obj: Any) -> str:
+    """
+    Safely serialize any Python object to JSON string.
+    Handles MapComposite, numpy types, pandas types, datetime, and other non-serializable objects.
+    """
+    def default_handler(o):
+        # Handle numpy types
+        if isinstance(o, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(o)
+        elif isinstance(o, (np.floating, np.float64, np.float32, np.float16)):
+            if np.isnan(o) or np.isinf(o):
+                return None
+            return float(o)
+        elif isinstance(o, np.ndarray):
+            return o.tolist()
+        elif isinstance(o, np.bool_):
+            return bool(o)
+
+        # Handle pandas types
+        elif isinstance(o, pd.Timestamp):
+            return o.isoformat()
+        elif isinstance(o, pd.Timedelta):
+            return str(o)
+        elif pd.isna(o):
+            return None
+
+        # Handle datetime types
+        elif isinstance(o, (datetime, date)):
+            return o.isoformat()
+
+        # Handle Decimal
+        elif isinstance(o, Decimal):
+            return float(o)
+
+        # Handle bytes
+        elif isinstance(o, bytes):
+            return o.decode('utf-8', errors='ignore')
+
+        # Handle SQLAlchemy Row/MapComposite and similar mapping types
+        elif hasattr(o, '_mapping'):
+            return dict(o._mapping)
+        elif hasattr(o, '__dict__') and not isinstance(o, type):
+            # Generic object with __dict__
+            return {k: v for k, v in o.__dict__.items() if not k.startswith('_')}
+
+        # Last resort: convert to string
+        else:
+            return str(o)
+
+    try:
+        return json.dumps(obj, ensure_ascii=False, default=default_handler)
+    except Exception as e:
+        logger.error(f"Failed to serialize object: {e}", exc_info=True)
+        # Ultimate fallback: return error as JSON
+        return json.dumps({"error": f"Serialization failed: {str(e)}"}, ensure_ascii=False)
 
 class CaculinhaBIAgent:
     """
@@ -50,9 +111,22 @@ class CaculinhaBIAgent:
         # Convert LangChain tools to Gemini Function Declarations
         self.gemini_tools = self._convert_tools_to_gemini_format(self.bi_tools)
         
-        # System instruction - Otimizado com estrutura real dos dados
-        self.system_prompt = """Você é o Assistente de BI da Caculinha (Agent Solution BI), powered by Gemini 2.0.
-Seu objetivo é ajudar usuários com dados de estoque, vendas, transferências e preços.
+        # System instruction - Conversacional + BI Expert
+        self.system_prompt = """Você é o Assistente de BI da Caculinha, powered by Gemini 2.0.
+Você é um assistente conversacional inteligente com expertise em Business Intelligence e análise de dados.
+
+PERSONALIDADE:
+- Conversacional e amigável, como ChatGPT
+- Responda a QUALQUER pergunta, não apenas sobre BI ou dados
+- Para perguntas gerais (saudações, conhecimentos gerais, etc.): responda normalmente de forma útil e precisa
+- Para perguntas sobre dados de BI: use suas ferramentas especializadas
+
+QUANDO USAR FERRAMENTAS BI:
+Use as ferramentas APENAS quando o usuário perguntar sobre:
+- Dados de estoque, vendas, produtos, lojas (UNE)
+- Análises de transferências, abastecimento, rupturas
+- Preços, margens, fabricantes, segmentos
+- Qualquer consulta que envolva o banco de dados admmat.parquet
 
 BANCO DE DADOS: admmat.parquet (1.113.822 registros, 97 colunas)
 
@@ -66,55 +140,68 @@ COLUNAS PRINCIPAIS DISPONÍVEIS:
 - **Status**: SITUACAO, PICKLIST_SITUACAO
 
 MAPEAMENTO DE FILTROS (use exatamente esses nomes):
-- Para filtrar por UNE: {"une": 261} ou {"UNE": 261}
+- Para filtrar por UNE: {"une": 2365} ou {"UNE": 2365}
 - Para filtrar por fabricante: {"nomefabricante": "NOME_FABRICANTE"}
 - Para filtrar por produto: {"codigo": "123456"} ou {"PRODUTO": "123456"}
-- Para filtrar por segmento: {"nomesegmento": "NOME_SEGMENTO"}
+- Para filtrar por segmento: {"nomesegmento": "TECIDOS"}
 
 FERRAMENTAS DISPONÍVEIS:
 
-1. **consultar_dados_flexivel** - USE PARA QUALQUER CONSULTA
+1. **consultar_dados_flexivel** - USE PARA QUALQUER CONSULTA DE DADOS
    Parâmetros importantes:
-   - filtros: {"une": 261, "nomefabricante": "TNT"}
+   - filtros: {"une": 2365, "nomesegmento": "TECIDOS"}
    - agregacao: "sum", "avg", "count", "min", "max"
-   - coluna_agregacao: "venda_30_d", "estoque_atual", "preco_venda"
+   - coluna_agregacao: "venda_30dd", "estoque_atual", "preco_venda"
    - agrupar_por: ["une"], ["nomefabricante"], ["nomesegmento"]
-   - ordenar_por: "venda_30_d", "estoque_atual"
+   - ordenar_por: "venda_30dd", "estoque_atual"
    - limite: número de resultados (padrão 20)
 
 2. **consultar_dados_gerais** - Alternativa para consultas simples
 
-3. **calcular_abastecimento_une** - Reposição e linha verde
+3. **calcular_abastecimento_une** - Produtos que precisam reposição
 
-4. **calcular_mc_produto** - Média Comum (MC)
+4. **calcular_mc_produto** - Média Comum (MC) de produtos
 
-5. **calcular_preco_final_une** - Preços com descontos
+5. **calcular_preco_final_une** - Preços com descontos aplicados
 
-6. **sugerir_transferencias_automaticas** - Sugestões de transferência
+6. **sugerir_transferencias_automaticas** - Sugestões de transferência entre lojas
 
-7. **encontrar_rupturas_criticas** - Produtos em ruptura
+7. **validar_transferencia_produto** - Validar viabilidade de transferências
+
+8. **encontrar_rupturas_criticas** - Produtos em ruptura crítica
 
 EXEMPLOS DE USO:
+
+Pergunta: "Olá, como você está?"
+Resposta: "Olá! Estou muito bem, obrigado por perguntar! 😊 Como posso ajudá-lo hoje? Posso responder perguntas gerais ou ajudá-lo com análises de dados de BI da Caculinha."
+
+Pergunta: "Qual é a capital do Brasil?"
+Resposta: "A capital do Brasil é Brasília, localizada no Distrito Federal. Foi inaugurada em 21 de abril de 1960 durante o governo de Juscelino Kubitschek."
+
+Pergunta: "Vendas totais do segmento TECIDOS na UNE 2365"
+Usar: consultar_dados_flexivel(filtros={"une": 2365, "nomesegmento": "TECIDOS"}, agregacao="sum", coluna_agregacao="venda_30dd")
 
 Pergunta: "Produtos do fabricante TNT"
 Usar: consultar_dados_flexivel(filtros={"nomefabricante": "TNT"}, limite=20)
 
 Pergunta: "Total de vendas da UNE 261"
-Usar: consultar_dados_flexivel(filtros={"une": 261}, agregacao="sum", coluna_agregacao="venda_30_d")
+Usar: consultar_dados_flexivel(filtros={"une": 261}, agregacao="sum", coluna_agregacao="venda_30dd")
 
 Pergunta: "Top 10 mais vendidos"
-Usar: consultar_dados_flexivel(ordenar_por="venda_30_d", ordem_desc=True, limite=10)
+Usar: consultar_dados_flexivel(ordenar_por="venda_30dd", ordem_desc=True, limite=10)
 
 Pergunta: "Estoque por segmento"
 Usar: consultar_dados_flexivel(agregacao="sum", coluna_agregacao="estoque_atual", agrupar_por=["nomesegmento"])
 
 DIRETRIZES:
-- SEMPRE use as ferramentas, NUNCA invente dados
+- Responda QUALQUER pergunta, não se limite apenas a BI
+- Para perguntas gerais: seja útil, preciso e conversacional
+- Para perguntas sobre dados: SEMPRE use as ferramentas, NUNCA invente dados
 - Use os nomes de colunas EXATOS listados acima
 - Se a coluna não existir, informe ao usuário
 - Formate números: 1.234,56 (BR) ou use separadores de milhar
 - Seja conciso mas informativo
-- Use emojis: 📊 📈 ⚠️ ✅ 📦 💰
+- Use emojis: 📊 📈 ⚠️ ✅ 📦 💰 😊 👋
 """
 
     def _convert_tools_to_gemini_format(self, tools: List[BaseTool]) -> Dict[str, List[Dict[str, Any]]]:
@@ -156,7 +243,7 @@ DIRETRIZES:
     def _clean_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
         Recursively cleans Pydantic JSON Schema for Gemini compatibility.
-        Removes 'anyOf', 'title', and handles Optional types.
+        Removes 'anyOf', 'title', 'default', 'additionalProperties', and handles Optional types.
         """
         if not isinstance(schema, dict):
             return schema
@@ -167,9 +254,12 @@ DIRETRIZES:
         if "title" in new_schema:
             del new_schema["title"]
         if "default" in new_schema:
-            # Gemini sometimes complains about defaults in complex ways, 
+            # Gemini sometimes complains about defaults in complex ways,
             # but keeping them is usually fine. Removing 'title' is most important.
             del new_schema["default"]
+        if "additionalProperties" in new_schema:
+            # Gemini API doesn't support 'additionalProperties' field
+            del new_schema["additionalProperties"]
 
         # Handle anyOf (generated by Pydantic for Optional[Type])
         if "anyOf" in new_schema:
@@ -262,10 +352,11 @@ DIRETRIZES:
 
                         # Add tool result to messages (User role with function_response)
                         # The adapter expects specific structure for function responses
+                        # Use safe_json_serialize to handle MapComposite and other non-serializable types
                         messages.append({
                             "role": "function", # Adapter will map this to user/function_response
                             "function_call": {"name": func_name}, # Metadata for adapter
-                            "content": json.dumps(tool_result, ensure_ascii=False)
+                            "content": safe_json_serialize(tool_result)
                         })
                     
                     # Loop continues to send tool outputs back to LLM
