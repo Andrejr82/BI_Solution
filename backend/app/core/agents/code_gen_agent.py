@@ -2,34 +2,41 @@
 
 import json
 import re
+import logging
 from typing import Any, Dict, List, Optional
-from langchain_core.language_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnablePassthrough
+import os
+from functools import lru_cache
 
 from app.core.utils.field_mapper import FieldMapper
 from app.core.utils.error_handler import APIError
 from app.core.utils.query_history import QueryHistory
-from app.core.utils.response_cache import ResponseCache # Placeholder, will be implemented later
-from app.config.settings import settings # For cache settings
-
-import logging
-logger = logging.getLogger(__name__) # Added logger
-
+from app.core.utils.response_cache import ResponseCache 
+from app.config.settings import settings 
 from app.core.learning.pattern_matcher import PatternMatcher
 from app.core.rag.query_retriever import QueryRetriever
 
-import os
-from functools import lru_cache
+logger = logging.getLogger(__name__)
+
+LANGCHAIN_AVAILABLE = False
+try:
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import JsonOutputParser
+    from langchain_core.runnables import RunnablePassthrough
+    LANGCHAIN_AVAILABLE = True
+except (ImportError, OSError):
+    logger.warning("LangChain dependencies missing. CodeGenAgent will be disabled.")
+    BaseChatModel = object # Dummy for type hinting
 
 # Helper to load prompts from files
 @lru_cache(maxsize=None)
 def _load_prompt_template(filename: str) -> str:
     current_dir = os.path.dirname(__file__)
     prompt_path = os.path.join(current_dir, "..", "prompts", filename)
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read()
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
 
 class CodeGenAgent:
     """
@@ -52,14 +59,16 @@ class CodeGenAgent:
         self.response_cache = response_cache if response_cache else ResponseCache()
         self.query_history = query_history if query_history else QueryHistory()
 
-        self.code_gen_prompt_template = _load_prompt_template("code_generation_system_prompt.md")
-        self.code_gen_prompt = ChatPromptTemplate.from_messages([
-            ("system", self.code_gen_prompt_template), # available_columns will be formatted at invoke time
-            ("human", "{user_query}\nSchema: {data_schema_info}\nExamples: {few_shot_examples}\nCode:"),
-        ])
-        
-        # Output parser for structured response from LLM
-        self.output_parser = JsonOutputParser()
+        if LANGCHAIN_AVAILABLE:
+            self.code_gen_prompt_template = _load_prompt_template("code_generation_system_prompt.md")
+            self.code_gen_prompt = ChatPromptTemplate.from_messages([
+                ("system", self.code_gen_prompt_template), 
+                ("human", "{user_query}\nSchema: {data_schema_info}\nExamples: {few_shot_examples}\nCode:"),
+            ])
+            self.output_parser = JsonOutputParser()
+        else:
+            self.code_gen_prompt = None
+            self.output_parser = None
 
     def _get_code_generation_system_prompt(self) -> str:
         # This method is no longer needed as prompt is loaded from file
@@ -71,11 +80,15 @@ class CodeGenAgent:
         and returns results, including chart specifications if requested.
         Includes self-healing for common errors.
         """
+        if not LANGCHAIN_AVAILABLE:
+             raise APIError("CodeGenAgent indisponível devido a falta de dependências (LangChain/Torch).", status_code=503)
+
         cache_key = self.response_cache.generate_key(user_query)
         cached_response = self.response_cache.get(cache_key)
         if cached_response:
             print(f"CodeGenAgent: Cache hit for query: {user_query}")
             return cached_response
+
 
         # Override available_columns with ACTUAL DataFrame columns from une_tools
         # This prevents the LLM from hallucinating column names based on the FieldMapper catalog

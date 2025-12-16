@@ -4,9 +4,10 @@ User management, audit logs, and system settings
 """
 
 import uuid
+import json # Added import
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks # Adicionado BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -16,7 +17,7 @@ from app.config.security import get_password_hash
 from app.infrastructure.database.models import AuditLog, Report, User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.core.parquet_cache import cache
-from app.core.sync_service import sync_service # Adicionado
+from app.core.sync_service import sync_service
 from app.core.supabase_user_service import supabase_user_service
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -172,7 +173,8 @@ async def create_user(
                 password=user_data.password,
                 username=user_data.username,
                 role=user_data.role,
-                full_name=user_data.username  # Can be enhanced later
+                full_name=user_data.username,  # Can be enhanced later
+                allowed_segments=user_data.allowed_segments # Added allowed_segments
             )
             return new_user
         except Exception as e:
@@ -201,6 +203,7 @@ async def create_user(
             email=user_data.email,
             hashed_password=hashed_password,
             role=user_data.role,
+            allowed_segments=json.dumps(user_data.allowed_segments) if user_data.allowed_segments else "[]" # Added allowed_segments
         )
 
         db.add(new_user)
@@ -213,6 +216,7 @@ async def create_user(
             "email": new_user.email,
             "role": new_user.role,
             "is_active": new_user.is_active,
+            "allowed_segments": user_data.allowed_segments
         }
 
 
@@ -241,7 +245,8 @@ async def update_user(
                 username=update_data.get("username"),
                 role=update_data.get("role"),
                 password=update_data.get("password"),
-                is_active=update_data.get("is_active")
+                is_active=update_data.get("is_active"),
+                allowed_segments=update_data.get("allowed_segments") # Added allowed_segments
             )
 
             if not updated_user:
@@ -274,6 +279,10 @@ async def update_user(
         if "password" in update_data:
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
 
+        # Handle allowed_segments conversion for SQL Server
+        if "allowed_segments" in update_data:
+            user.allowed_segments = json.dumps(update_data.pop("allowed_segments"))
+
         for field, value in update_data.items():
             setattr(user, field, value)
 
@@ -286,6 +295,7 @@ async def update_user(
             "email": user.email,
             "role": user.role,
             "is_active": user.is_active,
+            "allowed_segments": json.loads(user.allowed_segments) if user.allowed_segments else []
         }
 
 

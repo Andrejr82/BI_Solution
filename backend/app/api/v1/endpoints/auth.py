@@ -71,7 +71,8 @@ async def login(
     token_data = {
         "sub": user_data["id"],
         "username": user_data["username"],
-        "role": user_data["role"]
+        "role": user_data["role"],
+        "allowed_segments": user_data.get("allowed_segments", [])
     }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
@@ -130,7 +131,12 @@ async def refresh_token(
         if not user or not user.is_active:
             security_logger.warning(f"Refresh token for non-existent or inactive user ID: {user_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
-        token_data = {"sub": str(user.id), "username": user.username, "role": user.role}
+        token_data = {
+            "sub": str(user.id), 
+            "username": user.username, 
+            "role": user.role,
+            "allowed_segments": getattr(user, "allowed_segments", [])
+        }
         access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
         security_logger.info(f"User '{user.username}' refreshed token successfully.")

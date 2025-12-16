@@ -86,6 +86,7 @@ export interface Ruptura {
   CRITICIDADE_PCT: number;
   NECESSIDADE: number;
   NOMESEGMENTO?: string;
+  NOMEGRUPO?: string;  // Categoria/Grupo de produto
 }
 
 export interface RupturasSummary {
@@ -119,7 +120,7 @@ api.interceptors.response.use((response) => {
     localStorage.removeItem('token');
     // Forçar recarregamento para limpar estados
     if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      window.location.href = '/login';
     }
   }
   return Promise.reject(error);
@@ -131,6 +132,7 @@ export const analyticsApi = {
   getKpis: (days: number = 7) => api.get<KpiMetrics>(`/analytics/kpis?days=${days}`),
   getErrorTrend: (days: number = 30) => api.get<ErrorTrendItem[]>(`/analytics/error-trend?days=${days}`),
   getTopQueries: (days: number = 7, limit: number = 10) => api.get<TopQueryItem[]>(`/analytics/top-queries?days=${days}&limit=${limit}`),
+  getFilterOptions: () => api.get<{ categorias: string[], segmentos: string[] }>('/analytics/filter-options'),
 };
 
 export const reportsApi = {
@@ -144,6 +146,7 @@ export interface UserData {
   role: string;
   full_name?: string;
   is_active: boolean;
+  allowed_segments?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +156,7 @@ export interface CreateUserPayload {
   email: string;
   password: string;
   role: string;
+  allowed_segments?: string[];
 }
 
 export interface UpdateUserPayload {
@@ -161,6 +165,7 @@ export interface UpdateUserPayload {
   password?: string;
   role?: string;
   is_active?: boolean;
+  allowed_segments?: string[];
 }
 
 export const adminApi = {

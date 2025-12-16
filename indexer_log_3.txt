@@ -1,0 +1,17 @@
+2025-12-15 15:32:39,884 - INFO - Loading faiss with AVX2 support.
+2025-12-15 15:32:39,884 - INFO - Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2025-12-15 15:32:39,884 - INFO - Loading faiss.
+2025-12-15 15:32:39,897 - INFO - Successfully loaded faiss.
+2025-12-15 15:32:39,906 - INFO - ============================================================
+2025-12-15 15:32:39,906 - INFO - \U0001f680 Code Indexer - Generating RAG Index
+2025-12-15 15:32:39,906 - INFO - ============================================================
+Traceback (most recent call last):
+  File "C:\Agente_BI\BI_Solution\scripts\index_codebase.py", line 274, in <module>
+    main()
+  File "C:\Agente_BI\BI_Solution\scripts\index_codebase.py", line 246, in main
+    configure_llamaindex()
+  File "C:\Agente_BI\BI_Solution\scripts\index_codebase.py", line 65, in configure_llamaindex
+    if not api_key:
+           ^^^^^^^
+NameError: name 'api_key' is not defined

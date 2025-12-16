@@ -2,24 +2,33 @@
 import logging
 import sys
 import os
-from typing import Any, Dict, List  # Import List for chat_history type hint
+from typing import Any, Dict, List, Optional
 
 # Suppress transformers warnings about torch
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['HF_HUB_OFFLINE'] = '1'
 
+LANGCHAIN_AVAILABLE = False
 try:
-    from langchain.agents import AgentExecutor, create_tool_calling_agent
-except ImportError:
-    # Fallback for environments using langchain-classic (e.g., LangChain 0.3+ / 1.0.8)
-    from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+    try:
+        from langchain.agents import AgentExecutor, create_tool_calling_agent
+    except ImportError:
+        # Fallback for environments using langchain-classic
+        from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import (
-    BaseMessage,
-)  # Import BaseMessage for type hinting chat_history
-from langchain_core.runnables import RunnableConfig
-from langchain_core.agents import AgentAction, AgentFinish # Importar AgentAction e AgentFinish
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+    from langchain_core.messages import BaseMessage
+    from langchain_core.runnables import RunnableConfig
+    from langchain_core.agents import AgentAction, AgentFinish
+    
+    # Check for torch dependency explicitly to fail fast inside try block
+    import transformers
+    
+    LANGCHAIN_AVAILABLE = True
+except (ImportError, OSError) as e:
+    logging.warning(f"LangChain/Transformers dependencies not available: {e}. ToolAgent will run in fallback mode.")
+    # Define dummy classes for type hinting if needed, or just use Any
+    BaseMessage = Any
 
 from app.core.llm_base import BaseLLMAdapter
 from app.core.llm_gemini_adapter import GeminiLLMAdapter
@@ -36,42 +45,46 @@ class ToolAgent:
     def __init__(self, llm_adapter: BaseLLMAdapter):
         self.logger = logging.getLogger(__name__)
         self.llm_adapter = llm_adapter
+        self.agent_executor = None
 
-        self.langchain_llm = CustomLangChainLLM(llm_adapter=self.llm_adapter)
-
-        self.tools = unified_tools + date_time_tools + chart_tools
-        self.agent_executor = self._create_agent_executor()
-        self.logger.info("ToolAgent inicializado com adaptador Gemini.")
+        if LANGCHAIN_AVAILABLE:
+            try:
+                self.langchain_llm = CustomLangChainLLM(llm_adapter=self.llm_adapter)
+                self.tools = unified_tools + date_time_tools + chart_tools
+                self.agent_executor = self._create_agent_executor()
+                self.logger.info("ToolAgent inicializado com adaptador Gemini (LangChain ativo).")
+            except Exception as e:
+                self.logger.error(f"Erro ao inicializar LangChain Agent: {e}")
+                self.agent_executor = None
+        else:
+            self.logger.warning("ToolAgent rodando em modo degradado (sem LangChain).")
 
     def _create_agent_executor(self):
         """Cria e retorna um AgentExecutor com agente de ferramentas."""
+        if not LANGCHAIN_AVAILABLE:
+            return None
+            
         # ✅ FASE 3: PROMPT MINIMALISTA (30 linhas vs 168 linhas)
-        # Reduz tempo de processamento de 30s → 5s
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
                     "Você é um assistente BI especializado. Use as ferramentas disponíveis para responder queries sobre dados.\n\n"
-
                     "REGRAS:\n"
                     "1. Responda de forma natural e direta\n"
                     "2. Use formatação Markdown para valores (**R$ X,XX**, **X unidades**)\n"
                     "3. NUNCA mencione nomes técnicos de colunas\n"
                     "4. SEMPRE use ferramentas para consultar dados\n\n"
-
                     "FERRAMENTAS PRINCIPAIS:\n"
                     "- consultar_dados(coluna, valor, coluna_retorno) - Consulta dados específicos\n"
                     "- listar_colunas_disponiveis() - Lista colunas disponíveis\n"
                     "- gerar_grafico_* - Gera gráficos\n\n"
-
                     "EXEMPLOS:\n"
                     "Query: 'preço do produto 123'\n"
                     "Ferramenta: consultar_dados('PRODUTO', '123', 'LIQUIDO_38')\n"
                     "Resposta: 'O preço do produto 123 é **R$ 45,90**'\n\n"
-
                     "COLUNAS COMUNS: PRODUTO, NOME, LIQUIDO_38 (preço), ESTOQUE_UNE (estoque), NOMEFABRICANTE\n"
                     "Use listar_colunas_disponiveis() para ver todas.\n\n"
-
                     "Seja direto e profissional."
                 ),
                 MessagesPlaceholder(variable_name="chat_history"),
@@ -80,7 +93,6 @@ class ToolAgent:
             ]
         )
 
-        # Sempre usar LangChain AgentExecutor (mais estável)
         agent = create_tool_calling_agent(
             llm=self.langchain_llm, tools=self.tools, prompt=prompt
         )
@@ -93,9 +105,16 @@ class ToolAgent:
         )
 
     def process_query(
-        self, query: str, chat_history: List[BaseMessage] = None
+        self, query: str, chat_history: List[Any] = None
     ) -> Dict[str, Any]:
         """Processa a query do usuário usando o agente LangChain."""
+        
+        if not self.agent_executor:
+            return {
+                "type": "text",
+                "output": "⚠️ O sistema de Agentes Inteligentes está temporariamente indisponível (dependência ausente). Por favor, use o painel de Monitoramento ou contate o administrador."
+            }
+
         self.logger.info(f"Processando query com o Agente de Ferramentas: {query}")
         try:
             # Ensure chat_history is not None for invoke

@@ -1,6 +1,6 @@
-import { createSignal, onMount, Show, createResource, For } from 'solid-js';
+import { createSignal, onMount, Show, createResource, For, createEffect } from 'solid-js';
 import { BarChart3, TrendingUp, RefreshCw, Filter, X } from 'lucide-solid';
-import api from '../lib/api';
+import api, { analyticsApi } from '../lib/api'; // Import analyticsApi
 import { PlotlyChart } from '../components/PlotlyChart';
 import { ChartDownloadButton } from '../components/ChartDownloadButton';
 
@@ -35,11 +35,29 @@ export default function Analytics() {
   const [categoria, setCategoria] = createSignal('');
   const [segmento, setSegmento] = createSignal('');
 
-  // Carregar opções de filtro
-  const [filterOptions] = createResource<FilterOptions>(async () => {
-    const response = await api.get<FilterOptions>('/analytics/filter-options');
+  // Carregar opções de filtro (segmentos e todas as categorias)
+  const [allFilterOptions] = createResource<FilterOptions>(async () => {
+    const response = await analyticsApi.getFilterOptions(); // Use analyticsApi
     return response.data;
   });
+
+  // Carregar categorias filtradas por segmento
+  const [filteredCategoryOptions] = createResource(() => segmento(), async (segmento) => {
+    if (segmento === '') {
+      return allFilterOptions()?.categorias || [];
+    }
+    const response = await analyticsApi.getFilterOptions({ segmento: segmento });
+    return response.data.categorias;
+  });
+
+  // Efeito para resetar categoria quando o segmento muda
+  createEffect(() => {
+    // Apenas se o segmento realmente mudou e não é a inicialização
+    if (segmento() !== undefined) {
+      setCategoria('');
+    }
+  });
+
 
   // Chart specs
   const [vendasCategoriaChart, setVendasCategoriaChart] = createSignal<any>({});
@@ -69,7 +87,7 @@ export default function Analytics() {
   };
 
   const generateCharts = (analysisData: SalesAnalysis) => {
-    // 1. Vendas por Categoria (Bar Chart)
+    // 1. LOJAS CAÇULA - LIGHT THEME: Vendas por Categoria
     if (analysisData.vendas_por_categoria.length > 0) {
       const vendasSpec = {
         data: [{
@@ -77,41 +95,44 @@ export default function Analytics() {
           x: analysisData.vendas_por_categoria.map(c => c.categoria),
           y: analysisData.vendas_por_categoria.map(c => c.vendas),
           marker: {
-            color: '#3b82f6',
-            line: { color: '#1e40af', width: 1 }
+            color: '#8B7355', // Marrom Caçula
+            line: { color: '#E5E5E5', width: 1 }
           },
           text: analysisData.vendas_por_categoria.map(c => c.vendas.toLocaleString()),
           textposition: 'outside',
+          textfont: { color: '#2D2D2D', family: 'Inter, sans-serif' },
           hovertemplate: '<b>%{x}</b><br>Vendas: %{y:,}<extra></extra>'
         }],
         layout: {
           title: {
             text: 'Vendas por Categoria (Top 10)',
-            font: { size: 16, color: '#e5e7eb' }
+            font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
           },
           xaxis: {
             title: '',
             tickangle: -45,
-            tickfont: { size: 10, color: '#9ca3af' },
-            gridcolor: '#374151'
+            tickfont: { size: 10, color: '#6B6B6B', family: 'Inter, sans-serif' },
+            gridcolor: '#E5E5E5',
+            linecolor: '#E5E5E5'
           },
           yaxis: {
             title: 'Vendas (30 dias)',
-            titlefont: { color: '#9ca3af' },
-            tickfont: { color: '#9ca3af' },
-            gridcolor: '#374151'
+            titlefont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            gridcolor: '#E5E5E5',
+            linecolor: '#E5E5E5'
           },
-          plot_bgcolor: '#1f2937',
-          paper_bgcolor: '#1f2937',
+          plot_bgcolor: '#FFFFFF',
+          paper_bgcolor: '#FAFAFA',
           margin: { l: 60, r: 20, t: 60, b: 100 },
-          font: { color: '#e5e7eb' }
+          font: { color: '#2D2D2D', family: 'Inter, sans-serif' }
         },
         config: { responsive: true }
       };
       setVendasCategoriaChart(vendasSpec);
     }
 
-    // 2. Giro de Estoque (Line Chart)
+    // 2. LOJAS CAÇULA - LIGHT THEME: Giro de Estoque
     if (analysisData.giro_estoque.length > 0) {
       const giroSpec = {
         data: [{
@@ -121,11 +142,11 @@ export default function Analytics() {
           y: analysisData.giro_estoque.map(p => p.giro),
           text: analysisData.giro_estoque.map(p => p.nome),
           marker: {
-            color: '#10b981',
+            color: '#2D7A3E', // Verde oliva
             size: 8
           },
           line: {
-            color: '#10b981',
+            color: '#6B7A5A', // Verde oliva claro
             width: 2
           },
           hovertemplate: '<b>%{text}</b><br>Giro: %{y:.2f}<extra></extra>'
@@ -133,31 +154,33 @@ export default function Analytics() {
         layout: {
           title: {
             text: 'Giro de Estoque (Top 15 Produtos)',
-            font: { size: 16, color: '#e5e7eb' }
+            font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
           },
           xaxis: {
             title: 'Ranking',
-            titlefont: { color: '#9ca3af' },
-            tickfont: { color: '#9ca3af' },
-            gridcolor: '#374151'
+            titlefont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            gridcolor: '#E5E5E5',
+            linecolor: '#E5E5E5'
           },
           yaxis: {
             title: 'Taxa de Giro',
-            titlefont: { color: '#9ca3af' },
-            tickfont: { color: '#9ca3af' },
-            gridcolor: '#374151'
+            titlefont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+            gridcolor: '#E5E5E5',
+            linecolor: '#E5E5E5'
           },
-          plot_bgcolor: '#1f2937',
-          paper_bgcolor: '#1f2937',
+          plot_bgcolor: '#FFFFFF',
+          paper_bgcolor: '#FAFAFA',
           margin: { l: 60, r: 20, t: 60, b: 60 },
-          font: { color: '#e5e7eb' }
+          font: { color: '#2D2D2D', family: 'Inter, sans-serif' }
         },
         config: { responsive: true }
       };
       setGiroEstoqueChart(giroSpec);
     }
 
-    // 3. Distribuição ABC (Pie Chart)
+    // 3. LOJAS CAÇULA - LIGHT THEME: Distribuição ABC
     const abc = analysisData.distribuicao_abc;
     if (abc.A + abc.B + abc.C > 0) {
       const abcSpec = {
@@ -166,29 +189,33 @@ export default function Analytics() {
           labels: ['Classe A (20%)', 'Classe B (30%)', 'Classe C (50%)'],
           values: [abc.A, abc.B, abc.C],
           marker: {
-            colors: ['#10b981', '#f59e0b', '#ef4444']
+            colors: ['#2D7A3E', '#C9A961', '#B94343'], // Verde success, Dourado, Vermelho terroso
+            line: { color: '#FFFFFF', width: 2 }
           },
           textinfo: 'label+percent+value',
           textposition: 'inside',
-          textfont: { size: 12 },
+          textfont: { size: 12, color: '#FFFFFF', family: 'Inter, sans-serif' },
           hovertemplate: '<b>%{label}</b><br>Produtos: %{value}<br>%{percent}<extra></extra>'
         }],
         layout: {
           title: {
             text: 'Distribuição ABC (Curva de Pareto)',
-            font: { size: 16, color: '#e5e7eb' }
+            font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
           },
-          plot_bgcolor: '#1f2937',
-          paper_bgcolor: '#1f2937',
+          plot_bgcolor: '#FFFFFF',
+          paper_bgcolor: '#FAFAFA',
           margin: { l: 20, r: 20, t: 60, b: 20 },
-          font: { color: '#e5e7eb' },
+          font: { color: '#2D2D2D', family: 'Inter, sans-serif' },
           showlegend: true,
           legend: {
             orientation: 'h',
             x: 0.5,
             y: -0.1,
             xanchor: 'center',
-            font: { size: 10, color: '#9ca3af' }
+            font: { size: 10, color: '#6B6B6B', family: 'Inter, sans-serif' },
+            bgcolor: 'rgba(255,255,255,0.9)',
+            bordercolor: '#E5E5E5',
+            borderwidth: 1
           }
         },
         config: { responsive: true }
@@ -243,30 +270,32 @@ export default function Analytics() {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select
-            class="input"
-            value={categoria()}
-            onChange={(e) => setCategoria(e.currentTarget.value)}
-            disabled={filterOptions.loading}
-          >
-            <option value="">Todas as Categorias</option>
-            <Show when={filterOptions()}>
-              <For each={filterOptions()!.categorias}>
-                {(cat) => <option value={cat}>{cat}</option>}
-              </For>
-            </Show>
-          </select>
-
+          {/* Segmento */}
           <select
             class="input"
             value={segmento()}
             onChange={(e) => setSegmento(e.currentTarget.value)}
-            disabled={filterOptions.loading}
+            disabled={allFilterOptions.loading}
           >
             <option value="">Todos os Segmentos</option>
-            <Show when={filterOptions()}>
-              <For each={filterOptions()!.segmentos}>
+            <Show when={allFilterOptions()}>
+              <For each={allFilterOptions()!.segmentos}>
                 {(seg) => <option value={seg}>{seg}</option>}
+              </For>
+            </Show>
+          </select>
+
+          {/* Categoria (filtro dinâmico) */}
+          <select
+            class="input"
+            value={categoria()}
+            onChange={(e) => setCategoria(e.currentTarget.value)}
+            disabled={filteredCategoryOptions.loading}
+          >
+            <option value="">Todas as Categorias</option>
+            <Show when={filteredCategoryOptions()}>
+              <For each={filteredCategoryOptions()}>
+                {(cat) => <option value={cat}>{cat}</option>}
               </For>
             </Show>
           </select>
@@ -284,12 +313,12 @@ export default function Analytics() {
         <Show when={categoria() || segmento()}>
           <div class="flex gap-2 mt-3 flex-wrap">
             <span class="text-sm text-muted">Filtros ativos:</span>
-            <Show when={categoria()}>
+            <Show when={segmento()}>
               <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm flex items-center gap-1">
-                Categoria: {categoria()}
+                Segmento: {segmento()}
                 <button
                   onClick={() => {
-                    setCategoria('');
+                    setSegmento('');
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"
@@ -298,12 +327,12 @@ export default function Analytics() {
                 </button>
               </span>
             </Show>
-            <Show when={segmento()}>
+            <Show when={categoria()}>
               <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm flex items-center gap-1">
-                Segmento: {segmento()}
+                Categoria: {categoria()}
                 <button
                   onClick={() => {
-                    setSegmento('');
+                    setCategoria('');
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"

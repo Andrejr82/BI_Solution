@@ -14,8 +14,7 @@ LANGCHAIN_GEMINI_AVAILABLE = False
 try:
     import google.generativeai as genai
     from google.api_core.exceptions import RetryError, InternalServerError
-    # from google.generativeai.types import ToolCode # Removido
-    from google.generativeai.types import FunctionDeclaration
+    from google.generativeai.types import FunctionDeclaration, Tool
     GEMINI_AVAILABLE = True
 except ImportError as e:
     print(f"Erro de importação do Gemini: {e}")
@@ -58,6 +57,19 @@ class GeminiLLMAdapter(BaseLLMAdapter):
         self.system_instruction = system_instruction
 
         self.logger.info(f"Gemini adapter inicializado com modelo: {self.model_name}")
+
+    async def generate_response(self, prompt: str) -> str:
+        """
+        Gera uma resposta de texto simples para um prompt dado.
+        Wrapper para get_completion para compatibilidade com insights.py.
+        """
+        messages = [{"role": "user", "content": prompt}]
+        result = self.get_completion(messages)
+        
+        if "error" in result:
+            raise Exception(result["error"])
+            
+        return result.get("content", "")
 
     def get_llm(self):
         """
@@ -316,7 +328,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
         return gemini_messages
 
-    def _convert_tools(self, tools_wrapper: Dict[str, List[Dict[str, Any]]]) -> List['FunctionDeclaration']:
+    def _convert_tools(self, tools_wrapper: Dict[str, List[Dict[str, Any]]]) -> List['Tool']:
         """
         Converte ferramentas do formato OpenAI-like (agora encapsulado em 'function_declarations')
         para Gemini Tool Format.
@@ -336,4 +348,4 @@ class GeminiLLMAdapter(BaseLLMAdapter):
             )
             gemini_tools.append(gemini_tool)
 
-        return gemini_tools
+        return [Tool(function_declarations=gemini_tools)]

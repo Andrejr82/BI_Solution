@@ -4,6 +4,7 @@ FastAPI dependency injection utilities
 """
 
 import json # Adicionado
+import uuid # Adicionado para corrigir erro de tipo UUID
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -25,12 +26,15 @@ async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """
-    Get current user from JWT token - PARQUET ONLY (SIMPLIFIED)
+    Get current user from JWT token - PARQUET + SUPABASE FALLBACK
     """
     import polars as pl
     from pathlib import Path
     from datetime import datetime, timezone
     import sys
+    from app.config.settings import get_settings
+
+    settings = get_settings()
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -44,74 +48,84 @@ async def get_current_user(
         payload = decode_token(token)
 
         if payload.get("type") != "access":
-            # print("==> Invalid token type <==", file=sys.stderr, flush=True)
             raise credentials_exception
 
         user_id = payload.get("sub")
         if user_id is None:
-            # print("==> No user_id in token <==", file=sys.stderr, flush=True)
             raise credentials_exception
 
-        # print(f"==> Token decoded: user_id={user_id} <==", file=sys.stderr, flush=True)
-
     except JWTError as e:
-        # print(f"==> JWT Error: {e} <==", file=sys.stderr, flush=True)
         raise credentials_exception
 
-    # Read from Parquet ONLY
-    # Docker path vs Dev path
+    # PRIORITY 1: Try Parquet first
     docker_path = Path("/app/data/parquet/users.parquet")
     dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
     parquet_path = docker_path if docker_path.exists() else dev_path
-    # print(f"==> Parquet path: {parquet_path} <==", file=sys.stderr, flush=True)
 
-    if not parquet_path.exists():
-        # print(f"==> Parquet NOT FOUND <==", file=sys.stderr, flush=True)
-        raise credentials_exception
+    if parquet_path.exists():
+        try:
+            df = pl.read_parquet(parquet_path)
+            user_data = df.filter(pl.col("id") == user_id)
 
-    try:
-        df = pl.read_parquet(parquet_path)
-        # print(f"==> Parquet loaded: {len(df)} rows <==", file=sys.stderr, flush=True)
+            if len(user_data) > 0:
+                user_row = user_data.row(0, named=True)
+                user = User(
+                    id=uuid.UUID(str(user_row["id"])),
+                    username=user_row["username"],
+                    email=user_row.get("email", ""),
+                    role=user_row["role"],
+                    is_active=user_row.get("is_active", True),
+                    hashed_password=user_row["hashed_password"],
+                    allowed_segments=user_row.get("allowed_segments", "[]"),
+                    created_at=user_row.get("created_at", datetime.now(timezone.utc)),
+                    updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
+                    last_login=user_row.get("last_login")
+                )
 
-        # Simple filter without cast
-        user_data = df.filter(pl.col("id") == user_id)
-        # print(f"==> Filter result: {len(user_data)} rows <==", file=sys.stderr, flush=True)
+                if not user.is_active:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+                return user
+        except Exception:
+            pass  # Will try Supabase fallback
 
-        if len(user_data) == 0:
-            # print(f"==> User {user_id} NOT FOUND <==", file=sys.stderr, flush=True)
-            raise credentials_exception
+    # PRIORITY 2: Try Supabase if user not found in Parquet
+    if settings.USE_SUPABASE_AUTH:
+        try:
+            from app.core.supabase_client import get_supabase_admin_client
+            admin_client = get_supabase_admin_client()
+            
+            auth_user = admin_client.auth.admin.get_user_by_id(user_id)
+            if auth_user and auth_user.user:
+                user_metadata = auth_user.user.user_metadata or {}
+                
+                # Get role from user_profiles table
+                role = "user"
+                try:
+                    from app.core.supabase_client import get_supabase_client
+                    supabase = get_supabase_client()
+                    profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+                    if profile_response.data and len(profile_response.data) > 0:
+                        role = profile_response.data[0].get("role", "user")
+                except:
+                    pass
+                
+                user = User(
+                    id=uuid.UUID(str(user_id)),
+                    username=user_metadata.get("username", auth_user.user.email.split("@")[0]),
+                    email=auth_user.user.email or "",
+                    role=role,
+                    is_active=True,
+                    hashed_password="",  # Not needed for Supabase auth
+                    allowed_segments=json.dumps(user_metadata.get("allowed_segments", [])),
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                    last_login=datetime.now(timezone.utc)
+                )
+                return user
+        except Exception as e:
+            pass  # Will raise credentials_exception
 
-        user_row = user_data.row(0, named=True)
-        # print(f"==> User found: {user_row['username']} <==", file=sys.stderr, flush=True)
-
-        user = User(
-            id=user_row["id"],
-            username=user_row["username"],
-            email=user_row.get("email", ""),
-            role=user_row["role"],
-            is_active=user_row.get("is_active", True),
-            hashed_password=user_row["hashed_password"],
-            allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
-            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-            last_login=user_row.get("last_login")
-        )
-
-        if not user.is_active:
-            # print("==> User INACTIVE <==", file=sys.stderr, flush=True)
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Inactive user"
-            )
-
-        # print(f"==> SUCCESS: {user.username} authenticated <==", file=sys.stderr, flush=True)
-        return user
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        # print(f"==> ERROR: {e} <==", file=sys.stderr, flush=True)
-        raise credentials_exception
+    raise credentials_exception
 
 
 async def get_current_user_old(
@@ -277,7 +291,7 @@ async def get_current_user_from_token(token: str) -> User:
         user_row = user_data.row(0, named=True)
         
         user = User(
-            id=user_row["id"],
+            id=uuid.UUID(str(user_row["id"])),
             username=user_row["username"],
             email=user_row.get("email", ""),
             role=user_row["role"],
@@ -421,7 +435,7 @@ async def get_current_user_from_token(token: str) -> User:
         user_row = user_data.row(0, named=True)
         
         user = User(
-            id=user_row["id"],
+            id=uuid.UUID(str(user_row["id"])),
             username=user_row["username"],
             email=user_row.get("email", ""),
             role=user_row["role"],

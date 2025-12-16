@@ -117,10 +117,19 @@ class Settings(BaseSettings):
     # Data Sources
     PARQUET_DATA_PATH: str = Field(default="data/parquet/admmat.parquet")
     PARQUET_FILE_PATH: str = Field(default="data/parquet/admmat.parquet")  # Alias for compatibility
+    
+    # Business Rules
+    ALLOWED_UNES: list[int] = Field(default=[
+        1, 3, 11, 35, 57, 64, 79, 81, 135, 148, 265, 520, 1685, 1974, 
+        2365, 2401, 2475, 2586, 2599, 2720, 2906, 2952, 3038, 3054, 
+        3091, 3116, 3281, 3318, 3387, 3404, 3481, 3499, 3577, 3578, 
+        5570, 5822
+    ])
 
     # Supabase
     SUPABASE_URL: str = Field(default="")
     SUPABASE_ANON_KEY: str = Field(default="")
+    SUPABASE_SERVICE_ROLE_KEY: str = Field(default="")  # Required for admin operations
     USE_SUPABASE_AUTH: bool = Field(default=False)  # Disabled by default to align with Parquet auth
 
     @model_validator(mode="after")

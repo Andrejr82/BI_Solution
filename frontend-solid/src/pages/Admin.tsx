@@ -1,6 +1,6 @@
 import { Shield, Users, Database, Settings, RefreshCw, CheckCircle, AlertCircle, Plus, Edit, Trash2, X } from 'lucide-solid';
 import { createSignal, Show, For, createResource, onMount } from 'solid-js';
-import { adminApi, UserData, CreateUserPayload, UpdateUserPayload } from '@/lib/api';
+import { adminApi, analyticsApi, UserData, CreateUserPayload, UpdateUserPayload } from '@/lib/api';
 
 export default function Admin() {
   const [syncing, setSyncing] = createSignal(false);
@@ -18,13 +18,25 @@ export default function Admin() {
     }
   });
 
+  // Load Segment Options
+  const [filterOptions] = createResource(async () => {
+    try {
+      const response = await analyticsApi.getFilterOptions();
+      return response.data;
+    } catch (err) {
+      console.error('Error loading filter options:', err);
+      return { categorias: [], segmentos: [] };
+    }
+  });
+
   const [showUserModal, setShowUserModal] = createSignal(false);
   const [editingUser, setEditingUser] = createSignal<UserData | null>(null);
   const [formData, setFormData] = createSignal<CreateUserPayload>({
     username: '',
     email: '',
     password: '',
-    role: 'user'
+    role: 'user',
+    allowed_segments: []
   });
 
   const handleSync = async () => {
@@ -43,7 +55,7 @@ export default function Admin() {
 
   const openCreateUserModal = () => {
     setEditingUser(null);
-    setFormData({ username: '', email: '', password: '', role: 'user' });
+    setFormData({ username: '', email: '', password: '', role: 'user', allowed_segments: [] });
     setShowUserModal(true);
   };
 
@@ -53,7 +65,8 @@ export default function Admin() {
       username: user.username,
       email: user.email,
       password: '',
-      role: user.role
+      role: user.role,
+      allowed_segments: user.allowed_segments || []
     });
     setShowUserModal(true);
   };
@@ -61,7 +74,7 @@ export default function Admin() {
   const closeUserModal = () => {
     setShowUserModal(false);
     setEditingUser(null);
-    setFormData({ username: '', email: '', password: '', role: 'user' });
+    setFormData({ username: '', email: '', password: '', role: 'user', allowed_segments: [] });
   };
 
   const handleSubmitUser = async (e: Event) => {
@@ -76,7 +89,8 @@ export default function Admin() {
         const updateData: UpdateUserPayload = {
           username: data.username,
           email: data.email,
-          role: data.role
+          role: data.role,
+          allowed_segments: data.allowed_segments
         };
 
         // Only include password if provided
@@ -227,6 +241,7 @@ export default function Admin() {
                     <th class="text-left p-3 text-sm font-medium">Username</th>
                     <th class="text-left p-3 text-sm font-medium">Email</th>
                     <th class="text-left p-3 text-sm font-medium">Role</th>
+                    <th class="text-left p-3 text-sm font-medium">Segmentos</th>
                     <th class="text-center p-3 text-sm font-medium">Status</th>
                     <th class="text-right p-3 text-sm font-medium">Ações</th>
                   </tr>
@@ -234,7 +249,7 @@ export default function Admin() {
                 <tbody>
                   <Show when={users.loading}>
                     <tr>
-                      <td colspan="5" class="text-center p-8 text-muted">
+                      <td colspan="6" class="text-center p-8 text-muted">
                         <RefreshCw size={24} class="animate-spin mx-auto mb-2" />
                         Carregando usuários...
                       </td>
@@ -255,6 +270,15 @@ export default function Admin() {
                             }`}>
                               {user.role}
                             </span>
+                          </td>
+                          <td class="p-3 text-sm text-muted">
+                            <Show when={user.role === 'admin'} fallback={
+                                user.allowed_segments && user.allowed_segments.length > 0 
+                                ? <span title={user.allowed_segments.join(', ')}>{user.allowed_segments.length} segmento(s)</span>
+                                : <span class="text-yellow-500 text-xs">Nenhum</span>
+                            }>
+                                <span class="text-muted italic">Todos (Admin)</span>
+                            </Show>
                           </td>
                           <td class="p-3 text-center">
                             <button
@@ -293,7 +317,7 @@ export default function Admin() {
 
                   <Show when={!users.loading && (!users() || users()?.length === 0)}>
                     <tr>
-                      <td colspan="5" class="text-center p-8 text-muted">
+                      <td colspan="6" class="text-center p-8 text-muted">
                         Nenhum usuário encontrado
                       </td>
                     </tr>
@@ -308,7 +332,7 @@ export default function Admin() {
       {/* User Modal */}
       <Show when={showUserModal()}>
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeUserModal}>
-          <div class="bg-card border rounded-lg max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div class="bg-card border rounded-lg max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-semibold">
                 {editingUser() ? 'Editar Usuário' : 'Novo Usuário'}
@@ -367,6 +391,43 @@ export default function Admin() {
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
+              </div>
+
+              {/* Segment Selection */}
+              <div class="space-y-2">
+                <label class="block text-sm font-medium">Segmentos Permitidos</label>
+                <div class="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
+                  <Show when={!filterOptions.loading} fallback={<span class="text-xs text-muted">Carregando segmentos...</span>}>
+                    <For each={filterOptions()?.segmentos || []}>
+                      {(segment) => (
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData().allowed_segments?.includes(segment)}
+                            onChange={(e) => {
+                              const current = formData().allowed_segments || [];
+                              if (e.currentTarget.checked) {
+                                setFormData({ ...formData(), allowed_segments: [...current, segment] });
+                              } else {
+                                setFormData({ ...formData(), allowed_segments: current.filter(s => s !== segment) });
+                              }
+                            }}
+                            class="checkbox checkbox-sm checkbox-primary"
+                          />
+                          <span>{segment}</span>
+                        </label>
+                      )}
+                    </For>
+                    <Show when={!filterOptions()?.segmentos?.length}>
+                        <p class="text-xs text-muted">Nenhum segmento disponível encontrado.</p>
+                    </Show>
+                  </Show>
+                </div>
+                <p class="text-xs text-muted">
+                    {formData().role === 'admin' 
+                        ? 'Admin tem acesso total independente desta seleção.' 
+                        : 'Se nenhum selecionado, o usuário não verá dados.'}
+                </p>
               </div>
 
               <div class="flex gap-2 pt-4">

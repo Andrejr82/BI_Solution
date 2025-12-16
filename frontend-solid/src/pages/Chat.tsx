@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, onMount, For, Show } from 'solid-js';
 import auth from '@/store/auth';
-import { Typewriter } from '@/components';
+import { Typewriter, TypingIndicator } from '@/components';
 import { PlotlyChart } from '@/components/PlotlyChart';
 import { DataTable } from '@/components/DataTable';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
@@ -9,10 +9,26 @@ import { MessageActions } from '@/components/MessageActions';
 import { ExportMenu } from '@/components/ExportMenu';
 import { ShareButton } from '@/components/ShareButton';
 import { formatTimestamp } from '@/lib/formatters';
-// Removido solid-markdown devido a problemas de compatibilidade ESM
+import { marked } from 'marked'; // Renderizador de Markdown
 import { Trash2, StopCircle, Pencil, Check, X } from 'lucide-solid';
 import 'github-markdown-css/github-markdown.css';
 import './chat-markdown.css';
+
+// Configurar marked para renderizar tabelas corretamente
+marked.setOptions({
+  gfm: true, // GitHub Flavored Markdown (suporta tabelas)
+  breaks: true, // Quebras de linha automáticas
+});
+
+// Helper para renderizar Markdown
+const renderMarkdown = (text: string): string => {
+  try {
+    return marked.parse(text) as string;
+  } catch (e) {
+    console.error('Erro ao renderizar Markdown:', e);
+    return text;
+  }
+};
 
 // Interface para mensagem - Atualizada para suportar estrutura JSON do backend
 interface Message {
@@ -32,6 +48,7 @@ export default function Chat() {
   ]);
   const [input, setInput] = createSignal('');
   const [isStreaming, setIsStreaming] = createSignal(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = createSignal(false);
   const [sessionId, setSessionId] = createSignal<string>('');
   const [currentEventSource, setCurrentEventSource] = createSignal<EventSource | null>(null);
   const [lastUserMessage, setLastUserMessage] = createSignal<string>('');
@@ -40,28 +57,39 @@ export default function Chat() {
   let messagesEndRef: HTMLDivElement | undefined;
 
   // Check for example query from Examples page & Init Session
-  onMount(() => {
-    const exampleQuery = localStorage.getItem('example_query');
-    if (exampleQuery) {
-      setInput(exampleQuery);
-      localStorage.removeItem('example_query');
-    }
-
-    // Session Management
+  onMount(async () => {
+    // 1. Initialize Session First
     let storedSession = localStorage.getItem('chat_session_id');
     if (!storedSession) {
       storedSession = crypto.randomUUID();
       localStorage.setItem('chat_session_id', storedSession);
     }
     setSessionId(storedSession);
+
+    // 2. Check for Example Query
+    const exampleQuery = localStorage.getItem('example_query');
+    if (exampleQuery) {
+      localStorage.removeItem('example_query');
+
+      // Directly add the user message to the chat
+      const userMsg: Message = { id: Date.now().toString(), role: 'user', text: exampleQuery, timestamp: Date.now() };
+      setMessages(prev => [...prev, userMsg]);
+
+      // And immediately process it
+      await processUserMessage(exampleQuery);
+    }
   });
 
-  // Auto-scroll
+  // Auto-scroll - melhorado para garantir que sempre role até o final
   createEffect(() => {
     messages(); // Re-run effect when messages change
-    if (messagesEndRef) {
-      messagesEndRef.scrollIntoView({ behavior: 'smooth' });
-    }
+
+    // Usar setTimeout para garantir que o DOM foi atualizado
+    setTimeout(() => {
+      if (messagesEndRef) {
+        messagesEndRef.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }, 100);
   });
 
   // Cleanup on unmount
@@ -187,6 +215,7 @@ export default function Chat() {
     }
 
     setIsStreaming(true);
+    setIsWaitingForResponse(true);
 
     // Prepara mensagem do assistente - agora com suporte a tipos e dados
     const assistantId = (Date.now() + 1).toString();
@@ -196,7 +225,7 @@ export default function Chat() {
     try {
       // Conexão SSE Real com Backend
       console.log('📡 Iniciando SSE com token:', token.substring(0, 20) + '...', 'Session:', sessionId());
-      const eventSource = new EventSource(`/api/v1/chat/stream?q=${encodeURIComponent(userText)}&token=${token}&session_id=${sessionId()}`);
+      const eventSource = new EventSource(`/api/v1/chat/stream?q=${encodeURIComponent(userText)}&token=${encodeURIComponent(token)}&session_id=${sessionId()}`);
       setCurrentEventSource(eventSource);
 
       let fullResponseContent = ''; // Para acumular texto e gerar response_id
@@ -206,11 +235,17 @@ export default function Chat() {
         try {
           const data = JSON.parse(event.data);
 
+          // Desativa o indicador assim que receber qualquer dado
+          if (isWaitingForResponse()) {
+            setIsWaitingForResponse(false);
+          }
+
           if (data.done) {
             console.log('✅ Stream concluído');
             eventSource.close();
             setCurrentEventSource(null);
             setIsStreaming(false);
+            setIsWaitingForResponse(false);
             // Finaliza a mensagem do assistente, adicionando o response_id
             setMessages(prev => prev.map(msg =>
               msg.id === currentMessageId ? { ...msg, response_id: fullResponseContent ? btoa(fullResponseContent).substring(0, 16) : undefined } : msg
@@ -269,6 +304,7 @@ export default function Chat() {
             eventSource.close();
             setCurrentEventSource(null);
             setIsStreaming(false);
+            setIsWaitingForResponse(false);
           }
 
         } catch (err) {
@@ -281,6 +317,7 @@ export default function Chat() {
         eventSource.close();
         setCurrentEventSource(null);
         setIsStreaming(false);
+        setIsWaitingForResponse(false);
         setMessages(prev => prev.map(msg =>
           msg.id === currentMessageId ? { ...msg, text: msg.text + "\n⚠️ Erro de conexão com o servidor.", type: 'error' } : msg
         ));
@@ -289,6 +326,7 @@ export default function Chat() {
     } catch (err) {
       console.error("❌ Chat error:", err);
       setIsStreaming(false);
+      setIsWaitingForResponse(false);
       setMessages(prev => prev.map(msg =>
         msg.id === assistantId ? { ...msg, text: "\n❌ Erro ao processar mensagem.", type: 'error' } : msg
       ));
@@ -346,7 +384,7 @@ export default function Chat() {
 
 
   return (
-    <div class="flex flex-col h-full max-w-4xl mx-auto">
+    <div class="absolute inset-0 flex flex-col w-full max-w-4xl mx-auto bg-background">
       {/* Header with actions */}
       <div class="flex items-center justify-between p-4 border-b bg-background/50 backdrop-blur">
         <h2 class="text-lg font-semibold">Chat BI</h2>
@@ -380,8 +418,8 @@ export default function Chat() {
             <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 class={`max-w-[80%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                    ? 'bg-primary/10 border border-primary/20 text-foreground'
-                    : 'bg-card border text-card-foreground'
+                  ? 'bg-primary/10 border border-primary/20 text-foreground'
+                  : 'bg-card border text-card-foreground'
                   }`}
               >
                 <Show when={msg.role === 'assistant' && msg.type === 'chart' && msg.chart_spec}>
@@ -391,17 +429,26 @@ export default function Chat() {
                   <DataTable data={() => msg.data} caption={msg.text} />
                 </Show>
                 <Show when={msg.role === 'assistant' && msg.type === 'text'}>
-                  <div class="markdown-body" style="white-space: pre-wrap;">
-                    {msg.text + (isStreaming() && msg.id === messages()[messages().length - 1].id ? ' ▍' : '')}
-                  </div>
+                  <Show
+                    when={isWaitingForResponse() && msg.id === messages()[messages().length - 1].id}
+                    fallback={
+                      <div
+                        class="markdown-body"
+                        innerHTML={renderMarkdown(msg.text + (isStreaming() && msg.id === messages()[messages().length - 1].id ? ' ▍' : ''))}
+                      />
+                    }
+                  >
+                    <TypingIndicator />
+                  </Show>
                 </Show>
                 <Show when={msg.role === 'user'}>
                   <Show
                     when={editingMessageId() === msg.id}
                     fallback={
-                      <div class="markdown-body" style="white-space: pre-wrap;">
-                        {msg.text}
-                      </div>
+                      <div
+                        class="markdown-body"
+                        innerHTML={renderMarkdown(msg.text)}
+                      />
                     }
                   >
                     <div class="space-y-2">

@@ -6,6 +6,7 @@ import bcrypt
 from pathlib import Path
 import uuid
 from datetime import datetime
+import json
 
 def create_users_parquet():
     """Create users.parquet with admin user"""
@@ -24,6 +25,7 @@ def create_users_parquet():
         "full_name": ["Administrator"],
         "role": ["admin"],
         "is_active": [True],
+        "allowed_segments": [json.dumps(["*"])],
         "created_at": [datetime.utcnow().isoformat()],
         "updated_at": [datetime.utcnow().isoformat()]
     }

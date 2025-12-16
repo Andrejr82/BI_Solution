@@ -34,15 +34,50 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
   const [isExpanded, setIsExpanded] = createSignal(false);
 
   const toggleExpand = () => {
-    setIsExpanded(!isExpanded());
+    const newState = !isExpanded();
+    setIsExpanded(newState);
+
+    // Controlar scroll do body
+    if (newState) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
     // Force resize after state change and DOM update
     setTimeout(() => {
       if (chartDiv) {
         Plotly.Plots.resize(chartDiv);
+        // Forçar relayout também
+        Plotly.relayout(chartDiv, {
+          'xaxis.autorange': true,
+          'yaxis.autorange': true
+        });
       }
-    }, 50);
+    }, 100);
   };
 
+  // Fechar com tecla ESC
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isExpanded()) {
+      toggleExpand();
+    }
+  };
+
+  createEffect(() => {
+    if (isExpanded()) {
+      window.addEventListener('keydown', handleEsc);
+    } else {
+      window.removeEventListener('keydown', handleEsc);
+    }
+  });
+
+  onCleanup(() => {
+    window.removeEventListener('keydown', handleEsc);
+    document.body.style.overflow = '';
+  });
+
+  // Renderizar o gráfico
   createEffect(() => {
     const spec = props.chartSpec();
     if (chartDiv && spec && Object.keys(spec).length > 0) {
@@ -144,23 +179,33 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
   });
 
   return (
-    <div class={`relative transition-all duration-300 ${isExpanded() ? 'fixed inset-0 z-50 bg-background p-6 flex flex-col' : ''}`}>
-      <div class="absolute top-2 right-2 z-10 flex gap-2">
+    <div
+      class={`relative transition-all duration-300 ${isExpanded() ? 'fixed inset-0 z-[9999] bg-white p-8 flex flex-col overflow-auto' : ''}`}
+      style={isExpanded() ? { 'background-color': '#FAFAFA' } : {}}
+    >
+      {/* Botão de fechar/expandir */}
+      <div class={`absolute z-10 flex gap-2 ${isExpanded() ? 'top-4 right-4' : 'top-2 right-2'}`}>
         <button
           onClick={toggleExpand}
-          class="p-2 bg-background/80 hover:bg-muted rounded-full shadow-sm border backdrop-blur-sm transition-colors"
-          title={isExpanded() ? "Restaurar tamanho" : "Expandir tela cheia"}
+          class={`p-2 rounded-full shadow-md border transition-colors ${isExpanded() ? 'bg-primary text-white hover:bg-primary/80' : 'bg-background/80 hover:bg-muted backdrop-blur-sm'}`}
+          title={isExpanded() ? "Fechar tela cheia (ESC)" : "Expandir tela cheia"}
         >
           <Show when={isExpanded()} fallback={<Maximize size={16} />}>
-            <Minimize size={16} />
+            <Minimize size={20} />
           </Show>
         </button>
       </div>
+      {/* Título quando em tela cheia */}
+      <Show when={isExpanded()}>
+        <div class="mb-4 text-center">
+          <p class="text-sm text-muted">Pressione ESC ou clique no botão para fechar</p>
+        </div>
+      </Show>
       <div
         ref={chartDiv}
         id={chartId}
-        class="w-full"
-        style={{ height: isExpanded() ? '100%' : (props.height || '400px') }}
+        class={`w-full ${isExpanded() ? 'flex-1' : ''}`}
+        style={{ height: isExpanded() ? 'calc(100% - 60px)' : (props.height || '400px') }}
       >
         {/* Chart will be rendered here by Plotly.js */}
       </div>

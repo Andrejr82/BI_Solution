@@ -114,7 +114,7 @@ class SemanticCache:
         
         # Cache hit!
         self.hits += 1
-        logger.info(f"✅ Cache HIT para: {query[:50]}... (hits={self.hits})")
+        logger.info(f"Cache HIT para: {query[:50]}... (hits={self.hits})")
         
         # Carregar resposta do arquivo
         cache_file = self.cache_dir / f"{key}.json"

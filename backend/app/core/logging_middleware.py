@@ -84,6 +84,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         except Exception as exc:
             # Calcula duração até o erro
             duration = time.time() - start_time
+            
+            # Tratar erros de desconexão/stream de forma graciosa
+            error_msg = str(exc)
+            if "No response returned" in error_msg or "EndOfStream" in type(exc).__name__:
+                self.logger.warning(
+                    "client_disconnected",
+                    path=path,
+                    duration=f"{duration:.3f}s",
+                    error=error_msg
+                )
+                # Não relançar para evitar poluição de logs de erro, pois é um cancelamento do cliente
+                return Response(content="Client disconnected", status_code=499)
 
             # Log do erro
             self.logger.error(
@@ -91,7 +103,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 request_id=request_id,
                 method=method,
                 path=path,
-                error=str(exc),
+                error=error_msg,
                 error_type=type(exc).__name__,
                 duration=f"{duration:.3f}s",
                 user_id=user_id,

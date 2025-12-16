@@ -7,7 +7,8 @@ import logging
 from typing import Optional
 from datetime import datetime
 
-from app.core.supabase_client import get_supabase_client
+# Use ADMIN client for user management (requires service_role key)
+from app.core.supabase_client import get_supabase_admin_client
 from app.config.settings import get_settings
 
 settings = get_settings()
@@ -23,14 +24,15 @@ class SupabaseUserService:
 
     @property
     def client(self):
-        """Lazy load Supabase client only when needed"""
+        """Lazy load Supabase ADMIN client only when needed"""
         if self._client is None:
             if not settings.USE_SUPABASE_AUTH:
                 raise ValueError(
                     "Supabase authentication is disabled. "
                     "This service requires USE_SUPABASE_AUTH=true in .env"
                 )
-            self._client = get_supabase_client()
+            # Use ADMIN client with service_role key for user management
+            self._client = get_supabase_admin_client()
         return self._client
 
     def create_user(
@@ -39,7 +41,8 @@ class SupabaseUserService:
         password: str,
         username: str,
         role: str = "user",
-        full_name: Optional[str] = None
+        full_name: Optional[str] = None,
+        allowed_segments: Optional[list[str]] = None
     ) -> dict:
         """
         Create a new user in Supabase Auth and user_profiles table
@@ -50,6 +53,7 @@ class SupabaseUserService:
             username: Username for the system
             role: User role (admin, user, viewer)
             full_name: Optional full name
+            allowed_segments: List of allowed segments
 
         Returns:
             Dictionary with user data
@@ -66,7 +70,8 @@ class SupabaseUserService:
                 "user_metadata": {
                     "username": username,
                     "role": role,
-                    "full_name": full_name or username
+                    "full_name": full_name or username,
+                    "allowed_segments": allowed_segments or []
                 }
             })
 
@@ -95,12 +100,15 @@ class SupabaseUserService:
                 "username": username,
                 "role": role,
                 "full_name": full_name or username,
+                "allowed_segments": allowed_segments or [],
                 "is_active": True,
                 "created_at": datetime.utcnow().isoformat()
             }
 
         except Exception as e:
-            security_logger.error(f"Failed to create user '{username}': {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            security_logger.error(f"Failed to create user '{username}': {e}\n{error_details}")
             raise Exception(f"Failed to create user: {str(e)}")
 
     def list_users(self, limit: int = 100) -> list[dict]:
@@ -123,10 +131,23 @@ class SupabaseUserService:
                 try:
                     auth_user = self.client.auth.admin.get_user_by_id(profile["id"])
                     email = auth_user.user.email if auth_user.user else "N/A"
-                    is_active = not auth_user.user.banned_until if auth_user.user else True
-                except:
+                    # Check if user is banned - the attribute may vary by Supabase version
+                    is_active = True
+                    if auth_user.user:
+                        # Try different attribute names for banned status
+                        if hasattr(auth_user.user, 'banned_until') and auth_user.user.banned_until:
+                            is_active = False
+                        elif hasattr(auth_user.user, 'is_banned') and auth_user.user.is_banned:
+                            is_active = False
+                    # Get allowed_segments from metadata
+                    user_metadata = auth_user.user.user_metadata or {}
+                    allowed_segments = user_metadata.get("allowed_segments", [])
+                    logger.info(f"User {profile['id']}: email={email}, segments={allowed_segments}")
+                except Exception as e:
+                    logger.warning(f"Failed to get auth user data for {profile['id']}: {e}")
                     email = "N/A"
                     is_active = True
+                    allowed_segments = []
 
                 users.append({
                     "id": profile["id"],
@@ -134,6 +155,7 @@ class SupabaseUserService:
                     "email": email,
                     "role": profile.get("role", "user"),
                     "full_name": profile.get("full_name", ""),
+                    "allowed_segments": allowed_segments,
                     "is_active": is_active,
                     "created_at": profile.get("created_at", ""),
                     "updated_at": profile.get("updated_at", "")
@@ -169,6 +191,9 @@ class SupabaseUserService:
             auth_user = self.client.auth.admin.get_user_by_id(user_id)
             email = auth_user.user.email if auth_user.user else "N/A"
             is_active = not auth_user.user.banned_until if auth_user.user else True
+            
+            user_metadata = auth_user.user.user_metadata or {}
+            allowed_segments = user_metadata.get("allowed_segments", [])
 
             return {
                 "id": profile["id"],
@@ -176,6 +201,7 @@ class SupabaseUserService:
                 "email": email,
                 "role": profile.get("role", "user"),
                 "full_name": profile.get("full_name", ""),
+                "allowed_segments": allowed_segments,
                 "is_active": is_active,
                 "created_at": profile.get("created_at", ""),
                 "updated_at": profile.get("updated_at", "")
@@ -193,7 +219,8 @@ class SupabaseUserService:
         role: Optional[str] = None,
         full_name: Optional[str] = None,
         password: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        allowed_segments: Optional[list[str]] = None
     ) -> dict:
         """
         Update user in Supabase Auth and user_profiles
@@ -206,6 +233,7 @@ class SupabaseUserService:
             full_name: New full name (optional)
             password: New password (optional)
             is_active: Active status (optional)
+            allowed_segments: New allowed segments (optional)
 
         Returns:
             Updated user dictionary
@@ -216,6 +244,8 @@ class SupabaseUserService:
         try:
             # Update auth user if needed
             auth_updates = {}
+            user_metadata_updates = {}
+            
             if email:
                 auth_updates["email"] = email
             if password:
@@ -226,6 +256,19 @@ class SupabaseUserService:
                     auth_updates["ban_duration"] = "876000h"  # ~100 years (effectively permanent)
                 else:
                     auth_updates["ban_duration"] = "none"
+            
+            # Update metadata
+            if username:
+                user_metadata_updates["username"] = username
+            if role:
+                user_metadata_updates["role"] = role
+            if full_name:
+                user_metadata_updates["full_name"] = full_name
+            if allowed_segments is not None:
+                user_metadata_updates["allowed_segments"] = allowed_segments
+
+            if user_metadata_updates:
+                auth_updates["user_metadata"] = user_metadata_updates
 
             if auth_updates:
                 self.client.auth.admin.update_user_by_id(user_id, auth_updates)

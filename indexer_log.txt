@@ -1,0 +1,6 @@
+2025-12-15 15:27:58,272 - ERROR - Missing dependencies: cannot import name 'Settings' from 'llama_index.core' (C:\Agente_BI\BI_Solution\backend\.venv\Lib\site-packages\llama_index\core\__init__.py)
+Traceback (most recent call last):
+  File "C:\Agente_BI\BI_Solution\scripts\index_codebase.py", line 43, in <module>
+    from llama_index.core import (
+ImportError: cannot import name 'Settings' from 'llama_index.core' (C:\Agente_BI\BI_Solution\backend\.venv\Lib\site-packages\llama_index\core\__init__.py)
+2025-12-15 15:27:58,272 - ERROR - Install with: pip install llama-index llama-index-vector-stores-faiss llama-index-llms-gemini llama-index-embeddings-gemini faiss-cpu

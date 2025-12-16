@@ -1,26 +1,39 @@
 # core/llm_langchain_adapter.py
 from typing import Any, List, Optional, Dict
 import json
-
-from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import (
-    BaseMessage,
-    AIMessage,
-    HumanMessage,
-    SystemMessage,
-    FunctionMessage,
-    ToolMessage,
-    ToolCall,
-    AIMessageChunk,
-)
-from langchain_core.outputs import (
-    ChatResult,
-    ChatGeneration,
-    ChatGenerationChunk,
-)
+import logging
 
 from app.core.llm_base import BaseLLMAdapter
+
+logger = logging.getLogger(__name__)
+
+LANGCHAIN_AVAILABLE = False
+try:
+    from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import (
+        BaseMessage,
+        AIMessage,
+        HumanMessage,
+        SystemMessage,
+        FunctionMessage,
+        ToolMessage,
+        ToolCall,
+        AIMessageChunk,
+    )
+    from langchain_core.outputs import (
+        ChatResult,
+        ChatGeneration,
+        ChatGenerationChunk,
+    )
+    LANGCHAIN_AVAILABLE = True
+except (ImportError, OSError):
+    # Dummy classes for safe import
+    BaseChatModel = object
+    CallbackManagerForLLMRun = Any
+    BaseMessage = Any
+    ChatResult = Any
+    logger.warning("LangChain dependencies missing. CustomLangChainLLM will be disabled.")
 
 
 def _clean_json_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -57,6 +70,8 @@ class CustomLangChainLLM(BaseChatModel):
         return "custom_llm"
 
     def __init__(self, llm_adapter: BaseLLMAdapter, **kwargs: Any):
+        if not LANGCHAIN_AVAILABLE:
+            raise ImportError("LangChain is not available.")
         super().__init__(llm_adapter=llm_adapter, **kwargs)
 
     def bind_tools(
@@ -64,18 +79,10 @@ class CustomLangChainLLM(BaseChatModel):
         tools: List[Any],
         **kwargs: Any,
     ) -> "CustomLangChainLLM":
-        """Bind tools to the model.
-
-        Args:
-            tools: A list of tools to bind to the model.
-            kwargs: Additional keyword arguments.
-
-        Returns:
-            A new instance of the model with the tools bound.
-        """
-        # Create a new instance of the model with the tools bound
-        # This is a simplified implementation. In a real scenario, you might
-        # want to create a new runnable that wraps the model and the tools.
+        """Bind tools to the model."""
+        if not LANGCHAIN_AVAILABLE:
+             raise ImportError("LangChain is not available.")
+             
         new_instance = self.__class__(llm_adapter=self.llm_adapter, **kwargs)
         new_instance.tools = tools  # Store tools for _generate to access
         return new_instance
@@ -87,6 +94,9 @@ class CustomLangChainLLM(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        if not LANGCHAIN_AVAILABLE:
+             raise ImportError("LangChain is not available.")
+
         # Convert LangChain messages to a generic dictionary format
         # that GeminiLLMAdapter can understand (similar to OpenAI-like format)
         generic_messages = []
@@ -167,9 +177,8 @@ class CustomLangChainLLM(BaseChatModel):
             for tool in tools_to_pass:
                 if hasattr(tool, 'name') and hasattr(tool, 'description') and hasattr(tool, 'args'):
                     # LangChain's StructuredTool has 'name', 'description', and 'args'
-                    # 'args' is already a dictionary representing the parameters
                     
-                    # Infer required parameters: those without a default value
+                    # Infer required parameters
                     required_params = [
                         param for param, details in tool.args.items() 
                         if details.get("default") is None and details.get("type") != "null"
@@ -204,7 +213,6 @@ class CustomLangChainLLM(BaseChatModel):
                     generic_tools_declarations.append(tool)
                 else:
                     # Fallback for other tool types or if the tool object is not fully formed
-                    # This might need more robust handling depending on actual tool types
                     print(f"Warning: Unexpected tool format encountered: {type(tool)} - {tool}")
                     if hasattr(tool, 'name') and hasattr(tool, 'description'):
                          generic_tools_declarations.append(
@@ -271,6 +279,9 @@ class CustomLangChainLLM(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        if not LANGCHAIN_AVAILABLE:
+             raise ImportError("LangChain is not available.")
+             
         chat_result = self._generate(messages, stop, run_manager, **kwargs)
         generation = chat_result.generations[0]
         ai_message = generation.message

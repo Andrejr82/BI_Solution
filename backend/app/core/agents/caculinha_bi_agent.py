@@ -5,8 +5,19 @@ import pandas as pd
 from decimal import Decimal
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
-from langchain_core.language_models import BaseChatModel
-from langchain_core.tools import BaseTool
+
+logger = logging.getLogger(__name__)
+
+# Safe Import for LangChain dependencies
+LANGCHAIN_AVAILABLE = False
+try:
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.tools import BaseTool
+    LANGCHAIN_AVAILABLE = True
+except (ImportError, OSError):
+    logger.warning("LangChain dependencies missing. CaculinhaBIAgent will run in degraded mode.")
+    BaseChatModel = object # Dummy for type hinting
+    BaseTool = object # Dummy for type hinting
 
 from app.core.tools.une_tools import (
     calcular_abastecimento_une,
@@ -19,11 +30,24 @@ from app.core.tools.une_tools import (
 )
 from app.core.tools.flexible_query_tool import consultar_dados_flexivel
 
+# Import chart tools for visualization
+from app.core.tools.chart_tools import (
+    gerar_grafico_vendas_por_categoria,
+    gerar_grafico_estoque_por_produto,
+    gerar_comparacao_precos_categorias,
+    gerar_analise_distribuicao_estoque,
+    gerar_grafico_pizza_categorias,
+    gerar_grafico_vendas_mensais_produto,
+    gerar_grafico_vendas_por_grupo,
+    gerar_dashboard_executivo,
+    gerar_dashboard_analise_completa,
+    gerar_grafico_automatico,
+    listar_graficos_disponiveis,
+)
+
 # Optional: Import CodeGenAgent just for type hinting if needed,
 # but we won't use it for logic anymore.
 from app.core.utils.field_mapper import FieldMapper
-
-logger = logging.getLogger(__name__)
 
 
 def safe_json_serialize(obj: Any) -> str:
@@ -106,6 +130,18 @@ class CaculinhaBIAgent:
             validar_transferencia_produto,
             sugerir_transferencias_automaticas,
             encontrar_rupturas_criticas,
+            # Ferramentas de gráficos
+            gerar_grafico_vendas_por_categoria,
+            gerar_grafico_estoque_por_produto,
+            gerar_comparacao_precos_categorias,
+            gerar_analise_distribuicao_estoque,
+            gerar_grafico_pizza_categorias,
+            gerar_grafico_vendas_mensais_produto,
+            gerar_grafico_vendas_por_grupo,
+            gerar_dashboard_executivo,
+            gerar_dashboard_analise_completa,
+            gerar_grafico_automatico,
+            listar_graficos_disponiveis,
         ]
 
         # Convert LangChain tools to Gemini Function Declarations
@@ -115,11 +151,31 @@ class CaculinhaBIAgent:
         self.system_prompt = """Você é o Assistente de BI da Caculinha, powered by Gemini 2.0.
 Você é um assistente conversacional inteligente com expertise em Business Intelligence e análise de dados.
 
+CONTEXT7 STORYTELLING E PRIVACIDADE (CRÍTICO):
+1. **NUNCA revele suas ferramentas**: Jamais diga "Vou usar a ferramenta X", "Consultando a base de dados...", ou "Houve um erro na ferramenta Y". O usuário não deve saber como você obtém os dados.
+2. **Seja direto**: Se o usuário perguntar "Vendas de Tecidos", apenas responda: "O segmento de Tecidos teve X vendas...".
+3. **Erros transparentes**: Se uma ferramenta falhar, diga apenas "Não consegui encontrar essa informação no momento" ou "Poderia reformular a pergunta? Não encontrei dados para esses critérios".
+4. **Foco no Negócio**: Aja como um analista de negócios sênior. Entregue insights, não logs de execução.
+
+TABELAS MARKDOWN (CRÍTICO - SEMPRE FAÇA ISSO):
+**QUANDO UMA FERRAMENTA RETORNAR UMA TABELA MARKDOWN, VOCÊ DEVE COPIAR A TABELA COMPLETA NA SUA RESPOSTA.**
+- Se a ferramenta retornar texto com formato de tabela (linhas com | e ---), INCLUA A TABELA INTEIRA na sua resposta
+- NÃO resuma a tabela, NÃO diga apenas "aqui estão os resultados"
+- COPIE a tabela Markdown EXATAMENTE como foi retornada pela ferramenta
+- Exemplo: Se a ferramenta retornar:
+  "Aqui estão os 10 resultados:
+  
+  | PRODUTO | NOME | VENDAS |
+  |---|---|---|
+  | 123 | Produto A | 100 |"
+  
+  Você DEVE incluir essa tabela COMPLETA na sua resposta final ao usuário.
+
 PERSONALIDADE:
 - Conversacional e amigável, como ChatGPT
 - Responda a QUALQUER pergunta, não apenas sobre BI ou dados
 - Para perguntas gerais (saudações, conhecimentos gerais, etc.): responda normalmente de forma útil e precisa
-- Para perguntas sobre dados de BI: use suas ferramentas especializadas
+- Para perguntas sobre dados de BI: use suas ferramentas especializadas silenciosamente
 
 QUANDO USAR FERRAMENTAS BI:
 Use as ferramentas APENAS quando o usuário perguntar sobre:
@@ -169,6 +225,35 @@ FERRAMENTAS DISPONÍVEIS:
 7. **validar_transferencia_produto** - Validar viabilidade de transferências
 
 8. **encontrar_rupturas_criticas** - Produtos em ruptura crítica
+
+FERRAMENTAS DE GRÁFICOS E VISUALIZAÇÕES:
+=========================================
+IMPORTANTE: Você PODE e DEVE gerar gráficos quando o usuário pedir!
+
+9. **gerar_grafico_automatico(descricao)** - USE PARA QUALQUER GRÁFICO
+   - Detecta automaticamente o tipo de gráfico mais apropriado
+   - Exemplo: gerar_grafico_automatico(descricao="ranking de vendas por segmento")
+
+10. **gerar_grafico_vendas_por_categoria** - Gráfico de vendas por categoria/segmento
+
+11. **gerar_grafico_estoque_por_produto** - Níveis de estoque por produto
+
+12. **gerar_grafico_vendas_mensais_produto(codigo_produto)** - Vendas mensais de um produto
+
+13. **gerar_grafico_vendas_por_grupo(nome_grupo)** - Vendas de um segmento específico
+
+14. **gerar_dashboard_executivo** - Dashboard completo com múltiplos gráficos
+
+15. **gerar_dashboard_analise_completa** - Análise completa do negócio
+
+16. **listar_graficos_disponiveis** - Lista todos os gráficos que você pode gerar
+
+QUANDO O USUÁRIO PEDIR GRÁFICOS:
+- "gráfico de vendas" → gerar_grafico_automatico
+- "ranking de segmentos" → gerar_grafico_vendas_por_categoria
+- "vendas do produto X" → gerar_grafico_vendas_mensais_produto(codigo_produto=X)
+- "dashboard" → gerar_dashboard_executivo
+- "quais gráficos você gera?" → listar_graficos_disponiveis
 
 EXEMPLOS DE USO:
 
@@ -343,16 +428,30 @@ DIRETRIZES:
                             try:
                                 # Execute tool
                                 tool_output = tool_to_run.invoke(func_args)
-                                tool_result = tool_output
+                                
+                                # CRÍTICO: Converter MapComposite para dict ANTES de serializar
+                                def convert_mapcomposite(obj):
+                                    """Recursivamente converte MapComposite para dict"""
+                                    if hasattr(obj, '_mapping'):
+                                        return dict(obj._mapping)
+                                    elif isinstance(obj, dict):
+                                        return {k: convert_mapcomposite(v) for k, v in obj.items()}
+                                    elif isinstance(obj, list):
+                                        return [convert_mapcomposite(item) for item in obj]
+                                    return obj
+                                
+                                # Converter o output antes de usar
+                                tool_result = convert_mapcomposite(tool_output)
+                                logger.info(f"Tool {func_name} executed successfully, result type: {type(tool_result)}")
                             except Exception as e:
-                                logger.error(f"Error executing {func_name}: {e}")
+                                logger.error(f"Error executing {func_name}: {e}", exc_info=True)
                                 tool_result = {"error": str(e)}
                         else:
                             tool_result = {"error": f"Tool {func_name} not found"}
 
                         # Add tool result to messages (User role with function_response)
                         # The adapter expects specific structure for function responses
-                        # Use safe_json_serialize to handle MapComposite and other non-serializable types
+                        # Use safe_json_serialize to handle any remaining non-serializable types
                         messages.append({
                             "role": "function", # Adapter will map this to user/function_response
                             "function_call": {"name": func_name}, # Metadata for adapter
@@ -366,11 +465,67 @@ DIRETRIZES:
                 # If no tool calls, it's a text response (Final Answer)
                 content = response.get("content", "")
                 
-                # Check if it's a "Code Result" (tabular data) from the tool result
-                # If the last message was a tool result, we might want to return that structure
-                # But typically the LLM summarizes it.
-                # We will return standard text response.
+                # NOVO: Verificar se a última ferramenta retornou uma tabela Markdown
+                # Se sim, usar diretamente essa mensagem em vez de confiar no LLM
+                logger.info(f"DEBUG: Verificando dados tabulares. Total de mensagens: {len(messages)}")
                 
+                for msg in reversed(messages):
+                    if msg.get("role") == "function":
+                        try:
+                            content_str = msg.get("content", "{}")
+                            func_content = json.loads(content_str)
+                            
+                            # PRIMEIRO: Verificar se a ferramenta retornou um gráfico (chart_data)
+                            chart_data = func_content.get("chart_data")
+                            if chart_data and func_content.get("status") == "success":
+                                logger.info(f"SUCESSO: Gráfico detectado (chart_type: {func_content.get('chart_type', 'unknown')})")
+                                
+                                # CRÍTICO: chart_data pode ser string JSON (de fig.to_json())
+                                # O frontend espera um objeto, não uma string
+                                if isinstance(chart_data, str):
+                                    try:
+                                        chart_data = json.loads(chart_data)
+                                        logger.info("chart_data parseado de string para objeto")
+                                    except json.JSONDecodeError:
+                                        logger.error("Falha ao parsear chart_data como JSON")
+                                
+                                return {
+                                    "type": "code_result",
+                                    "result": {
+                                        "result": func_content.get("summary", {}),
+                                        "chart_spec": chart_data
+                                    },
+                                    "chart_spec": chart_data
+                                }
+                            
+                            # Verificar se a mensagem contém uma tabela Markdown
+                            mensagem = func_content.get("mensagem", "")
+                            if isinstance(mensagem, str) and "|" in mensagem and "---" in mensagem:
+                                logger.info(f"SUCESSO: Tabela Markdown detectada na mensagem da ferramenta!")
+                                # Usar a mensagem com tabela diretamente como resposta
+                                return {
+                                    "type": "text",
+                                    "result": mensagem
+                                }
+                            
+                            # Também verificar se há dados brutos para retornar como code_result
+                            resultados = func_content.get("resultados", [])
+                            if isinstance(resultados, list) and len(resultados) > 0:
+                                logger.info(f"SUCESSO: Dados tabulares detectados: {len(resultados)} registros")
+                                return {
+                                    "type": "code_result",
+                                    "result": {
+                                        "result": resultados,
+                                        "chart_spec": None
+                                    },
+                                    "chart_spec": None
+                                }
+                        except Exception as e:
+                            logger.error(f"DEBUG: Erro ao parsear: {e}")
+                        break  # Só verificar a última função
+                
+                logger.info(f"DEBUG: Nenhum dado tabular detectado. Retornando texto do LLM.")
+                # Caso contrário, retornar resposta de texto normal do LLM
                 return {
                     "type": "text",
                     "result": content

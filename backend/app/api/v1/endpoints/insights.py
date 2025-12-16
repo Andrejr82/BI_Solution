@@ -6,6 +6,9 @@ Proactive AI-powered business insights
 from typing import Any, List
 from datetime import datetime, timedelta
 import logging
+import json
+import re
+import polars as pl
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -15,7 +18,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.infrastructure.database.models import User
 from app.core.llm_gemini_adapter import GeminiLLMAdapter
 from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
-from app.core.data_scope_service import DataScopeService
+from app.core.data_scope_service import data_scope_service
 from app.config.settings import settings
 
 router = APIRouter(prefix="/insights", tags=["AI Insights"])
@@ -56,149 +59,136 @@ async def get_proactive_insights(
     - Revenue opportunities
     - Stock risks
     """
+    logger.info(f"🧠 Proactive Insights solicitado por: {current_user.username}")
     try:
         # Initialize adapters
-        data_adapter = HybridDataAdapter()
         llm_adapter = GeminiLLMAdapter()
-        data_scope = DataScopeService()
-
-        # Get user segments
-        segments = data_scope.get_user_segments(current_user)
-
-        # Collect business metrics
+        
+        # Get filtered dataframe using singleton service (Fast & Secure)
+        df = data_scope_service.get_filtered_dataframe(current_user)
+        
+        # Collect business metrics using Polars
         insights_data = []
 
-        # 1. Sales Trends Analysis
-        sales_query = """
-        SELECT TOP 10
-            SEGMENTO,
-            SUM(QtdVenda) as total_vendas,
-            SUM(VrVenda) as receita_total,
-            COUNT(DISTINCT CODPRODUTO) as produtos_vendidos
-        FROM AdmMatao
-        WHERE SEGMENTO IN ({})
-        GROUP BY SEGMENTO
-        ORDER BY receita_total DESC
-        """.format(','.join(f"'{s}'" for s in segments))
+        # Helper to safely get column
+        def get_col(candidates, default=None):
+            for c in candidates:
+                if c in df.columns: return c
+            return default
 
-        try:
-            sales_df = await data_adapter.execute_query(sales_query)
-            if not sales_df.empty:
-                insights_data.append({
-                    "type": "sales",
-                    "data": sales_df.to_dict('records')
-                })
-        except Exception as e:
-            logger.warning(f"Sales query failed: {e}")
+        # Map columns based on ADMMAT schema
+        col_segment = get_col(["NOMESEGMENTO", "SEGMENTO", "CATEGORIA"], "SEGMENTO")
+        col_sales = get_col(["VENDA_30DD", "QtdVenda", "VENDA"], "VENDA_30DD")
+        col_revenue = get_col(["MES_01", "VrVenda", "RECEITA"], "MES_01")
+        col_stock = get_col(["ESTOQUE_UNE", "QtdEstoque"], "ESTOQUE_UNE")
+        col_product = get_col(["PRODUTO", "CODPRODUTO"], "PRODUTO")
+        col_name = get_col(["NOME", "NOMPRODUTO"], "NOME")
 
-        # 2. Stock Rupture Analysis
-        rupture_query = """
-        SELECT TOP 10
-            NOMPRODUTO,
-            CODPRODUTO,
-            QtdEstoque,
-            QtdVenda,
-            SEGMENTO,
-            CASE WHEN QtdEstoque = 0 THEN 1 ELSE 0 END as is_rupture
-        FROM AdmMatao
-        WHERE SEGMENTO IN ({})
-            AND QtdEstoque < QtdVenda * 0.5
-        ORDER BY QtdVenda DESC
-        """.format(','.join(f"'{s}'" for s in segments))
+        # 1. Sales Trends Analysis (Aggregated by Segment)
+        if col_segment and col_sales and col_revenue:
+            try:
+                # Group by Segment
+                df_sales = df.group_by(col_segment).agg([
+                    pl.col(col_sales).sum().alias("total_vendas"),
+                    pl.col(col_revenue).sum().alias("receita_total"),
+                    pl.col(col_product).n_unique().alias("produtos_vendidos")
+                ]).sort("receita_total", descending=True).head(10)
+                
+                sales_data = df_sales.to_dicts()
+                if sales_data:
+                    insights_data.append({
+                        "type": "sales_by_segment",
+                        "data": sales_data
+                    })
+            except Exception as e:
+                logger.warning(f"Sales analysis failed: {e}")
 
-        try:
-            rupture_df = await data_adapter.execute_query(rupture_query)
-            if not rupture_df.empty:
-                insights_data.append({
-                    "type": "rupture",
-                    "data": rupture_df.to_dict('records')
-                })
-        except Exception as e:
-            logger.warning(f"Rupture query failed: {e}")
+        # 2. Stock Rupture Analysis (Low Stock items)
+        if col_name and col_stock and col_sales:
+            try:
+                # Filter potential ruptures: Stock < 10% of monthly sales
+                df_rupture = df.filter(
+                    (pl.col(col_stock).cast(pl.Float64).fill_null(0) < (pl.col(col_sales).cast(pl.Float64).fill_null(0) * 0.1)) &
+                    (pl.col(col_sales).cast(pl.Float64).fill_null(0) > 0)
+                ).sort(col_sales, descending=True).head(10).select([
+                    col_name, col_stock, col_sales, col_segment
+                ])
 
-        # 3. High Value Products
-        high_value_query = """
-        SELECT TOP 10
-            NOMPRODUTO,
-            CODPRODUTO,
-            VrVenda,
-            QtdVenda,
-            (VrVenda / NULLIF(QtdVenda, 0)) as preco_medio,
-            SEGMENTO
-        FROM AdmMatao
-        WHERE SEGMENTO IN ({})
-            AND QtdVenda > 0
-        ORDER BY VrVenda DESC
-        """.format(','.join(f"'{s}'" for s in segments))
+                rupture_data = df_rupture.to_dicts()
+                if rupture_data:
+                    insights_data.append({
+                        "type": "critical_ruptures",
+                        "data": rupture_data
+                    })
+            except Exception as e:
+                logger.warning(f"Rupture analysis failed: {e}")
 
-        try:
-            high_value_df = await data_adapter.execute_query(high_value_query)
-            if not high_value_df.empty:
-                insights_data.append({
-                    "type": "high_value",
-                    "data": high_value_df.to_dict('records')
-                })
-        except Exception as e:
-            logger.warning(f"High value query failed: {e}")
+        # 3. High Value Products (Pareto/ABC)
+        if col_name and col_revenue:
+            try:
+                df_high_value = df.sort(col_revenue, descending=True).head(10).select([
+                    col_name, col_revenue, col_sales, col_segment
+                ])
+                
+                high_value_data = df_high_value.to_dicts()
+                if high_value_data:
+                    insights_data.append({
+                        "type": "top_revenue_products",
+                        "data": high_value_data
+                    })
+            except Exception as e:
+                logger.warning(f"High value analysis failed: {e}")
 
         # Generate insights using Gemini
-        prompt = f"""
-Você é um analista de BI expert. Analise os dados abaixo e gere 3-5 insights acionáveis.
+        try:
+            # Call Gemini
+            response = await llm_adapter.generate_response(prompt)
+            
+            # Log raw response for debugging (truncated)
+            logger.info(f"🤖 Gemini Raw Response: {response[:200]}...")
 
-**Dados Disponíveis:**
-{insights_data}
+            # Extract JSON from response (handles markdown code blocks)
+            # Regex robusto para capturar JSON dentro ou fora de blocos de código
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Tenta encontrar o primeiro { e o último }
+                start = response.find('{')
+                end = response.rfind('}') + 1
+                if start != -1 and end > start:
+                    json_str = response[start:end]
+                else:
+                    json_str = response
 
-**Suas tarefas:**
-1. Identifique padrões, tendências e anomalias
-2. Destaque oportunidades de negócio
-3. Sinalize riscos potenciais
-4. Forneça recomendações práticas
+            insights_response = json.loads(json_str)
 
-**Formato da resposta (JSON):**
-```json
-{{
-  "insights": [
-    {{
-      "id": "unique-id-1",
-      "title": "Título curto do insight",
-      "description": "Descrição detalhada do que foi identificado",
-      "category": "trend|anomaly|opportunity|risk",
-      "severity": "low|medium|high",
-      "recommendation": "Ação recomendada específica",
-      "data_points": [{{ "key": "value" }}]
-    }}
-  ]
-}}
-```
-
-Seja conciso, objetivo e focado em ações práticas. Use dados quantitativos sempre que possível.
-"""
-
-        # Call Gemini
-        response = await llm_adapter.generate_response(prompt)
-
-        # Parse JSON response
-        import json
-        import re
-
-        # Extract JSON from response (handles markdown code blocks)
-        json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            json_str = response
-
-        insights_response = json.loads(json_str)
+        except Exception as llm_error:
+            logger.error(f"❌ Falha no LLM ou Parse: {llm_error}. Usando fallback.")
+            # Fallback seguro para não quebrar o frontend
+            insights_response = {
+                "insights": [
+                    {
+                        "id": "fallback-1",
+                        "title": "Análise de Dados Disponível",
+                        "description": "Os dados foram processados com sucesso, mas a análise detalhada da IA está temporariamente indisponível.",
+                        "category": "opportunity",
+                        "severity": "low",
+                        "recommendation": "Verifique os gráficos de KPI para análise manual.",
+                        "data_points": []
+                    }
+                ]
+            }
 
         # Format insights with timestamps
         formatted_insights = []
         for idx, insight in enumerate(insights_response.get('insights', [])):
             formatted_insights.append(InsightResponse(
                 id=insight.get('id', f"insight-{idx}"),
-                title=insight['title'],
-                description=insight['description'],
-                category=insight['category'],
-                severity=insight['severity'],
+                title=insight.get('title', 'Insight Gerado'),
+                description=insight.get('description', 'Sem descrição disponível.'),
+                category=insight.get('category', 'opportunity'),
+                severity=insight.get('severity', 'low'),
                 recommendation=insight.get('recommendation'),
                 data_points=insight.get('data_points'),
                 created_at=datetime.utcnow().isoformat()
@@ -210,17 +200,13 @@ Seja conciso, objetivo e focado em ações práticas. Use dados quantitativos se
             generated_at=datetime.utcnow().isoformat()
         )
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Gemini response: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate insights. Please try again."
-        )
     except Exception as e:
-        logger.error(f"Insights generation failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating insights: {str(e)}"
+        logger.error(f"🔥 Erro Crítico em Proactive Insights: {e}", exc_info=True)
+        # Última linha de defesa: retornar lista vazia em vez de 500
+        return InsightsListResponse(
+            insights=[],
+            total=0,
+            generated_at=datetime.utcnow().isoformat()
         )
 
 
@@ -235,8 +221,7 @@ async def detect_anomalies(
     Returns unusual patterns that require attention.
     """
     data_adapter = HybridDataAdapter()
-    data_scope = DataScopeService()
-    segments = data_scope.get_user_segments(current_user)
+    segments = data_scope_service.get_user_segments(current_user)
 
     # Detect sudden drops in sales
     anomaly_query = """

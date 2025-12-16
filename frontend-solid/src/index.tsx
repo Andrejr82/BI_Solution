@@ -22,6 +22,7 @@ import Diagnostics from './pages/Diagnostics';
 import Examples from './pages/Examples';
 import Help from './pages/Help';
 import SharedConversation from './pages/SharedConversation';
+import CodeChat from './pages/CodeChat';
 
 // Importar Store de Autenticação
 import auth from './store/auth';
@@ -87,15 +88,16 @@ function App() {
       {/* Rotas Protegidas - Dentro do Layout */}
       <Route path="/" component={Layout}>
         <Route path="/dashboard" component={() => <PrivateRoute component={<Dashboard />} />} />
-        <Route path="/metrics" component={() => <PrivateRoute component={<Analytics />} />} />
+        <Route path="/metrics" component={() => <RoleRoute component={<Analytics />} requiredRole="admin" />} />
         <Route path="/rupturas" component={() => <PrivateRoute component={<Rupturas />} />} />
         <Route path="/transfers" component={() => <PrivateRoute component={<Transfers />} />} />
-        <Route path="/reports" component={() => <PrivateRoute component={<Reports />} />} />
+        <Route path="/reports" component={() => <RoleRoute component={<Reports />} requiredRole="admin" />} />
         <Route path="/chat" component={() => <PrivateRoute component={<Chat />} />} />
-        <Route path="/examples" component={() => <PrivateRoute component={<Examples />} />} />
-        <Route path="/learning" component={() => <PrivateRoute component={<Learning />} />} />
-        <Route path="/playground" component={() => <PrivateRoute component={<Playground />} />} />
-        <Route path="/diagnostics" component={() => <PrivateRoute component={<Diagnostics />} />} />
+        <Route path="/examples" component={() => <RoleRoute component={<Examples />} requiredRole="admin" />} />
+        <Route path="/learning" component={() => <RoleRoute component={<Learning />} requiredRole="admin" />} />
+        <Route path="/playground" component={() => <RoleRoute component={<Playground />} requiredRole="admin" />} />
+        <Route path="/code-chat" component={() => <RoleRoute component={<CodeChat />} requiredRole="admin" />} />
+        <Route path="/diagnostics" component={() => <RoleRoute component={<Diagnostics />} requiredRole="admin" />} />
         <Route path="/help" component={() => <PrivateRoute component={<Help />} />} />
         <Route path="/profile" component={() => <PrivateRoute component={<Profile />} />} />
         <Route path="/admin" component={() => <RoleRoute component={<Admin />} requiredRole="admin" />} />

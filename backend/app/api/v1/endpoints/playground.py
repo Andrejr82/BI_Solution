@@ -29,6 +29,7 @@ class ChatMessage(BaseModel):
 
 class PlaygroundChatRequest(BaseModel):
     message: str
+    system_instruction: Optional[str] = None
     history: List[ChatMessage] = Field(default_factory=list)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=100, le=8192)
@@ -76,6 +77,13 @@ async def playground_chat(
     Permite testar o modelo Gemini com diferentes parâmetros.
     """
     try:
+        # Validar mensagem não vazia
+        if not request.message or not request.message.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="A mensagem não pode estar vazia. Por favor, digite algo."
+            )
+
         if not settings.GEMINI_API_KEY:
             raise HTTPException(
                 status_code=500,
@@ -85,7 +93,8 @@ async def playground_chat(
         # Configurar LLM com parâmetros customizados usando GeminiLLMAdapter
         llm = GeminiLLMAdapter(
             model_name=settings.LLM_MODEL_NAME,
-            gemini_api_key=settings.GEMINI_API_KEY
+            gemini_api_key=settings.GEMINI_API_KEY,
+            system_instruction=request.system_instruction
         ).get_llm()
 
         # Note: GeminiLLMAdapter doesn't support custom temperature/max_tokens in get_llm()

@@ -133,10 +133,12 @@ async def get_top_queries(
 
 @router.get("/filter-options")
 async def get_filter_options(
-    current_user: Annotated[User, Depends(get_current_active_user)]
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    segmento: Optional[str] = Query(None, description="Segmento para filtrar as categorias retornadas")
 ) -> Dict[str, List[str]]:
     """
     Retorna valores únicos de categoria e segmento para os filtros.
+    Pode filtrar categorias por um segmento específico.
     """
     import polars as pl
     from app.core.data_scope_service import data_scope_service
@@ -146,6 +148,10 @@ async def get_filter_options(
 
         categorias = []
         segmentos = []
+        
+        # Filtrar o DataFrame pelo segmento se fornecido
+        if segmento and "NOMESEGMENTO" in df.columns:
+            df = df.filter(pl.col("NOMESEGMENTO").str.to_lowercase() == segmento.lower())
 
         # Categorias únicas
         if "NOMECATEGORIA" in df.columns:
@@ -155,9 +161,10 @@ async def get_filter_options(
                 if cat and cat != "null" and cat != "None":
                     categorias.append(cat)
 
-        # Segmentos únicos
-        if "NOMESEGMENTO" in df.columns:
-            seg_unique = df.select("NOMESEGMENTO").unique().sort("NOMESEGMENTO")
+        # Segmentos únicos (sempre da base original, não filtrada por categoria)
+        df_all_segments = data_scope_service.get_filtered_dataframe(current_user, max_rows=50000)
+        if "NOMESEGMENTO" in df_all_segments.columns:
+            seg_unique = df_all_segments.select("NOMESEGMENTO").unique().sort("NOMESEGMENTO")
             for row in seg_unique.iter_rows(named=True):
                 seg = str(row["NOMESEGMENTO"]).strip()
                 if seg and seg != "null" and seg != "None":

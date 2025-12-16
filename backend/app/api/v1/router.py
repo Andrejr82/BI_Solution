@@ -22,7 +22,8 @@ from app.api.v1.endpoints import (
     shared,
     preferences,
     insights,
-    health
+    health,
+    code_chat  # Code Chat RAG
 )
 
 api_router = APIRouter()
@@ -49,6 +50,7 @@ api_router.include_router(playground.router)
 api_router.include_router(shared.router)
 api_router.include_router(preferences.router)
 api_router.include_router(insights.router)
+api_router.include_router(code_chat.router)  # Code Chat RAG
 
 # Frontend Logs
 api_router.include_router(frontend_logs.router)

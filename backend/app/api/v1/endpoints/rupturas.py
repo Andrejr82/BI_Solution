@@ -49,7 +49,20 @@ async def get_critical_rupturas(
             df = df.filter(pl.col("NOMESEGMENTO") == segmento)
 
         if une:
-            df = df.filter(pl.col("UNE") == une)
+            # UNE pode ser string ou int - tentar conversão
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"🔍 Filtro UNE recebido: '{une}'")
+            
+            try:
+                une_val = int(une)
+                df = df.filter(pl.col("UNE") == une_val)
+                logger.info(f"📊 Filtro UNE aplicado como INT: {df.height} registros")
+            except (ValueError, Exception) as e:
+                # Se falhar, tentar como string
+                logger.warning(f"⚠️ Conversão para int falhou, tentando como string: {e}")
+                df = df.filter(pl.col("UNE").cast(pl.Utf8) == str(une))
+                logger.info(f"📊 Filtro UNE aplicado como STRING: {df.height} registros")
 
         # Definição de ruptura crítica:
         # CD=0 + Loja < Linha Verde + Vendas > 0
@@ -159,7 +172,11 @@ async def get_rupturas_summary(
         if segmento and "NOMESEGMENTO" in df.columns:
             df = df.filter(pl.col("NOMESEGMENTO") == segmento)
         if une:
-            df = df.filter(pl.col("UNE") == une)
+            try:
+                une_val = int(une)
+                df = df.filter(pl.col("UNE") == une_val)
+            except (ValueError, Exception):
+                df = df.filter(pl.col("UNE").cast(pl.Utf8) == str(une))
 
         # Filtrar rupturas
         rupturas = df.filter(

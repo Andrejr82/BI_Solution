@@ -16,6 +16,9 @@ export default function Rupturas() {
   const [necessidadeSegmentoChart, setNecessidadeSegmentoChart] = createSignal<any>({});
   const [selectedProduct, setSelectedProduct] = createSignal<Ruptura | null>(null);
 
+  // Drill-down: Grupo selecionado para ver produtos
+  const [selectedGroup, setSelectedGroup] = createSignal<string | null>(null);
+
   // Filtros
   const [segmentos, setSegmentos] = createSignal<string[]>([]);
   const [unes, setUnes] = createSignal<string[]>([]);
@@ -49,10 +52,15 @@ export default function Rupturas() {
       const segmento = selectedSegmento() || undefined;
       const une = selectedUne() || undefined;
 
+      console.log('🔍 [Rupturas] Carregando dados com filtros:', { segmento, une });
+
       const [rupturaRes, summaryRes] = await Promise.all([
         rupturasApi.getCritical(50, segmento, une),
         rupturasApi.getSummary(segmento, une)
       ]);
+
+      console.log('📊 [Rupturas] Dados recebidos:', rupturaRes.data.length, 'produtos');
+      console.log('📊 [Rupturas] UNEs nos dados:', [...new Set(rupturaRes.data.map(r => r.UNE))]);
 
       setData(rupturaRes.data);
       setSummary(summaryRes.data);
@@ -70,39 +78,71 @@ export default function Rupturas() {
   const generateCharts = (rupturas: Ruptura[]) => {
     if (rupturas.length === 0) return;
 
-    // 1. Gráfico de Pizza - Distribuição de Criticidade
-    const criticidade = {
-      critico: rupturas.filter(r => r.CRITICIDADE_PCT >= 75).length,
-      alto: rupturas.filter(r => r.CRITICIDADE_PCT >= 50 && r.CRITICIDADE_PCT < 75).length,
-      medio: rupturas.filter(r => r.CRITICIDADE_PCT >= 25 && r.CRITICIDADE_PCT < 50).length,
-      baixo: rupturas.filter(r => r.CRITICIDADE_PCT < 25).length
-    };
+    // 1. Top Grupos em Ruptura Crítica - mais acionável para o comprador
+    // Agrupa produtos críticos por NOMEGRUPO e mostra top 8
+    const gruposContagem: { [key: string]: { total: number, criticos: number, necessidade: number } } = {};
+
+    rupturas.forEach(r => {
+      const grupo = (r as any).NOMEGRUPO || r.NOMESEGMENTO || 'SEM GRUPO';
+      if (!gruposContagem[grupo]) {
+        gruposContagem[grupo] = { total: 0, criticos: 0, necessidade: 0 };
+      }
+      gruposContagem[grupo].total++;
+      gruposContagem[grupo].necessidade += r.NECESSIDADE;
+      if (r.CRITICIDADE_PCT >= 75) gruposContagem[grupo].criticos++;
+    });
+
+    // Ordenar por quantidade de críticos e pegar top 8
+    const topGrupos = Object.entries(gruposContagem)
+      .sort((a, b) => b[1].criticos - a[1].criticos)
+      .slice(0, 8);
 
     setCriticidadeChart({
       data: [{
-        type: 'pie',
-        labels: ['CRÍTICO (≥75%)', 'ALTO (50-75%)', 'MÉDIO (25-50%)', 'BAIXO (<25%)'],
-        values: [criticidade.critico, criticidade.alto, criticidade.medio, criticidade.baixo],
+        type: 'bar',
+        orientation: 'h',
+        y: topGrupos.map(([nome]) => nome.length > 25 ? nome.substring(0, 25) + '...' : nome),
+        x: topGrupos.map(([, data]) => data.criticos),
         marker: {
-          colors: ['#ef4444', '#f97316', '#f59e0b', '#3b82f6']
+          color: topGrupos.map(([, data]) => {
+            const pct = data.criticos / data.total;
+            if (pct >= 0.8) return '#B94343';       // 80%+ críticos = vermelho
+            if (pct >= 0.5) return '#CC8B3C';       // 50%+ = laranja
+            return '#C9A961';                        // menos = dourado
+          }),
+          line: { color: '#E5E5E5', width: 1 }
         },
-        textinfo: 'label+value+percent',
-        textposition: 'inside',
-        textfont: { size: 11, color: '#ffffff' },
-        hovertemplate: '<b>%{label}</b><br>Produtos: %{value}<br>%{percent}<extra></extra>'
+        text: topGrupos.map(([, data]) => `${data.criticos} críticos (${Math.round(data.necessidade)} un)`),
+        textposition: 'auto',
+        textfont: { color: '#FFFFFF', size: 11, family: 'Inter, sans-serif' },
+        hovertemplate: '<b>%{y}</b><br>Produtos críticos: %{x}<br>Total no grupo: %{customdata[0]}<br>Necessidade: %{customdata[1]:.0f} un<extra></extra>',
+        customdata: topGrupos.map(([, data]) => [data.total, data.necessidade])
       }],
       layout: {
         title: {
-          text: 'Distribuição por Criticidade',
-          font: { size: 16, color: '#e5e7eb' }
+          text: '<b>🔴 Top Grupos em Ruptura Crítica</b><br><span style="font-size:11px;color:#6B6B6B">Categorias com mais produtos em situação crítica (≥75%)</span>',
+          font: { size: 14, color: '#2D2D2D', family: 'Inter, sans-serif' },
+          x: 0.02
         },
-        plot_bgcolor: '#1f2937',
-        paper_bgcolor: '#1f2937',
-        margin: { l: 20, r: 20, t: 60, b: 20 },
-        font: { color: '#e5e7eb' },
-        showlegend: false
+        xaxis: {
+          title: 'Produtos Críticos',
+          titlefont: { color: '#6B6B6B', size: 11, family: 'Inter, sans-serif' },
+          tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+          gridcolor: '#E5E5E5',
+          zeroline: false
+        },
+        yaxis: {
+          tickfont: { color: '#2D2D2D', size: 10, family: 'Inter, sans-serif' },
+          automargin: true
+        },
+        plot_bgcolor: '#FFFFFF',
+        paper_bgcolor: '#FAFAFA',
+        margin: { l: 150, r: 20, t: 70, b: 50 },
+        font: { color: '#2D2D2D', family: 'Inter, sans-serif' },
+        showlegend: false,
+        bargap: 0.25
       },
-      config: { responsive: true }
+      config: { responsive: true, displayModeBar: false }
     });
 
     // 2. Gráfico de Barras - Top 10 Produtos em Ruptura
@@ -110,6 +150,7 @@ export default function Rupturas() {
       .sort((a, b) => b.NECESSIDADE - a.NECESSIDADE)
       .slice(0, 10);
 
+    // LOJAS CAÇULA - LIGHT THEME
     setTopRupturasChart({
       data: [{
         type: 'bar',
@@ -117,129 +158,142 @@ export default function Rupturas() {
         y: top10.map(r => r.NECESSIDADE),
         marker: {
           color: top10.map(r => {
-            if (r.CRITICIDADE_PCT >= 75) return '#ef4444';
-            if (r.CRITICIDADE_PCT >= 50) return '#f97316';
-            if (r.CRITICIDADE_PCT >= 25) return '#f59e0b';
-            return '#3b82f6';
+            if (r.CRITICIDADE_PCT >= 75) return '#B94343'; // Vermelho terroso
+            if (r.CRITICIDADE_PCT >= 50) return '#CC8B3C'; // Laranja terroso
+            if (r.CRITICIDADE_PCT >= 25) return '#C9A961'; // Dourado
+            return '#5B7B9A'; // Azul acinzentado
           }),
-          line: { color: '#1e40af', width: 1 }
+          line: { color: '#E5E5E5', width: 1 }
         },
         text: top10.map(r => Math.round(r.NECESSIDADE)),
         textposition: 'outside',
-        hovertemplate: '<b>%{x}</b><br>Necessidade: %{y:.0f} un<br>Código: ' +
-          top10.map(r => r.PRODUTO).join('<br>Código: ') + '<extra></extra>',
+        textfont: { color: '#2D2D2D', family: 'Inter, sans-serif' },
+        hovertemplate: '<b>%{x}</b><br>Necessidade: %{y:.0f} un<extra></extra>',
         customdata: top10.map(r => r.PRODUTO)
       }],
       layout: {
         title: {
           text: 'Top 10 Produtos - Maior Necessidade',
-          font: { size: 16, color: '#e5e7eb' }
+          font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
         },
         xaxis: {
           title: '',
           tickangle: -45,
-          tickfont: { size: 9, color: '#9ca3af' },
-          gridcolor: '#374151'
+          tickfont: { size: 9, color: '#6B6B6B', family: 'Inter, sans-serif' },
+          gridcolor: '#E5E5E5',
+          linecolor: '#E5E5E5'
         },
         yaxis: {
           title: 'Necessidade (unidades)',
-          titlefont: { color: '#9ca3af' },
-          tickfont: { color: '#9ca3af' },
-          gridcolor: '#374151'
+          titlefont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+          tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+          gridcolor: '#E5E5E5',
+          linecolor: '#E5E5E5'
         },
-        plot_bgcolor: '#1f2937',
-        paper_bgcolor: '#1f2937',
+        plot_bgcolor: '#FFFFFF',
+        paper_bgcolor: '#FAFAFA',
         margin: { l: 60, r: 20, t: 60, b: 120 },
-        font: { color: '#e5e7eb' }
+        font: { color: '#2D2D2D', family: 'Inter, sans-serif' }
       },
       config: { responsive: true }
     });
 
-    // 3. Gráfico de Barras Empilhadas - Necessidade por Segmento
-    const segmentoData: { [key: string]: { critico: number, alto: number, medio: number, baixo: number } } = {};
+    // 3. Gráfico de Barras Empilhadas - Necessidade por GRUPO (categoria de produto)
+    // Agrupa por NOMEGRUPO para que o comprador possa priorizar por categoria
+    const grupoData: { [key: string]: { critico: number, alto: number, medio: number, baixo: number, total: number } } = {};
 
     rupturas.forEach(r => {
-      const seg = r.NOMESEGMENTO || 'SEM SEGMENTO';
-      if (!segmentoData[seg]) {
-        segmentoData[seg] = { critico: 0, alto: 0, medio: 0, baixo: 0 };
+      // Usar NOMEGRUPO se disponível, senão fallback para NOMESEGMENTO
+      const grupo = (r as any).NOMEGRUPO || r.NOMESEGMENTO || 'SEM GRUPO';
+      if (!grupoData[grupo]) {
+        grupoData[grupo] = { critico: 0, alto: 0, medio: 0, baixo: 0, total: 0 };
       }
 
       const necessidade = r.NECESSIDADE;
-      if (r.CRITICIDADE_PCT >= 75) segmentoData[seg].critico += necessidade;
-      else if (r.CRITICIDADE_PCT >= 50) segmentoData[seg].alto += necessidade;
-      else if (r.CRITICIDADE_PCT >= 25) segmentoData[seg].medio += necessidade;
-      else segmentoData[seg].baixo += necessidade;
+      grupoData[grupo].total += necessidade;
+      if (r.CRITICIDADE_PCT >= 75) grupoData[grupo].critico += necessidade;
+      else if (r.CRITICIDADE_PCT >= 50) grupoData[grupo].alto += necessidade;
+      else if (r.CRITICIDADE_PCT >= 25) grupoData[grupo].medio += necessidade;
+      else grupoData[grupo].baixo += necessidade;
     });
 
-    const segmentos = Object.keys(segmentoData);
+    // Ordenar grupos por total de necessidade (mais críticos primeiro)
+    const grupos = Object.keys(grupoData).sort((a, b) => grupoData[b].total - grupoData[a].total).slice(0, 10);
 
+    // LOJAS CAÇULA - LIGHT THEME
     setNecessidadeSegmentoChart({
       data: [
         {
           type: 'bar',
-          name: 'CRÍTICO',
-          x: segmentos,
-          y: segmentos.map(s => segmentoData[s].critico),
-          marker: { color: '#ef4444' },
+          name: '🔴 CRÍTICO',
+          x: grupos,
+          y: grupos.map(g => grupoData[g].critico),
+          marker: { color: '#B94343' },
           hovertemplate: '<b>%{x}</b><br>Crítico: %{y:.0f} un<extra></extra>'
         },
         {
           type: 'bar',
-          name: 'ALTO',
-          x: segmentos,
-          y: segmentos.map(s => segmentoData[s].alto),
-          marker: { color: '#f97316' },
+          name: '🟠 ALTO',
+          x: grupos,
+          y: grupos.map(g => grupoData[g].alto),
+          marker: { color: '#CC8B3C' },
           hovertemplate: '<b>%{x}</b><br>Alto: %{y:.0f} un<extra></extra>'
         },
         {
           type: 'bar',
-          name: 'MÉDIO',
-          x: segmentos,
-          y: segmentos.map(s => segmentoData[s].medio),
-          marker: { color: '#f59e0b' },
+          name: '🟡 MÉDIO',
+          x: grupos,
+          y: grupos.map(g => grupoData[g].medio),
+          marker: { color: '#C9A961' },
           hovertemplate: '<b>%{x}</b><br>Médio: %{y:.0f} un<extra></extra>'
         },
         {
           type: 'bar',
-          name: 'BAIXO',
-          x: segmentos,
-          y: segmentos.map(s => segmentoData[s].baixo),
-          marker: { color: '#3b82f6' },
+          name: '🔵 BAIXO',
+          x: grupos,
+          y: grupos.map(g => grupoData[g].baixo),
+          marker: { color: '#5B7B9A' },
           hovertemplate: '<b>%{x}</b><br>Baixo: %{y:.0f} un<extra></extra>'
         }
       ],
       layout: {
         title: {
-          text: 'Necessidade por Segmento e Criticidade',
-          font: { size: 16, color: '#e5e7eb' }
+          text: '<b>Necessidade de Reposição por Grupo de Produtos</b><br><span style="font-size:11px;color:#6B6B6B">Top 10 grupos ordenados por volume de necessidade</span>',
+          font: { size: 14, color: '#2D2D2D', family: 'Inter, sans-serif' },
+          x: 0.02
         },
         barmode: 'stack',
         xaxis: {
           title: '',
           tickangle: -45,
-          tickfont: { size: 10, color: '#9ca3af' },
-          gridcolor: '#374151'
+          tickfont: { size: 10, color: '#6B6B6B', family: 'Inter, sans-serif' },
+          gridcolor: '#E5E5E5',
+          linecolor: '#E5E5E5'
         },
         yaxis: {
           title: 'Necessidade Total (unidades)',
-          titlefont: { color: '#9ca3af' },
-          tickfont: { color: '#9ca3af' },
-          gridcolor: '#374151'
+          titlefont: { color: '#6B6B6B', size: 11, family: 'Inter, sans-serif' },
+          tickfont: { color: '#6B6B6B', family: 'Inter, sans-serif' },
+          gridcolor: '#E5E5E5',
+          linecolor: '#E5E5E5'
         },
-        plot_bgcolor: '#1f2937',
-        paper_bgcolor: '#1f2937',
-        margin: { l: 60, r: 20, t: 60, b: 100 },
-        font: { color: '#e5e7eb' },
+        plot_bgcolor: '#FFFFFF',
+        paper_bgcolor: '#FAFAFA',
+        margin: { l: 70, r: 20, t: 80, b: 120 },
+        font: { color: '#2D2D2D', family: 'Inter, sans-serif' },
         showlegend: true,
         legend: {
           orientation: 'h',
           x: 0.5,
-          y: 1.1,
+          y: 1.12,
           xanchor: 'center',
-          font: { size: 10, color: '#9ca3af' }
+          font: { size: 10, color: '#2D2D2D', family: 'Inter, sans-serif' },
+          bgcolor: 'rgba(255,255,255,0.9)',
+          bordercolor: '#E5E5E5',
+          borderwidth: 1
         }
       },
-      config: { responsive: true }
+      config: { responsive: true, displayModeBar: false }
     });
   };
 
@@ -256,6 +310,33 @@ export default function Rupturas() {
     }
   };
 
+  // Handler para clique no gráfico de grupos - abre modal com produtos do grupo
+  const handleGroupClick = (clickData: any) => {
+    if (clickData && clickData.points && clickData.points[0]) {
+      const point = clickData.points[0];
+      // O label do eixo Y contém o nome do grupo
+      const grupoName = point.y || point.label;
+      if (grupoName) {
+        // Remover truncagem (...) se houver
+        const cleanName = grupoName.replace('...', '');
+        setSelectedGroup(cleanName);
+      }
+    }
+  };
+
+  // Filtrar produtos pelo grupo selecionado
+  const getProductsByGroup = () => {
+    const grupo = selectedGroup();
+    if (!grupo) return [];
+
+    return data().filter(r => {
+      const productGroup = (r as any).NOMEGRUPO || r.NOMESEGMENTO || 'SEM GRUPO';
+      // Match parcial para grupos truncados
+      return productGroup.toLowerCase().includes(grupo.toLowerCase()) ||
+        grupo.toLowerCase().includes(productGroup.substring(0, 20).toLowerCase());
+    }).sort((a, b) => b.CRITICIDADE_PCT - a.CRITICIDADE_PCT);
+  };
+
   const clearFilters = () => {
     setSelectedSegmento('');
     setSelectedUne('');
@@ -266,12 +347,13 @@ export default function Rupturas() {
     const items = data();
     if (items.length === 0) return;
 
-    const headers = ['Produto', 'Nome', 'UNE', 'Segmento', 'Venda 30d', 'Estoque UNE', 'Estoque CD', 'Linha Verde', 'Criticidade %', 'Necessidade'];
+    const headers = ['Produto', 'Nome', 'UNE', 'Segmento', 'Grupo', 'Venda 30d', 'Estoque UNE', 'Estoque CD', 'Linha Verde', 'Criticidade %', 'Necessidade'];
     const rows = items.map(item => [
       item.PRODUTO,
       item.NOME,
       item.UNE,
       item.NOMESEGMENTO || '',
+      (item as any).NOMEGRUPO || '',
       item.VENDA_30DD,
       item.ESTOQUE_UNE,
       item.ESTOQUE_CD,
@@ -286,6 +368,51 @@ export default function Rupturas() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `rupturas_criticas_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Gerar Pedido de Compra - Exporta lista formatada para compras
+  const exportPurchaseOrder = () => {
+    const items = data();
+    if (items.length === 0) return;
+
+    // Agrupar por NOMEGRUPO
+    const grupoData: { [key: string]: Array<typeof items[0]> } = {};
+    items.forEach(item => {
+      const grupo = (item as any).NOMEGRUPO || item.NOMESEGMENTO || 'SEM GRUPO';
+      if (!grupoData[grupo]) grupoData[grupo] = [];
+      grupoData[grupo].push(item);
+    });
+
+    // Calcular totais por grupo
+    let csvContent = '=== PEDIDO DE COMPRA - REPOSIÇÃO DE RUPTURAS CRÍTICAS ===\n';
+    csvContent += `Data de Geração: ${new Date().toLocaleString('pt-BR')}\n`;
+    csvContent += `Total de Produtos: ${items.length}\n`;
+    csvContent += `Total de Grupos: ${Object.keys(grupoData).length}\n\n`;
+
+    Object.entries(grupoData)
+      .sort((a, b) => b[1].reduce((sum, i) => sum + i.NECESSIDADE, 0) - a[1].reduce((sum, i) => sum + i.NECESSIDADE, 0))
+      .forEach(([grupo, produtos]) => {
+        const totalNecessidade = produtos.reduce((sum, p) => sum + p.NECESSIDADE, 0);
+        const totalCriticos = produtos.filter(p => p.CRITICIDADE_PCT >= 75).length;
+
+        csvContent += `\n--- ${grupo.toUpperCase()} ---\n`;
+        csvContent += `Produtos: ${produtos.length} | Críticos: ${totalCriticos} | Necessidade Total: ${Math.round(totalNecessidade)} un\n`;
+        csvContent += 'Código,Nome,Necessidade (un),Criticidade %\n';
+
+        produtos
+          .sort((a, b) => b.CRITICIDADE_PCT - a.CRITICIDADE_PCT)
+          .forEach(p => {
+            csvContent += `${p.PRODUTO},"${p.NOME.substring(0, 50)}",${Math.round(p.NECESSIDADE)},${p.CRITICIDADE_PCT.toFixed(0)}%\n`;
+          });
+      });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pedido_compra_rupturas_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -328,9 +455,19 @@ export default function Rupturas() {
             <Filter size={16} />
             Filtros
           </button>
+          <button
+            onClick={exportPurchaseOrder}
+            class="btn gap-2"
+            style="background-color: #2D7A3E; color: white;"
+            disabled={data().length === 0}
+            title="Gerar arquivo para pedido de compra agrupado por categoria"
+          >
+            <ShoppingCart size={16} />
+            Gerar Pedido de Compra
+          </button>
           <button onClick={exportCSV} class="btn btn-outline gap-2" disabled={data().length === 0}>
             <Download size={16} />
-            Exportar CSV
+            CSV
           </button>
           <button onClick={loadData} class="btn btn-outline gap-2" disabled={loading()}>
             <RefreshCw size={16} class={loading() ? 'animate-spin' : ''} />
@@ -449,8 +586,8 @@ export default function Rupturas() {
             <div class="card p-6 border">
               <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold flex items-center gap-2">
-                  <PieChart size={20} class="text-blue-500" />
-                  Distribuição de Criticidade
+                  <PieChart size={20} class="text-red-500" />
+                  Top Grupos em Ruptura
                 </h3>
                 <ChartDownloadButton
                   chartId="criticidade-chart"
@@ -463,7 +600,9 @@ export default function Rupturas() {
                 chartId="criticidade-chart"
                 enableDownload={true}
                 height="350px"
+                onDataClick={handleGroupClick}
               />
+              <p class="text-xs text-muted mt-2">💡 Clique nas barras para ver produtos do grupo</p>
             </div>
 
             {/* Gráfico de Barras - Top 10 */}
@@ -576,11 +715,10 @@ export default function Rupturas() {
                   </div>
                   <div class="w-full bg-gray-700 rounded-full h-2">
                     <div
-                      class={`h-2 rounded-full ${
-                        selectedProduct()!.CRITICIDADE_PCT >= 75 ? 'bg-red-500' :
+                      class={`h-2 rounded-full ${selectedProduct()!.CRITICIDADE_PCT >= 75 ? 'bg-red-500' :
                         selectedProduct()!.CRITICIDADE_PCT >= 50 ? 'bg-orange-500' :
-                        selectedProduct()!.CRITICIDADE_PCT >= 25 ? 'bg-yellow-500' : 'bg-blue-500'
-                      }`}
+                          selectedProduct()!.CRITICIDADE_PCT >= 25 ? 'bg-yellow-500' : 'bg-blue-500'
+                        }`}
                       style={`width: ${selectedProduct()!.CRITICIDADE_PCT}%`}
                     />
                   </div>
@@ -591,6 +729,89 @@ export default function Rupturas() {
             <div class="mt-6 flex justify-end">
               <button
                 onClick={() => setSelectedProduct(null)}
+                class="btn btn-primary"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Drill-Down - Produtos do Grupo Selecionado */}
+      <Show when={selectedGroup()}>
+        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[9998] p-4" onClick={(e) => e.target === e.currentTarget && setSelectedGroup(null)}>
+          <div class="bg-background rounded-xl shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div class="p-4 border-b bg-gradient-to-r from-red-500/10 to-orange-500/10">
+              <div class="flex justify-between items-center">
+                <div>
+                  <h3 class="text-xl font-bold flex items-center gap-2">
+                    <Package size={24} class="text-red-500" />
+                    Produtos em Ruptura: {selectedGroup()}
+                  </h3>
+                  <p class="text-sm text-muted mt-1">
+                    {getProductsByGroup().length} produtos | {getProductsByGroup().filter(p => p.CRITICIDADE_PCT >= 75).length} críticos
+                  </p>
+                </div>
+                <button onClick={() => setSelectedGroup(null)} class="p-2 hover:bg-muted rounded-full">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Tabela de Produtos */}
+            <div class="overflow-auto max-h-[60vh] p-4">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-background">
+                  <tr class="border-b">
+                    <th class="text-left p-2 font-semibold">Código</th>
+                    <th class="text-left p-2 font-semibold">Produto</th>
+                    <th class="text-right p-2 font-semibold">Criticidade</th>
+                    <th class="text-right p-2 font-semibold">Necessidade</th>
+                    <th class="text-right p-2 font-semibold">Venda 30d</th>
+                    <th class="text-right p-2 font-semibold">Estoque</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={getProductsByGroup()}>
+                    {(produto) => (
+                      <tr class="border-b hover:bg-muted/50 transition-colors">
+                        <td class="p-2 font-mono text-xs">{produto.PRODUTO}</td>
+                        <td class="p-2 max-w-[250px] truncate" title={produto.NOME}>{produto.NOME}</td>
+                        <td class="p-2 text-right">
+                          <span class={`px-2 py-0.5 rounded text-xs font-bold ${produto.CRITICIDADE_PCT >= 75 ? 'bg-red-500/20 text-red-500' :
+                            produto.CRITICIDADE_PCT >= 50 ? 'bg-orange-500/20 text-orange-500' :
+                              produto.CRITICIDADE_PCT >= 25 ? 'bg-yellow-500/20 text-yellow-500' :
+                                'bg-blue-500/20 text-blue-500'
+                            }`}>
+                            {produto.CRITICIDADE_PCT.toFixed(0)}%
+                          </span>
+                        </td>
+                        <td class="p-2 text-right font-semibold text-red-500">{Math.round(produto.NECESSIDADE)} un</td>
+                        <td class="p-2 text-right">{produto.VENDA_30DD}</td>
+                        <td class="p-2 text-right text-muted">{produto.ESTOQUE_UNE} / {produto.ESTOQUE_LV}</td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+
+              <Show when={getProductsByGroup().length === 0}>
+                <div class="text-center py-8 text-muted">
+                  <Package size={48} class="mx-auto mb-2 opacity-50" />
+                  <p>Nenhum produto encontrado para este grupo</p>
+                </div>
+              </Show>
+            </div>
+
+            {/* Footer */}
+            <div class="p-4 border-t flex justify-between items-center bg-muted/30">
+              <div class="text-sm text-muted">
+                Necessidade total: <strong class="text-red-500">{Math.round(getProductsByGroup().reduce((sum, p) => sum + p.NECESSIDADE, 0))} un</strong>
+              </div>
+              <button
+                onClick={() => setSelectedGroup(null)}
                 class="btn btn-primary"
               >
                 Fechar

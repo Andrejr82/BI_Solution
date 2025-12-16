@@ -8,3 +8,4 @@ export { Typewriter, createTypewriter } from './Typewriter';
 export { MessageActions } from './MessageActions';
 export { ExportMenu } from './ExportMenu';
 export { ShareButton } from './ShareButton';
+export { TypingIndicator } from './TypingIndicator';

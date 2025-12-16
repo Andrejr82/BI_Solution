@@ -2,7 +2,7 @@ import { A, useLocation } from '@solidjs/router';
 import auth from '@/store/auth';
 import {
   LayoutDashboard, MessageSquare, PieChart, FileText, Settings, LogOut,
-  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield, Lightbulb, HelpCircle
+  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield, Lightbulb, HelpCircle, Code
 } from 'lucide-solid';
 import { For, Show, children } from 'solid-js';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -19,13 +19,13 @@ export default function Layout(props: any) {
       items: [
         { href: '/dashboard', icon: LayoutDashboard, label: 'Monitoramento', roles: ['admin', 'user'] },
         { href: '/metrics', icon: PieChart, label: 'Métricas', roles: ['admin'] },
-        { href: '/rupturas', icon: AlertTriangle, label: 'Rupturas Críticas', roles: ['admin'] },
+        { href: '/rupturas', icon: AlertTriangle, label: 'Rupturas Críticas', roles: ['admin', 'user'] },
       ]
     },
     {
       group: 'Operacional',
       items: [
-        { href: '/transfers', icon: Truck, label: 'Transferências', roles: ['admin'] },
+        { href: '/transfers', icon: Truck, label: 'Transferências', roles: ['admin', 'user'] },
         { href: '/reports', icon: FileText, label: 'Relatórios', roles: ['admin'] },
       ]
     },
@@ -33,9 +33,10 @@ export default function Layout(props: any) {
       group: 'Inteligência',
       items: [
         { href: '/chat', icon: MessageSquare, label: 'Chat BI', roles: ['admin', 'user'] },
-        { href: '/examples', icon: Lightbulb, label: 'Exemplos', roles: ['admin', 'user'] },
-        { href: '/learning', icon: BookOpen, label: 'Aprendizado', roles: ['admin', 'user'] },
-        { href: '/playground', icon: Terminal, label: 'Playground', roles: ['admin', 'user'] },
+        { href: '/code-chat', icon: Code, label: 'Code Chat', roles: ['admin'] },
+        { href: '/examples', icon: Lightbulb, label: 'Exemplos', roles: ['admin'] },
+        { href: '/learning', icon: BookOpen, label: 'Aprendizado', roles: ['admin'] },
+        { href: '/playground', icon: Terminal, label: 'Playground', roles: ['admin'] },
       ]
     },
     {
@@ -44,7 +45,7 @@ export default function Layout(props: any) {
         { href: '/diagnostics', icon: Database, label: 'Diagnóstico DB', roles: ['admin'] },
         { href: '/help', icon: HelpCircle, label: 'Ajuda', roles: ['admin', 'user'] },
         { href: '/profile', icon: Lock, label: 'Alterar Senha', roles: ['admin', 'user'] },
-        { href: '/admin', icon: Shield, label: 'Administração', roles: ['admin', 'user'] }, // Compradores veem versão limitada
+        { href: '/admin', icon: Shield, label: 'Administração', roles: ['admin'] },
       ]
     }
   ];

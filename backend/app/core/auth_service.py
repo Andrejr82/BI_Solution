@@ -1,12 +1,8 @@
-"""
-Authentication Service
-Handles authentication with hybrid SQL Server + Parquet fallback
-"""
-
 import logging
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
+import json # Import json
 
 import polars as pl
 import bcrypt
@@ -129,12 +125,21 @@ class AuthService:
         user.last_login = datetime.now(timezone.utc)
         await db.commit()
 
+        # Parse allowed_segments
+        allowed_segments = []
+        if user.allowed_segments:
+            try:
+                allowed_segments = json.loads(user.allowed_segments)
+            except:
+                allowed_segments = []
+
         return {
             "id": str(user.id),
             "username": user.username,
             "email": user.email or "",
             "role": user.role,
             "is_active": user.is_active,
+            "allowed_segments": allowed_segments
         }
 
     async def _auth_from_supabase(
@@ -153,11 +158,28 @@ class AuthService:
                 security_logger.error(f"Supabase client not configured: {ve}")
                 return None
 
-            # Supabase usa email para login, então tentamos com username como email
-            # Se username não for email, tentamos adicionar @agentbi.com
-            email = username if "@" in username else f"{username}@agentbi.com"
+            # First, try to find the real email by username in user_profiles
+            email = None
+            try:
+                profile_response = supabase.table("user_profiles").select("id").eq("username", username).execute()
+                if profile_response.data and len(profile_response.data) > 0:
+                    user_id = profile_response.data[0]["id"]
+                    # Now get the email from auth admin
+                    from app.core.supabase_client import get_supabase_admin_client
+                    admin_client = get_supabase_admin_client()
+                    auth_user = admin_client.auth.admin.get_user_by_id(user_id)
+                    if auth_user and auth_user.user:
+                        email = auth_user.user.email
+                        security_logger.info(f"Found email '{email}' for username '{username}'")
+            except Exception as e:
+                security_logger.warning(f"Could not lookup email by username: {e}")
 
-            # Tentar autenticar com Supabase - Python usa estrutura diferente
+            # Fallback: use username as email or append domain
+            if not email:
+                email = username if "@" in username else f"{username}@agentbi.com"
+                security_logger.info(f"Using fallback email: {email}")
+
+            # Tentar autenticar com Supabase
             try:
                 response = supabase.auth.sign_in_with_password({
                     "email": email,
@@ -183,12 +205,17 @@ class AuthService:
             except Exception as e:
                 logger.warning(f"Could not fetch user profile from Supabase: {e}")
 
+            # Get allowed_segments from user_metadata
+            user_metadata = user.user_metadata or {}
+            allowed_segments = user_metadata.get("allowed_segments", [])
+
             return {
                 "id": str(user.id),
                 "username": email.split("@")[0],  # Extrair username do email
                 "email": user.email or email,
                 "role": role,
                 "is_active": True,
+                "allowed_segments": allowed_segments
             }
 
         except Exception as e:
@@ -238,12 +265,23 @@ class AuthService:
                 security_logger.warning(f"Inactive user '{username}' attempted to log in via Parquet.")
                 return None
 
+            # Parse allowed_segments
+            allowed_segments = []
+            if "allowed_segments" in user_row and user_row["allowed_segments"]:
+                try:
+                    # It should be a JSON string
+                    allowed_segments = json.loads(user_row["allowed_segments"])
+                except:
+                    # Fallback if it's not JSON (e.g. legacy data)
+                    allowed_segments = []
+
             return {
                 "id": str(user_row["id"]),
                 "username": user_row["username"],
                 "email": user_row.get("email", ""),
                 "role": user_row["role"],
                 "is_active": user_row.get("is_active", True),
+                "allowed_segments": allowed_segments
             }
         except Exception as e:
             security_logger.error(f"Error reading/processing Parquet for user '{username}': {e}")

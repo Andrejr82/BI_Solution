@@ -265,11 +265,56 @@ def consultar_dados_flexivel(
         total = len(resultados)
         logger.info(f"✅ Consulta retornou {total} resultados")
         
+        # ⭐ NOVO: Gerar tabela Markdown para o LLM incluir na resposta
+        mensagem_tabela = f"{total} resultado(s) encontrado(s)"
+        
+        if total > 0 and total <= 50:  # Só gerar tabela para até 50 resultados
+            # Selecionar colunas mais relevantes para exibir
+            colunas_exibir = []
+            colunas_prioritarias = ['PRODUTO', 'NOME', 'VENDA_30DD', 'ESTOQUE_UNE', 'NOMESEGMENTO', 'NOMEFABRICANTE', 'UNE']
+            
+            # Adicionar colunas prioritárias que existem nos dados
+            for col in colunas_prioritarias:
+                if col in df_result.columns:
+                    colunas_exibir.append(col)
+            
+            # Se não temos colunas prioritárias, pegar as primeiras 5
+            if not colunas_exibir:
+                colunas_exibir = list(df_result.columns)[:5]
+            
+            # Limitar a 6 colunas para não ficar muito largo
+            colunas_exibir = colunas_exibir[:6]
+            
+            # Gerar tabela Markdown
+            mensagem_tabela = f"Aqui estão os {total} resultados:\n\n"
+            
+            # Cabeçalho
+            mensagem_tabela += "| " + " | ".join(colunas_exibir) + " |\n"
+            mensagem_tabela += "|" + "|".join(["---" for _ in colunas_exibir]) + "|\n"
+            
+            # Linhas de dados
+            for item in resultados:
+                valores = []
+                for col in colunas_exibir:
+                    val = item.get(col, "")
+                    # Formatar valor
+                    if val is None or val == "":
+                        val_str = "-"
+                    elif isinstance(val, float):
+                        val_str = f"{val:.2f}"
+                    else:
+                        val_str = str(val)
+                    # Truncar se muito longo
+                    if len(val_str) > 30:
+                        val_str = val_str[:27] + "..."
+                    valores.append(val_str)
+                mensagem_tabela += "| " + " | ".join(valores) + " |\n"
+        
         return {
             "total_resultados": total,
             "resultados": resultados,
             "limite_aplicado": limite,
-            "mensagem": f"{total} resultado(s) encontrado(s)"
+            "mensagem": mensagem_tabela
         }
         
     except Exception as e:

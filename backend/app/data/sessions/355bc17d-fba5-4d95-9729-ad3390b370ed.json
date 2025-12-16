@@ -1,0 +1,20 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "quais sao os top 20 de vendas na une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Os 20 produtos mais vendidos na UNE 2365 são:\n"
+    },
+    {
+      "role": "user",
+      "content": "quais sao os top 20 de vendas na une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Os 20 produtos mais vendidos na UNE 2365 são:\n"
+    }
+  ]
+}

@@ -209,7 +209,7 @@ async def get_business_kpis(
     Get business KPIs for Dashboard
 
     Returns key business metrics including products, UNEs, stock ruptures, and top sellers.
-    Uses FULL dataset without limits for accurate counts.
+    Optimized to use Polars LazyFrame for memory efficiency.
     """
     import polars as pl
     import logging
@@ -217,72 +217,105 @@ async def get_business_kpis(
     logger = logging.getLogger(__name__)
 
     try:
-        # Usar TODOS os dados sem limite para contagens precisas
-        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=None)
+        # Usar LazyFrame para evitar carregar tudo na memória
+        lf = data_scope_service.get_filtered_lazyframe(current_user)
         
-        logger.info(f"📊 KPIs: Processando {df.height} linhas do DataFrame completo")
+        # Verificar se temos dados antes de tentar processar
+        # collect_schema é rápido
+        schema = lf.collect_schema()
+        if not schema.names():
+             return BusinessKPIs(total_produtos=0, total_unes=0, produtos_ruptura=0, valor_estoque=0.0, top_produtos=[], vendas_por_categoria=[])
 
-        # 1. Total de Produtos (únicos)
-        total_produtos = df.select(pl.col("PRODUTO")).n_unique()
-        logger.info(f"📊 Total produtos únicos: {total_produtos}")
+        logger.info(f"📊 KPIs: Iniciando processamento LAZY")
 
-        # 2. Total de UNEs (unidades/lojas únicas)
-        total_unes = df.select(pl.col("UNE")).n_unique() if "UNE" in df.columns else 0
-        logger.info(f"📊 Total UNEs: {total_unes}")
+        # Preparar expressões de agregação para rodar em UMA ÚNICA PASSADA se possível
+        # Nota: Polars otimiza scans, então múltiplas coletas são eficientes se o grafo for simples,
+        # mas agregar tudo de uma vez é melhor.
+        
+        # Casting seguro para colunas numéricas
+        def safe_col(name):
+            if name in schema.names():
+                return pl.col(name)
+            return pl.lit(0)
 
-        # 3. Produtos em Ruptura (CD=0 E Loja < Linha Verde/MC)
-        # Ruptura crítica: estoque CD zerado E estoque loja abaixo da Linha Verde (MC)
-        df_ruptura = df.filter(
-            (pl.col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0) == 0) &
-            (pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0) < pl.col("ESTOQUE_LV").cast(pl.Float64, strict=False).fill_null(0)) &
-            (pl.col("VENDA_30DD").cast(pl.Float64, strict=False).fill_null(0) > 0)  # Apenas produtos com vendas
-        )
-        produtos_ruptura = len(df_ruptura)
-        logger.info(f"📊 Produtos em ruptura: {produtos_ruptura}")
+        # Definições de colunas
+        c_produto = safe_col("PRODUTO")
+        c_une = safe_col("UNE")
+        c_venda30 = safe_col("VENDA_30DD").cast(pl.Float64, strict=False).fill_null(0)
+        c_est_une = safe_col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0)
+        c_est_cd = safe_col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0)
+        c_est_lv = safe_col("ESTOQUE_LV").cast(pl.Float64, strict=False).fill_null(0)
+        c_nome = safe_col("NOME")
+        c_segmento = safe_col("NOMESEGMENTO") if "NOMESEGMENTO" in schema.names() else safe_col("SEGMENTO")
 
-        # 4. Valor do Estoque Total (usando estoque loja + CD)
-        estoque_loja = float(df.select(pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0).sum()).item())
-        estoque_cd = float(df.select(pl.col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0).sum()).item())
-        valor_estoque = estoque_loja + estoque_cd
-        logger.info(f"📊 Valor estoque total: {valor_estoque}")
-
-        # 5. Top 10 Produtos Mais Vendidos (baseado em VENDA_30DD)
-        df_top = df.filter(pl.col("VENDA_30DD") > 0).group_by(["PRODUTO", "NOME"]).agg([
-            pl.col("VENDA_30DD").sum().alias("vendas")
-        ]).sort("vendas", descending=True).head(10)
-
+        # 1. Métricas Escalares (Count, Sum)
+        # Podemos coletar isso em uma query rápida
+        metrics_lf = lf.select([
+            pl.col("PRODUTO").n_unique().alias("total_produtos"),
+            pl.col("UNE").n_unique().alias("total_unes") if "UNE" in schema.names() else pl.lit(0).alias("total_unes"),
+            c_est_une.sum().alias("sum_estoque_une"),
+            c_est_cd.sum().alias("sum_estoque_cd"),
+            # Ruptura: CD=0 & Loja < LV & Venda > 0
+            ((c_est_cd == 0) & (c_est_une < c_est_lv) & (c_venda30 > 0)).sum().alias("produtos_ruptura")
+        ])
+        
+        metrics_df = metrics_lf.collect() # Executa
+        metrics = metrics_df.row(0, named=True)
+        
+        valor_estoque = metrics["sum_estoque_une"] + metrics["sum_estoque_cd"]
+        
+        # 2. Top Produtos (precisa de group_by)
+        top_produtos_lf = lf.filter(c_venda30 > 0)\
+            .group_by(["PRODUTO", "NOME"])\
+            .agg([c_venda30.sum().alias("vendas")])\
+            .sort("vendas", descending=True)\
+            .head(10)
+            
+        top_produtos_df = top_produtos_lf.collect()
+        
         top_produtos = []
-        for row in df_top.iter_rows(named=True):
+        for row in top_produtos_df.iter_rows(named=True):
             top_produtos.append({
                 "produto": str(row["PRODUTO"]),
                 "nome": str(row["NOME"])[:40],
                 "vendas": int(row["vendas"])
             })
 
-        # 6. Vendas por Categoria (usando NOMESEGMENTO que é mais descritivo)
-        vendas_por_categoria = []
-        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else "SEGMENTO"
-        if segmento_col in df.columns:
-            df_categoria = df.group_by(segmento_col).agg([
-                pl.col("VENDA_30DD").sum().alias("vendas"),
+        # 3. Vendas por Categoria (NOMEGRUPO de produto, NÃO segmento)
+        # O segmento já está filtrado pelo allowed_segments do usuário
+        # Agora queremos ver a distribuição por NOMEGRUPO (categoria) dentro do(s) segmento(s)
+        grupo_col_name = "NOMEGRUPO" if "NOMEGRUPO" in schema.names() else "NOMECATEGORIA" if "NOMECATEGORIA" in schema.names() else "NOMESEGMENTO"
+        c_grupo = safe_col(grupo_col_name)
+        
+        vendas_cat_lf = lf.filter(c_grupo.is_not_null())\
+            .group_by(grupo_col_name)\
+            .agg([
+                c_venda30.sum().alias("vendas"),
                 pl.col("PRODUTO").n_unique().alias("produtos")
-            ]).sort("vendas", descending=True).head(8)
+            ])\
+            .sort("vendas", descending=True)\
+            .head(10)  # Top 10 categorias
+            
+        vendas_cat_df = vendas_cat_lf.collect()
+        
+        vendas_por_categoria = []
+        
+        for row in vendas_cat_df.iter_rows(named=True):
+            categoria = str(row.get(grupo_col_name, "N/A")).strip()
+            
+            if categoria and categoria != "null":
+                vendas_por_categoria.append({
+                    "categoria": categoria[:30],
+                    "vendas": int(row["vendas"]),
+                    "produtos": int(row["produtos"])
+                })
 
-            for row in df_categoria.iter_rows(named=True):
-                segmento = str(row[segmento_col]).strip()
-                if segmento and segmento != "null" and segmento != "None" and segmento != "":
-                    vendas_por_categoria.append({
-                        "categoria": segmento[:30],
-                        "vendas": int(row["vendas"]),
-                        "produtos": int(row["produtos"])
-                    })
-
-        logger.info(f"📊 KPIs calculados com sucesso - Produtos: {total_produtos}, UNEs: {total_unes}, Rupturas: {produtos_ruptura}")
+        logger.info(f"📊 KPIs calculados (Lazy) - Produtos: {metrics['total_produtos']}")
 
         return BusinessKPIs(
-            total_produtos=total_produtos,
-            total_unes=total_unes,
-            produtos_ruptura=produtos_ruptura,
+            total_produtos=metrics["total_produtos"],
+            total_unes=metrics["total_unes"],
+            produtos_ruptura=metrics["produtos_ruptura"],
             valor_estoque=valor_estoque,
             top_produtos=top_produtos,
             vendas_por_categoria=vendas_por_categoria

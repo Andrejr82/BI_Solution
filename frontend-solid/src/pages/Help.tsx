@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from 'solid-js';
 import { HelpCircle, Book, AlertCircle, Database, Search, ChevronDown, ChevronUp } from 'lucide-solid';
+import auth from '@/store/auth';
 
 type TabType = 'guia' | 'faq' | 'troubleshooting' | 'dados';
 
@@ -17,6 +18,8 @@ export default function Help() {
   const [activeTab, setActiveTab] = createSignal<TabType>('guia');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [expandedFAQ, setExpandedFAQ] = createSignal<number | null>(null);
+  
+  const isAdmin = () => auth.user()?.role === 'admin';
 
   const FAQ_ITEMS: FAQItem[] = [
     {
@@ -183,33 +186,35 @@ export default function Help() {
             </div>
           </button>
 
-          <button
-            onClick={() => setActiveTab('troubleshooting')}
-            class={`px-4 py-2 font-medium transition-colors ${
-              activeTab() === 'troubleshooting'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <div class="flex items-center gap-2">
-              <AlertCircle size={16} />
-              Troubleshooting
-            </div>
-          </button>
+          <Show when={isAdmin()}>
+            <button
+              onClick={() => setActiveTab('troubleshooting')}
+              class={`px-4 py-2 font-medium transition-colors ${
+                activeTab() === 'troubleshooting'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <div class="flex items-center gap-2">
+                <AlertCircle size={16} />
+                Troubleshooting
+              </div>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('dados')}
-            class={`px-4 py-2 font-medium transition-colors ${
-              activeTab() === 'dados'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <div class="flex items-center gap-2">
-              <Database size={16} />
-              Dados Disponíveis
-            </div>
-          </button>
+            <button
+              onClick={() => setActiveTab('dados')}
+              class={`px-4 py-2 font-medium transition-colors ${
+                activeTab() === 'dados'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <div class="flex items-center gap-2">
+                <Database size={16} />
+                Dados Disponíveis
+              </div>
+            </button>
+          </Show>
         </div>
       </div>
 
@@ -317,7 +322,7 @@ export default function Help() {
         </Show>
 
         {/* Tab: Troubleshooting */}
-        <Show when={activeTab() === 'troubleshooting'}>
+        <Show when={activeTab() === 'troubleshooting' && isAdmin()}>
           <div class="max-w-4xl mx-auto space-y-4">
             <For each={TROUBLESHOOTING_ITEMS}>
               {(item) => (
@@ -343,7 +348,7 @@ export default function Help() {
         </Show>
 
         {/* Tab: Dados Disponíveis */}
-        <Show when={activeTab() === 'dados'}>
+        <Show when={activeTab() === 'dados' && isAdmin()}>
           <div class="max-w-4xl mx-auto space-y-6">
             <div class="card p-6 border">
               <h3 class="text-xl font-bold mb-4 flex items-center gap-2">

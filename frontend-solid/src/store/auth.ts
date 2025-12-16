@@ -1,8 +1,15 @@
 import { createSignal, createRoot } from 'solid-js';
 import api from '@/lib/api';
 
+export interface User {
+  username: string;
+  role: string;
+  email: string;
+  allowed_segments: string[];
+}
+
 function createAuthStore() {
-  const [user, setUser] = createSignal<any>(null);
+  const [user, setUser] = createSignal<User | null>(null);
   const [token, setToken] = createSignal<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = createSignal<boolean>(false);
   const [loading, setLoading] = createSignal<boolean>(false);
@@ -47,27 +54,34 @@ function createAuthStore() {
       const initToken = localStorage.getItem('token');
       if (initToken) {
         const payload = validateAndDecodeToken(initToken);
+        
+        // Verificação ESTRITA: Se o payload for nulo ou token expirado, limpar TUDO.
         if (payload) {
-          const userData = {
+          const userData: User = {
             username: payload.username || payload.sub || 'user',
             role: payload.role || 'user',
             email: payload.email || `${payload.username || payload.sub}@agentbi.com`,
+            allowed_segments: payload.allowed_segments || []
           };
           setUser(userData);
           setToken(initToken);
           setIsAuthenticated(true);
-          console.log('🔄 User restaurado do token:', userData);
+          console.log('🔄 Sessão restaurada com sucesso.');
         } else {
-          // Token inválido ou expirado - limpar
-          console.warn('⚠️ Token inválido ou expirado - removendo');
+          // Token inválido, malformado ou expirado -> Logout forçado imediato
+          console.warn('⚠️ Token inválido detectado na inicialização - Limpando sessão.');
           localStorage.removeItem('token');
           setIsAuthenticated(false);
           setUser(null);
           setToken(null);
+          // Opcional: Redirecionar se estiver numa rota protegida é responsabilidade do Router,
+          // mas garantir o estado limpo previne o acesso visual indevido.
         }
       }
     } catch (error) {
-      console.error('❌ Erro ao inicializar autenticação:', error);
+      console.error('❌ Erro crítico ao inicializar autenticação:', error);
+      localStorage.removeItem('token');
+      setIsAuthenticated(false);
     }
   };
 
@@ -97,10 +111,11 @@ function createAuthStore() {
         setIsAuthenticated(true);
 
         // Definir dados do usuário baseado no payload do JWT
-        const userData = {
+        const userData: User = {
           username: payload.username || payload.sub || username,
           role: payload.role || 'user',
           email: payload.email || `${payload.username || username}@agentbi.com`,
+          allowed_segments: payload.allowed_segments || []
         };
 
         console.log('✅ Login successful. User:', userData);

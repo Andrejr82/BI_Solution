@@ -4,7 +4,7 @@ import { Truck, Search, Plus, Trash2, ShoppingCart, AlertTriangle, CheckCircle, 
 import api from '../lib/api';
 
 // Types
-type TransferMode = '1→1' | '1→N' | 'N→N';
+type TransferMode = 'UNE - UNE' | 'UNE - UNES' | 'UNES - UNES';
 
 interface Product {
   produto_id: number;
@@ -132,12 +132,15 @@ export default function Transfers() {
   createEffect(() => {
     const currentUnes = unes();
     if (currentUnes.length === 1) {
-      const singleUne = currentUnes[0].une;
-      if (mode() === 'N→N') {
-        if (selectedUnesOrigem().length === 0) setSelectedUnesOrigem([singleUne]);
-      } else {
-        if (!selectedUneOrigem()) setSelectedUneOrigem(singleUne);
-      }
+        const singleUne = currentUnes[0].une;
+        if (mode() === 'UNES - UNES') {
+          if (selectedUnesOrigem().length === 0) setSelectedUnesOrigem([singleUne]);
+        } else {
+          // Modes UNE - UNE and UNE - UNES
+          if (!selectedUneOrigem()) {
+            setSelectedUneOrigem(singleUne);
+          }
+        }
     }
   });
 
@@ -163,7 +166,7 @@ export default function Transfers() {
   // Adicionar item ao carrinho
   const addToCart = async () => {
     // Validar seleções baseado no modo
-    const selectedOrigens = mode() === 'N→N' ? selectedUnesOrigem() : selectedUneOrigem() ? [selectedUneOrigem() as number] : [];
+    const selectedOrigens = mode() === 'UNES - UNES' ? selectedUnesOrigem() : selectedUneOrigem() ? [selectedUneOrigem() as number] : [];
     
     if (selectedProducts().length === 0 || selectedOrigens.length === 0 || selectedUnesDestino().length === 0 || !quantidade()) {
       setError(`Preencha todos os campos para adicionar ao carrinho (Modo ${mode()})`);
@@ -259,7 +262,7 @@ export default function Transfers() {
         }
       }
 
-      if (mode() === '1→1' && transfers.length === 1) {
+      if (mode() === 'UNE - UNE' && transfers.length === 1) {
         // Transferência simples
         const response = await api.post('/transfers', transfers[0]);
         setSuccess(`Solicitação criada! ID: ${response.data.transfer_id}`);
@@ -355,22 +358,22 @@ export default function Transfers() {
             <label class="text-sm font-medium mb-3 block">Modo de Transferência</label>
             <div class="flex gap-2">
               <button
-                class={`btn ${mode() === '1→1' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setMode('1→1')}
+                class={`btn ${mode() === 'UNE - UNE' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMode('UNE - UNE')}
               >
-                1 → 1 (Simples)
+                UNE - UNE (Simples)
               </button>
               <button
-                class={`btn ${mode() === '1→N' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setMode('1→N')}
+                class={`btn ${mode() === 'UNE - UNES' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMode('UNE - UNES')}
               >
-                1 → N (Uma origem, várias destinos)
+                UNE - UNES (Uma origem, várias destinos)
               </button>
               <button
-                class={`btn ${mode() === 'N→N' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setMode('N→N')}
+                class={`btn ${mode() === 'UNES - UNES' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMode('UNES - UNES')}
               >
-                N → N (Múltiplas origens e destinos)
+                UNES - UNES (Múltiplas origens e destinos)
               </button>
             </div>
           </div>
@@ -379,8 +382,8 @@ export default function Transfers() {
           <div class="border-t pt-4">
             <p class="text-xs text-muted mb-3">
               ℹ️ {
-                mode() === '1→1' ? 'Selecione uma UNE de origem e uma de destino' :
-                mode() === '1→N' ? 'Selecione uma UNE de origem e múltiplos destinos' :
+                mode() === 'UNE - UNE' ? 'Selecione uma UNE de origem e uma de destino' :
+                mode() === 'UNE - UNES' ? 'Selecione uma UNE de origem e múltiplos destinos' :
                 'Selecione múltiplas UNEs de origem e destino'
               }
             </p>
@@ -403,7 +406,7 @@ export default function Transfers() {
                           : selectedUneOrigem() === une.une;
                         
                         const toggleSelection = () => {
-                          if (mode() === 'N→N') {
+                          if (mode() === 'UNES - UNES') {
                             const current = selectedUnesOrigem();
                             if (current.includes(une.une)) {
                               setSelectedUnesOrigem(current.filter(u => u !== une.une));
@@ -411,7 +414,7 @@ export default function Transfers() {
                               setSelectedUnesOrigem([...current, une.une]);
                             }
                           } else {
-                            // Modo 1→1 ou 1→N
+                            // Modo UNE - UNE ou UNE - UNES
                             if (selectedUneOrigem() === une.une) {
                               setSelectedUneOrigem('');
                             } else {
@@ -469,9 +472,9 @@ export default function Transfers() {
                   }>
                     <For each={unes()}>
                       {(une) => {
-                        const isDisabledDestino = () => mode() === '1→1' 
+                        const isDisabledDestino = () => mode() === 'UNE - UNE' 
                           ? selectedUneOrigem() === une.une
-                          : mode() === 'N→N'
+                          : mode() === 'UNES - UNES'
                           ? selectedUnesOrigem().includes(une.une)
                           : selectedUneOrigem() === une.une;
 
@@ -484,7 +487,7 @@ export default function Transfers() {
                           if (current.includes(une.une)) {
                             setSelectedUnesDestino(current.filter(u => u !== une.une));
                           } else {
-                            if (mode() === '1→1' && current.length >= 1) {
+                            if (mode() === 'UNE - UNE' && current.length >= 1) {
                               setSelectedUnesDestino([une.une]);
                             } else {
                               setSelectedUnesDestino([...current, une.une]);

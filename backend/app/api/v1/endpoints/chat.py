@@ -163,6 +163,12 @@ class ChatRequest(BaseModel):
     query: str
 
 
+class FeedbackRequest(BaseModel):
+    response_id: str
+    feedback_type: str
+    comment: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     response: str
 
@@ -207,10 +213,10 @@ async def stream_chat(
 
             logger.info(f"Processing query with CaculinhaBIAgent: '{q}' | History len: {len(chat_history)}")
             
-            # ✅ NOVO: Verificar Semantic Cache primeiro
+            # NOVO: Verificar Semantic Cache primeiro
             cached_response = cache_get(q)
             if cached_response:
-                logger.info(f"✅ CACHE HIT: Resposta encontrada em cache para: {q[:50]}...")
+                logger.info(f"CACHE HIT: Resposta encontrada em cache para: {q[:50]}...")
                 event_counter += 1
                 yield f"id: {event_counter}\n"
                 yield f"data: {safe_json_dumps({'type': 'cache_hit', 'done': False})}\n\n"
@@ -235,17 +241,17 @@ async def stream_chat(
             
             logger.info(f"Agent response received: {agent_response}")
 
-            # ✅ NOVO: Validar resposta com Response Validator
+            # NOVO: Validar resposta com Response Validator
             validation = validate_response(agent_response, q)
             if not validation.is_valid:
-                logger.warning(f"⚠️ Validação: confidence={validation.confidence:.2f}, issues={validation.issues}")
+                logger.warning(f"Validacao: confidence={validation.confidence:.2f}, issues={validation.issues}")
                 # Adicionar aviso à resposta se houver problemas
                 if validation.confidence < 0.5:
                     event_counter += 1
                     yield f"id: {event_counter}\n"
                     yield f"data: {safe_json_dumps({'type': 'warning', 'message': 'Resposta com baixa confiança. Verifique os dados.', 'done': False})}\n\n"
             else:
-                logger.info(f"✅ Validação OK: confidence={validation.confidence:.2f}")
+                logger.info(f"Validacao OK: confidence={validation.confidence:.2f}")
 
             response_type = agent_response.get("type", "text")
             response_content = agent_response.get("result")
@@ -262,18 +268,63 @@ async def stream_chat(
                 if not isinstance(response_text, str):
                     response_text = str(response_text)
             
+            
             elif response_type == "code_result":
                 chart_spec = agent_response.get("chart_spec")
 
-                if response_content and isinstance(response_content, dict) and "result" in response_content:
-                    table_data = response_content.get("result")
+                # Log para debug
+                logger.info(f"DEBUG: response_content = {response_content}")
+                
+                # O agent retorna: {"result": {"result": [...], "chart_spec": ...}, "chart_spec": ...}
+                # Então precisamos acessar response_content["result"] para pegar os dados
+                if response_content and isinstance(response_content, dict):
+                    # Verificar se há dados aninhados em "result"
+                    if "result" in response_content:
+                        table_data = response_content.get("result")
+                    else:
+                        # Caso os dados estejam diretamente em response_content
+                        table_data = response_content
+                    
+                    logger.info(f"DEBUG: table_data type = {type(table_data)}, is_list = {isinstance(table_data, list)}")
+                    if isinstance(table_data, list):
+                        logger.info(f"DEBUG: table_data length = {len(table_data)}, first_item = {table_data[0] if len(table_data) > 0 else 'empty'}")
+                    
                     if isinstance(table_data, list) and len(table_data) > 0 and isinstance(table_data[0], dict):
+                        # Enviar texto introdutório ANTES da tabela
+                        intro_text = f"Aqui estão os {len(table_data)} resultados da sua consulta:"
+                        
+                        # Stream do texto introdutório palavra por palavra
+                        intro_words = intro_text.split(" ")
+                        for i in range(0, len(intro_words), 1):
+                            chunk_words = intro_words[i:i + 1]
+                            prefix = " " if i > 0 else ""
+                            chunk_text = prefix + " ".join(chunk_words)
+                            event_counter += 1
+                            yield f"id: {event_counter}\n"
+                            yield f"data: {safe_json_dumps({'type': 'text', 'text': chunk_text, 'done': False})}\n\n"
+                        
+                        # Converter MapComposite para dict antes de serializar
+                        def convert_row(row):
+                            """Converte objetos MapComposite e similares para dict"""
+                            if hasattr(row, '_mapping'):
+                                return dict(row._mapping)
+                            elif isinstance(row, dict):
+                                # Converter valores internos também
+                                return {k: (dict(v._mapping) if hasattr(v, '_mapping') else v) for k, v in row.items()}
+                            return row
+                        
+                        # Converter todos os dados
+                        clean_table_data = [convert_row(row) for row in table_data]
+                        
+                        # Agora enviar a tabela com dados limpos
                         event_counter += 1
                         yield f"id: {event_counter}\n"
-                        columns = list(table_data[0].keys())
-                        yield f"data: {safe_json_dumps({'type': 'table', 'data': table_data, 'columns': columns, 'done': False})}\n\n"
-                        logger.info(f"Streaming table data with {len(table_data)} rows...")
-                        response_text = f"Análise concluída com {len(table_data)} registros."
+                        columns = list(clean_table_data[0].keys())
+                        yield f"data: {safe_json_dumps({'type': 'table', 'data': clean_table_data, 'columns': columns, 'done': False})}\n\n"
+                        logger.info(f"Streaming table data with {len(clean_table_data)} rows...")
+                        
+                        # Limpar response_text para não enviar texto adicional
+                        response_text = ""
                     else:
                         response_text = f"Resultados da sua análise:\n```json\n{safe_json_dumps(response_content, indent=2, ensure_ascii=False)}\n```"
                 elif response_content:
@@ -288,27 +339,29 @@ async def stream_chat(
                     logger.info("Streaming chart spec...")
             
             # Save Assistant Response to History
-            session_manager.add_message(session_id, "assistant", response_text)
+            session_manager.add_message(session_id, "assistant", response_text if response_text else "Dados enviados")
 
-            words = response_text.split(" ")
-            # Use smaller chunks for smoother streaming (like a real typewriter)
-            chunk_size = 1 
-            
-            logger.info(f"Initiating text streaming of {len(words)} words...")
-            
-            for i in range(0, len(words), chunk_size):
-                chunk_words = words[i:i + chunk_size]
-                # Reconstruct spacing correctly
-                prefix = " " if i > 0 else ""
-                chunk_text = prefix + " ".join(chunk_words)
+            # Só fazer streaming de texto se houver texto para enviar
+            if response_text and response_text.strip():
+                words = response_text.split(" ")
+                # Use smaller chunks for smoother streaming (like a real typewriter)
+                chunk_size = 1 
                 
-                event_counter += 1
+                logger.info(f"Initiating text streaming of {len(words)} words...")
+                
+                for i in range(0, len(words), chunk_size):
+                    chunk_words = words[i:i + chunk_size]
+                    # Reconstruct spacing correctly
+                    prefix = " " if i > 0 else ""
+                    chunk_text = prefix + " ".join(chunk_words)
+                    
+                    event_counter += 1
 
-                yield f"id: {event_counter}\n"
-                yield f"data: {safe_json_dumps({'type': 'text', 'text': chunk_text, 'done': False})}\n\n"
-                
-                # Small delay to simulate typing speed if needed, but usually network latency is enough
-                # await asyncio.sleep(0.01)
+                    yield f"id: {event_counter}\n"
+                    yield f"data: {safe_json_dumps({'type': 'text', 'text': chunk_text, 'done': False})}\n\n"
+                    
+                    # Small delay to simulate typing speed if needed, but usually network latency is enough
+                    # await asyncio.sleep(0.01)
 
             logger.info("Text streaming complete. Sending done signal.")
             yield f"id: {event_counter + 1}\n"
@@ -336,10 +389,8 @@ async def stream_chat(
 
 @router.post("/feedback")
 async def submit_feedback(
-    response_id: str,
-    feedback_type: str,
+    feedback_data: FeedbackRequest,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    comment: Optional[str] = None,
 ):
     if query_history is None:
         raise HTTPException(
@@ -350,9 +401,9 @@ async def submit_feedback(
     feedback_entry = {
         "timestamp": "now", # Placeholder, would import datetime
         "user_id": current_user.username,
-        "response_id": response_id,
-        "feedback_type": feedback_type,
-        "comment": comment
+        "response_id": feedback_data.response_id,
+        "feedback_type": feedback_data.feedback_type,
+        "comment": feedback_data.comment
     }
     
     feedback_file_path = Path(settings.LEARNING_FEEDBACK_PATH) / "feedback.jsonl"
