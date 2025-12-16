@@ -1,6 +1,0 @@
-Testing Gemini initialization...
-Attempt 1: using 'model' parameter
-Failed with 'model': 404 Model is not found: models/gemini-pro for api version v1beta
-
-Attempt 2: using 'model_name' parameter
-Success with 'model_name'
