@@ -197,48 +197,56 @@ async def get_sales_analysis(
     from app.core.data_scope_service import data_scope_service
 
     try:
-        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=50000)
+        # Obter o DataFrame completo (Lazy) para máxima performance sem limites arbitrários no início
+        df = data_scope_service.get_filtered_dataframe(current_user)
+
+        if df.is_empty():
+            return {
+                "vendas_por_categoria": [],
+                "giro_estoque": [],
+                "distribuicao_abc": {"A": 0, "B": 0, "C": 0, "detalhes": []}
+            }
 
         # Determinar nomes corretos das colunas
         categoria_col = "NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else ("CATEGORIA" if "CATEGORIA" in df.columns else None)
         segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else ("SEGMENTO" if "SEGMENTO" in df.columns else None)
 
-        # Aplicar filtros se fornecidos (exato, case-insensitive)
+        # Aplicar filtros se fornecidos
         if categoria and categoria_col:
             df = df.filter(pl.col(categoria_col).str.to_lowercase() == categoria.lower())
         if segmento and segmento_col:
             df = df.filter(pl.col(segmento_col).str.to_lowercase() == segmento.lower())
 
-        # 1. Vendas por Categoria
+        # Função auxiliar para casting seguro
+        def safe_cast_col(col_name):
+            if col_name not in df.columns: return pl.lit(0).cast(pl.Float64)
+            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
+
+        # 1. Vendas por Categoria (Top 10)
         vendas_categoria = []
         if categoria_col:
             df_cat = df.group_by(categoria_col).agg([
-                pl.col("VENDA_30DD").sum().alias("vendas")
+                safe_cast_col("VENDA_30DD").sum().alias("vendas")
             ]).sort("vendas", descending=True).head(10)
 
             for row in df_cat.iter_rows(named=True):
-                cat = str(row[categoria_col]).strip()
-                if cat and cat != "null" and cat != "None":
-                    vendas_categoria.append({
-                        "categoria": cat[:30],
-                        "vendas": int(row["vendas"])
-                    })
+                vendas_categoria.append({
+                    "categoria": str(row[categoria_col])[:30],
+                    "vendas": int(row["vendas"])
+                })
 
-        # 2. Giro de Estoque (vendas / estoque médio)
+        # 2. Giro de Estoque (Top 15)
         giro_estoque = []
         if "VENDA_30DD" in df.columns and "ESTOQUE_UNE" in df.columns:
-            # Clean and cast ESTOQUE_UNE, handling empty strings
-            estoque_cleaned = pl.col("ESTOQUE_UNE").replace("", None).cast(pl.Float64)
-
-            df_giro = df.filter(
-                (pl.col("VENDA_30DD") > 0) &
-                (estoque_cleaned > 0)
+            df_giro = df.with_columns([
+                safe_cast_col("VENDA_30DD").alias("v_clean"),
+                safe_cast_col("ESTOQUE_UNE").alias("e_clean")
+            ]).filter(
+                (pl.col("v_clean") > 0) & (pl.col("e_clean") > 0)
             ).group_by("PRODUTO", "NOME").agg([
-                pl.col("VENDA_30DD").sum().alias("vendas"),
-                estoque_cleaned.mean().alias("estoque_medio")
-            ])
-
-            df_giro = df_giro.with_columns([
+                pl.col("v_clean").sum().alias("vendas"),
+                pl.col("e_clean").mean().alias("estoque_medio")
+            ]).with_columns([
                 (pl.col("vendas") / pl.col("estoque_medio")).alias("giro")
             ]).sort("giro", descending=True).head(15)
 
@@ -249,56 +257,51 @@ async def get_sales_analysis(
                     "giro": round(float(row["giro"]), 2)
                 })
 
-        # 3. Distribuição ABC (Princípio de Pareto - Baseado em Receita)
-        distribuicao_abc = {"A": 0, "B": 0, "C": 0, "detalhes": []}
+        # 3. Distribuição ABC (Princípio de Pareto - Dataset Completo)
+        distribuicao_abc = {"A": 0, "B": 0, "C": 0, "detalhes": [], "receita_por_classe": {}}
         
-        # Identificar colunas de valor/receita de forma flexível
-        receita_col = next((c for c in ["MES_01", "VrVenda", "VALOR_VENDA", "RECEITA"] if c in df.columns), None)
+        # Usamos MES_01 para faturamento ou VENDA_30DD se MES_01 estiver zerado
+        # No varejo, Pareto pode ser por Valor ou Volume
+        val_col = "MES_01" if "MES_01" in df.columns else "VENDA_30DD"
         
-        if receita_col:
-            # Casting robusto para garantir cálculos precisos (Pareto é sensível a tipos)
-            df_abc_raw = df.with_columns([
-                pl.col(receita_col).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0).alias("receita_clean")
-            ]).filter(pl.col("receita_clean") > 0)
+        df_abc_raw = df.with_columns([
+            safe_cast_col(val_col).alias("valor_clean")
+        ]).filter(pl.col("valor_clean") > 0)
 
-            if not df_abc_raw.is_empty():
-                df_abc = df_abc_raw.select([
-                    pl.col("PRODUTO"), 
-                    pl.col("NOME"), 
-                    pl.col("receita_clean").alias("receita")
-                ]).sort("receita", descending=True)
+        if not df_abc_raw.is_empty():
+            # Ordenar por valor decrescente
+            df_abc = df_abc_raw.select([
+                pl.col("PRODUTO"), 
+                pl.col("NOME"), 
+                pl.col("valor_clean").alias("receita")
+            ]).sort("receita", descending=True)
 
-                total_receita = df_abc.select(pl.col("receita").sum()).item()
+            total_receita = df_abc.select(pl.col("receita").sum()).item()
+            
+            if total_receita > 0:
+                # Calcular Acumulado
+                df_abc = df_abc.with_columns([
+                    (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
+                ])
+
+                # Classificação ABC (80/15/5)
+                df_abc = df_abc.with_columns([
+                    pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
+                    .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
+                    .otherwise(pl.lit("C")).alias("classe")
+                ])
+
+                # Resultados
+                resumo = df_abc.group_by("classe").agg([
+                    pl.count().alias("qtd"),
+                    pl.col("receita").sum().alias("soma")
+                ])
                 
-                if total_receita > 0:
-                    # Cálculo da Curva de Pareto
-                    df_abc = df_abc.with_columns([
-                        (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
-                    ])
+                for row in resumo.iter_rows(named=True):
+                    distribuicao_abc[row["classe"]] = row["qtd"]
+                    distribuicao_abc["receita_por_classe"][row["classe"]] = row["soma"]
 
-                    # Classificação ABC Clássica (Pareto 80/20)
-                    df_abc = df_abc.with_columns([
-                        pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
-                        .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
-                        .otherwise(pl.lit("C")).alias("classe")
-                    ])
-
-                    # Resumo por Classe
-                    counts = df_abc.group_by("classe").agg(pl.count().alias("qtd"))
-                    for row in counts.iter_rows(named=True):
-                        distribuicao_abc[row["classe"]] = row["qtd"]
-
-                    # Top 20 para o gráfico detalhado
-                    distribuicao_abc["detalhes"] = df_abc.head(20).to_dicts()
-                    
-                    # Metadados financeiros
-                    receitas = df_abc.group_by("classe").agg(pl.col("receita").sum().alias("soma"))
-                    distribuicao_abc["receita_por_classe"] = {r["classe"]: r["soma"] for r in receitas.iter_rows(named=True)}
-        
-        # Fallback se MES_01 falhar: Tentar por Volume de Vendas (VENDA_30DD)
-        elif "VENDA_30DD" in df.columns:
-            # Lógica similar mas usando volume como proxy de importância
-            pass 
+                distribuicao_abc["detalhes"] = df_abc.head(20).to_dicts()
 
         return {
             "vendas_por_categoria": vendas_categoria,
