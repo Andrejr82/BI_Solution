@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_db
 from app.infrastructure.database.models import User
-from app.core.llm_gemini_adapter import GeminiLLMAdapter
+from app.core.llm_gemini_adapter_v2 import GeminiLLMAdapterV2 as GeminiLLMAdapter
 from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
 from app.core.data_scope_service import data_scope_service
 from app.config.settings import settings
@@ -34,7 +34,7 @@ class InsightResponse(BaseModel):
     category: str  # trend, anomaly, opportunity, risk
     severity: str  # low, medium, high
     recommendation: str | None
-    data_points: List[dict] | None
+    data_points: List[Any] | None
     created_at: str
 
 
@@ -51,148 +51,143 @@ async def get_proactive_insights(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
-    Get AI-powered proactive insights based on current business data.
-
-    Analyzes recent data and generates intelligent insights about:
-    - Sales trends
-    - Inventory anomalies
-    - Revenue opportunities
-    - Stock risks
+    Gera insights de varejo modernos e proativos usando IA.
+    Analisa tendências, riscos de ruptura e oportunidades de mix.
     """
-    logger.info(f"🧠 Proactive Insights solicitado por: {current_user.username}")
+    logger.info(f"🧠 Gerando insights modernos para: {current_user.username} (Role: {current_user.role})")
     try:
-        # Initialize adapters
         llm_adapter = GeminiLLMAdapter()
         
-        # Get filtered dataframe using singleton service (Fast & Secure)
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        # Obtém o dataframe já filtrado por escopo (Segmentos do Usuário ou Global para Admin)
+        df_raw = data_scope_service.get_filtered_dataframe(current_user)
         
-        # Collect business metrics using Polars
-        insights_data = []
+        if df_raw.is_empty():
+            return InsightsListResponse(insights=[], total=0, generated_at=datetime.utcnow().isoformat())
 
-        # Helper to safely get column
-        def get_col(candidates, default=None):
-            for c in candidates:
-                if c in df.columns: return c
-            return default
+        # Coleta de métricas avançadas usando Polars para alta performance
+        # Garantir tipos numéricos para cálculos, tratando strings vazias
+        def safe_cast_col(col_name):
+            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
 
-        # Map columns based on ADMMAT schema
-        col_segment = get_col(["NOMESEGMENTO", "SEGMENTO", "CATEGORIA"], "SEGMENTO")
-        col_sales = get_col(["VENDA_30DD", "QtdVenda", "VENDA"], "VENDA_30DD")
-        col_revenue = get_col(["MES_01", "VrVenda", "RECEITA"], "MES_01")
-        col_stock = get_col(["ESTOQUE_UNE", "QtdEstoque"], "ESTOQUE_UNE")
-        col_product = get_col(["PRODUTO", "CODPRODUTO"], "PRODUTO")
-        col_name = get_col(["NOME", "NOMPRODUTO"], "NOME")
+        df_numeric = df_raw.with_columns([
+            safe_cast_col("VENDA_30DD"),
+            safe_cast_col("MES_01"),
+            safe_cast_col("MES_02"),
+            safe_cast_col("ESTOQUE_UNE"),
+            safe_cast_col("ESTOQUE_CD")
+        ])
 
-        # 1. Sales Trends Analysis (Aggregated by Segment)
-        if col_segment and col_sales and col_revenue:
-            try:
-                # Group by Segment
-                df_sales = df.group_by(col_segment).agg([
-                    pl.col(col_sales).sum().alias("total_vendas"),
-                    pl.col(col_revenue).sum().alias("receita_total"),
-                    pl.col(col_product).n_unique().alias("produtos_vendidos")
-                ]).sort("receita_total", descending=True).head(10)
-                
-                sales_data = df_sales.to_dicts()
-                if sales_data:
-                    insights_data.append({
-                        "type": "sales_by_segment",
-                        "data": sales_data
-                    })
-            except Exception as e:
-                logger.warning(f"Sales analysis failed: {e}")
+        insights_context = []
 
-        # 2. Stock Rupture Analysis (Low Stock items)
-        if col_name and col_stock and col_sales:
-            try:
-                # Filter potential ruptures: Stock < 10% of monthly sales
-                df_rupture = df.filter(
-                    (pl.col(col_stock).cast(pl.Float64).fill_null(0) < (pl.col(col_sales).cast(pl.Float64).fill_null(0) * 0.1)) &
-                    (pl.col(col_sales).cast(pl.Float64).fill_null(0) > 0)
-                ).sort(col_sales, descending=True).head(10).select([
-                    col_name, col_stock, col_sales, col_segment
-                ])
+        # 1. Resumo Executivo (Macro)
+        exec_summary = df_numeric.select([
+            pl.col("VENDA_30DD").sum().alias("vendas_totais"),
+            pl.col("MES_01").sum().alias("receita_atual"),
+            pl.col("MES_02").sum().alias("receita_anterior"),
+            pl.col("ESTOQUE_UNE").sum().alias("estoque_lojas"),
+            pl.col("ESTOQUE_CD").sum().alias("estoque_cd"),
+            pl.col("PRODUTO").n_unique().alias("skus_ativos")
+        ]).to_dicts()[0]
+        
+        # Calcular crescimento MoM
+        if exec_summary["receita_anterior"] > 0:
+            growth = ((exec_summary["receita_atual"] - exec_summary["receita_anterior"]) / exec_summary["receita_anterior"]) * 100
+            exec_summary["crescimento_mom"] = round(growth, 2)
+        else:
+            exec_summary["crescimento_mom"] = 0
+        
+        insights_context.append({"type": "executive_summary", "data": exec_summary})
 
-                rupture_data = df_rupture.to_dicts()
-                if rupture_data:
-                    insights_data.append({
-                        "type": "critical_ruptures",
-                        "data": rupture_data
-                    })
-            except Exception as e:
-                logger.warning(f"Rupture analysis failed: {e}")
-
-        # 3. High Value Products (Pareto/ABC)
-        if col_name and col_revenue:
-            try:
-                df_high_value = df.sort(col_revenue, descending=True).head(10).select([
-                    col_name, col_revenue, col_sales, col_segment
-                ])
-                
-                high_value_data = df_high_value.to_dicts()
-                if high_value_data:
-                    insights_data.append({
-                        "type": "top_revenue_products",
-                        "data": high_value_data
-                    })
-            except Exception as e:
-                logger.warning(f"High value analysis failed: {e}")
-
-        # Generate insights using Gemini
-        try:
-            # Call Gemini
-            response = await llm_adapter.generate_response(prompt)
+        # 2. Top Categorias/Segmentos por Performance
+        group_col = "NOMESEGMENTO" if current_user.role == "admin" else "NOMECATEGORIA"
+        if group_col in df_numeric.columns:
+            top_performers = df_numeric.group_by(group_col).agg([
+                pl.col("MES_01").sum().alias("receita"),
+                pl.col("VENDA_30DD").sum().alias("unidades"),
+                (pl.col("ESTOQUE_UNE").sum() / (pl.col("VENDA_30DD").sum().clip(0.01) / 30)).alias("cobertura_dias")
+            ]).sort("receita", descending=True).head(5).to_dicts()
             
-            # Log raw response for debugging (truncated)
-            logger.info(f"🤖 Gemini Raw Response: {response[:200]}...")
+            insights_context.append({"type": "top_categories", "data": top_performers})
 
-            # Extract JSON from response (handles markdown code blocks)
-            # Regex robusto para capturar JSON dentro ou fora de blocos de código
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # Tenta encontrar o primeiro { e o último }
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                if start != -1 and end > start:
-                    json_str = response[start:end]
-                else:
-                    json_str = response
+        # 3. Alertas de Ruptura e Estoque Crítico
+        venda_media = df_numeric.select(pl.col("VENDA_30DD").mean()).item() or 0
+        df_critical = df_numeric.filter(
+            (pl.col("VENDA_30DD") > venda_media) & 
+            (pl.col("ESTOQUE_UNE") < (pl.col("VENDA_30DD") / 30 * 5))
+        ).sort("VENDA_30DD", descending=True).head(5).select([
+            "NOME", "VENDA_30DD", "ESTOQUE_UNE", "ESTOQUE_CD", "NOMESEGMENTO"
+        ]).to_dicts()
+        
+        if df_critical:
+            insights_context.append({"type": "critical_stock_alerts", "data": df_critical})
 
-            insights_response = json.loads(json_str)
+        # Preparar o Prompt para o Especialista em Varejo
+        context_description = "todos os segmentos da rede" if current_user.role == "admin" else f"seu segmento específico ({', '.join(current_user.segments_list)})";
+        
+        prompt = f"""
+        Você é um Diretor de BI da Caculinha (Varejo de Armarinhos/Tecidos).
+        Analise os dados abaixo para o usuário {current_user.username}, que tem visão sobre {context_description}.
+        
+        DADOS ESTRUTURADOS:
+        {json.dumps(insights_context, indent=2, ensure_ascii=False)}
+        
+        SUA TAREFA:
+        Gere 4 insights estratégicos e modernos seguindo estas diretrizes:
+        1. TENDÊNCIA: Analise o crescimento MoM e o que ele indica.
+        2. EFICIÊNCIA: Comente sobre a 'cobertura_dias'. Ideal é entre 15-30 dias. Menos é risco, mais é capital parado.
+        3. PARETO: Identifique se há concentração excessiva em poucos SKUs ou categorias.
+        4. AÇÃO: Cada insight DEVE ter uma recomendação prática (Ex: 'Transferir X do CD', 'Realizar queima de estoque', 'Aumentar pedido de compra').
 
-        except Exception as llm_error:
-            logger.error(f"❌ Falha no LLM ou Parse: {llm_error}. Usando fallback.")
-            # Fallback seguro para não quebrar o frontend
-            insights_response = {
-                "insights": [
-                    {
-                        "id": "fallback-1",
-                        "title": "Análise de Dados Disponível",
-                        "description": "Os dados foram processados com sucesso, mas a análise detalhada da IA está temporariamente indisponível.",
-                        "category": "opportunity",
-                        "severity": "low",
-                        "recommendation": "Verifique os gráficos de KPI para análise manual.",
-                        "data_points": []
-                    }
-                ]
-            }
+        REGRAS DE FORMATO:
+        - Retorne APENAS um objeto JSON.
+        - Linguagem: Português PT-BR profissional mas direta.
+        - Categorias: 'trend', 'anomaly', 'opportunity', 'risk'.
+        - Severidade: 'low', 'medium', 'high'.
 
-        # Format insights with timestamps
-        formatted_insights = []
-        for idx, insight in enumerate(insights_response.get('insights', [])):
-            formatted_insights.append(InsightResponse(
-                id=insight.get('id', f"insight-{idx}"),
-                title=insight.get('title', 'Insight Gerado'),
-                description=insight.get('description', 'Sem descrição disponível.'),
-                category=insight.get('category', 'opportunity'),
-                severity=insight.get('severity', 'low'),
-                recommendation=insight.get('recommendation'),
-                data_points=insight.get('data_points'),
+        ESTRUTURA DO JSON:
+        {{
+            "insights": [
+                {{
+                    "id": "unique-id",
+                    "title": "Título Impactante",
+                    "description": "Explicação baseada em números reais",
+                    "category": "risk",
+                    "severity": "high",
+                    "recommendation": "Ação sugerida",
+                    "data_points": [] 
+                }}
+            ]
+        }}
+        """
+
+        # Chamada ao Gemini
+        response = await llm_adapter.generate_response(prompt)
+        
+        # Limpeza e parse do JSON
+        json_match = re.search(r'(\{.*\})', response, re.DOTALL)
+        if json_match:
+            try:
+                insights_response = json.loads(json_match.group(1))
+            except:
+                logger.error("Erro ao parsear JSON do Gemini")
+                raise Exception("AI Response parsing failed")
+        else:
+            raise Exception("No JSON found in AI response")
+
+        # Formatação final
+        formatted_insights = [
+            InsightResponse(
+                id=i.get('id', f"ins-{idx}"),
+                title=i.get('title', 'Insight Estratégico'),
+                description=i.get('description', ''),
+                category=i.get('category', 'opportunity'),
+                severity=i.get('severity', 'medium'),
+                recommendation=i.get('recommendation'),
+                data_points=i.get('data_points', []),
                 created_at=datetime.utcnow().isoformat()
-            ))
+            )
+            for idx, i in enumerate(insights_response.get('insights', []))
+        ]
 
         return InsightsListResponse(
             insights=formatted_insights,
@@ -201,13 +196,24 @@ async def get_proactive_insights(
         )
 
     except Exception as e:
-        logger.error(f"🔥 Erro Crítico em Proactive Insights: {e}", exc_info=True)
-        # Última linha de defesa: retornar lista vazia em vez de 500
+        logger.error(f"❌ Erro em Proactive Insights: {str(e)}", exc_info=True)
         return InsightsListResponse(
-            insights=[],
-            total=0,
+            insights=[
+                InsightResponse(
+                    id="err-1",
+                    title="Análise em processamento",
+                    description="Estamos consolidando os dados do seu segmento para gerar novos insights.",
+                    category="trend",
+                    severity="low",
+                    recommendation="Tente atualizar em alguns instantes.",
+                    data_points=[],
+                    created_at=datetime.utcnow().isoformat()
+                )
+            ],
+            total=1,
             generated_at=datetime.utcnow().isoformat()
         )
+
 
 
 @router.get("/anomalies")

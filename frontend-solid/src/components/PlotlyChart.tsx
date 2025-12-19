@@ -1,22 +1,12 @@
 // frontend-solid/src/components/PlotlyChart.tsx
 
-import { createEffect, onCleanup, Accessor, createSignal, Show } from 'solid-js';
+import { createEffect, onCleanup, Accessor, createSignal, Show, onMount } from 'solid-js';
 import Plotly from 'plotly.js-dist-min';
 import { Maximize, Minimize } from 'lucide-solid';
 
-// ===== PALETA LOJAS CAÇULA - 40 ANOS DE TRADIÇÃO =====
-// Cores terrosas/neutras para consistência visual
 const CACULA_CHART_COLORS = [
-  '#8B7355',  // Marrom Caçula (principal)
-  '#C9A961',  // Dourado/Bronze (tradição)
-  '#6B7A5A',  // Verde oliva
-  '#A68968',  // Marrom claro
-  '#CC8B3C',  // Laranja terroso
-  '#5B7B9A',  // Azul acinzentado
-  '#9B8875',  // Bege médio
-  '#B8984E',  // Dourado escuro
-  '#7A8B6F',  // Verde acinzentado
-  '#B59B7A',  // Bege quente
+  '#8B7355', '#C9A961', '#6B7A5A', '#A68968', '#CC8B3C', 
+  '#5B7B9A', '#9B8875', '#B8984E', '#7A8B6F', '#B59B7A',
 ];
 
 interface PlotlyChartProps {
@@ -30,185 +20,140 @@ interface PlotlyChartProps {
 
 export const PlotlyChart = (props: PlotlyChartProps) => {
   let chartDiv: HTMLDivElement | undefined;
+  let expandedChartDiv: HTMLDivElement | undefined;
+  
   const chartId = props.chartId || `chart-${Math.random().toString(36).substr(2, 9)}`;
   const [isExpanded, setIsExpanded] = createSignal(false);
 
   const toggleExpand = () => {
     const newState = !isExpanded();
     setIsExpanded(newState);
-
-    // Controlar scroll do body
-    if (newState) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
-    // Force resize after state change and DOM update
-    setTimeout(() => {
-      if (chartDiv) {
-        Plotly.Plots.resize(chartDiv);
-        // Forçar relayout também
-        Plotly.relayout(chartDiv, {
-          'xaxis.autorange': true,
-          'yaxis.autorange': true
-        });
-      }
-    }, 100);
+    document.body.style.overflow = newState ? 'hidden' : '';
+    
+    // Pequeno delay para garantir que o DOM do modal esteja pronto
+    setTimeout(renderPlot, 50);
   };
 
-  // Fechar com tecla ESC
   const handleEsc = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && isExpanded()) {
-      toggleExpand();
-    }
+    if (e.key === 'Escape' && isExpanded()) toggleExpand();
   };
 
   createEffect(() => {
-    if (isExpanded()) {
-      window.addEventListener('keydown', handleEsc);
-    } else {
-      window.removeEventListener('keydown', handleEsc);
-    }
+    if (isExpanded()) window.addEventListener('keydown', handleEsc);
+    else window.removeEventListener('keydown', handleEsc);
   });
 
   onCleanup(() => {
     window.removeEventListener('keydown', handleEsc);
     document.body.style.overflow = '';
+    if (chartDiv) Plotly.purge(chartDiv);
+    if (expandedChartDiv) Plotly.purge(expandedChartDiv);
   });
 
-  // Renderizar o gráfico
-  createEffect(() => {
+  const renderPlot = () => {
     const spec = props.chartSpec();
-    if (chartDiv && spec && Object.keys(spec).length > 0) {
-      console.log('Rendering Plotly Chart with spec:', spec);
-      try {
-        // ===== APLICAR TEMA CAÇULA - LIGHT MODE =====
-        // Merge layout com tema Lojas Caçula
-        const caculaLayout = {
-          paper_bgcolor: '#FAFAFA',  // Light background
-          plot_bgcolor: '#FFFFFF',   // White plot area
-          font: {
-            color: '#2D2D2D',        // Cinza escuro quente
-            family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            size: 12
-          },
-          colorway: CACULA_CHART_COLORS, // Paleta terrosa Caçula
+    const targetDiv = isExpanded() ? expandedChartDiv : chartDiv;
+    
+    if (!targetDiv || !spec || Object.keys(spec).length === 0) return;
 
-          // Eixos com cores suaves
-          xaxis: {
-            gridcolor: '#E5E5E5',
-            linecolor: '#E5E5E5',
-            zerolinecolor: '#E5E5E5',
-            tickfont: { color: '#2D2D2D' },
-            ...(spec.layout?.xaxis || {})
-          },
-          yaxis: {
-            gridcolor: '#E5E5E5',
-            linecolor: '#E5E5E5',
-            zerolinecolor: '#E5E5E5',
-            tickfont: { color: '#2D2D2D' },
-            ...(spec.layout?.yaxis || {})
-          },
+    try {
+      const caculaLayout = {
+        paper_bgcolor: isExpanded() ? '#FAFAFA' : '#FAFAFA',
+        plot_bgcolor: '#FFFFFF',
+        font: {
+          color: '#2D2D2D',
+          family: 'Inter, sans-serif',
+          size: isExpanded() ? 13 : 11
+        },
+        colorway: CACULA_CHART_COLORS,
+        margin: isExpanded() ? { l: 80, r: 40, t: 80, b: 100 } : (spec.layout?.margin || { l: 40, r: 20, t: 40, b: 40 }),
+        xaxis: { gridcolor: '#E5E5E5', ...spec.layout?.xaxis },
+        yaxis: { gridcolor: '#E5E5E5', ...spec.layout?.yaxis },
+        legend: {
+          bgcolor: 'rgba(255,255,255,0.8)',
+          ...spec.layout?.legend
+        },
+        ...spec.layout
+      };
 
-          // Hover info estilizado
-          hoverlabel: {
-            bgcolor: '#FFFFFF',
-            bordercolor: '#8B7355', // Marrom Caçula
-            font: { color: '#2D2D2D', family: 'Inter, sans-serif' }
-          },
+      const config = {
+        responsive: true,
+        displayModeBar: isExpanded(),
+        displaylogo: false,
+        ...spec.config
+      };
 
-          // Legend (legenda)
-          legend: {
-            font: { color: '#2D2D2D' },
-            bgcolor: 'rgba(255,255,255,0.9)',
-            bordercolor: '#E5E5E5',
-            borderwidth: 1,
-            ...(spec.layout?.legend || {})
-          },
+      // Limpar o outro div se estiver mudando de estado
+      if (isExpanded() && chartDiv) Plotly.purge(chartDiv);
+      if (!isExpanded() && expandedChartDiv) Plotly.purge(expandedChartDiv);
 
-          // Merge com layout original (permite override)
-          ...spec.layout
-        };
+      Plotly.newPlot(targetDiv, spec.data, caculaLayout, config);
 
-        // Merge config com opções de download se habilitado
-        const config = {
-          responsive: true,
-          displayModeBar: props.enableDownload ?? false,
-          displaylogo: false,
-          showLink: false,
-          modeBarButtonsToRemove: ['sendDataToCloud', 'editInChartStudio', 'lasso2d', 'select2d'],
-          modeBarButtonsToAdd: props.enableDownload ? ['downloadImage'] : [],
-          toImageButtonOptions: props.enableDownload ? {
-            format: 'png',
-            filename: `grafico_cacula_${new Date().toISOString().split('T')[0]}`,
-            height: 800,
-            width: 1200,
-            scale: 2
-          } : undefined,
-          ...spec.config
-        };
-
-        Plotly.newPlot(chartDiv, spec.data, caculaLayout, config);
-
-        // Adicionar eventos de interação
-        if (props.onDataClick) {
-          chartDiv.on('plotly_click', (data) => {
-            props.onDataClick!(data);
-          });
-        }
-
-        if (props.onHover) {
-          chartDiv.on('plotly_hover', (data) => {
-            props.onHover!(data);
-          });
-        }
-      } catch (error: any) {
-        console.error("Error rendering Plotly chart:", error);
-        chartDiv.innerHTML = `<div class="text-red-500">Erro ao renderizar gráfico: ${error.message}</div>`;
+      if (props.onDataClick) {
+        targetDiv.on('plotly_click', props.onDataClick);
       }
-    } else if (chartDiv && (!spec || Object.keys(spec).length === 0)) {
-      chartDiv.innerHTML = `<div class="text-gray-500">Nenhuma especificação de gráfico fornecida.</div>`;
+    } catch (error) {
+      console.error("Plotly render error:", error);
     }
-  });
+  };
 
-  onCleanup(() => {
-    if (chartDiv) {
-      Plotly.purge(chartDiv);
-    }
-  });
+  createEffect(renderPlot);
 
   return (
-    <div
-      class={`relative transition-all duration-300 ${isExpanded() ? 'fixed inset-0 z-[9999] bg-white p-8 flex flex-col overflow-auto' : ''}`}
-      style={isExpanded() ? { 'background-color': '#FAFAFA' } : {}}
-    >
-      {/* Botão de fechar/expandir */}
-      <div class={`absolute z-10 flex gap-2 ${isExpanded() ? 'top-4 right-4' : 'top-2 right-2'}`}>
-        <button
-          onClick={toggleExpand}
-          class={`p-2 rounded-full shadow-md border transition-colors ${isExpanded() ? 'bg-primary text-white hover:bg-primary/80' : 'bg-background/80 hover:bg-muted backdrop-blur-sm'}`}
-          title={isExpanded() ? "Fechar tela cheia (ESC)" : "Expandir tela cheia"}
-        >
-          <Show when={isExpanded()} fallback={<Maximize size={16} />}>
-            <Minimize size={20} />
-          </Show>
-        </button>
+    <>
+      <div
+        class="relative w-full overflow-hidden rounded-xl border bg-card group shadow-sm hover:shadow-md transition-shadow"
+        style={{ height: props.height || '400px' }}
+      >
+        <div class="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleExpand(); }}
+            class="p-2 rounded-lg bg-white/90 border shadow-sm hover:bg-white text-primary transition-colors"
+            title="Ver em tela cheia"
+          >
+            <Maximize size={18} />
+          </button>
+        </div>
+        
+        <div ref={chartDiv} class="w-full h-full" id={chartId}></div>
       </div>
-      {/* Título quando em tela cheia */}
+
       <Show when={isExpanded()}>
-        <div class="mb-4 text-center">
-          <p class="text-sm text-muted">Pressione ESC ou clique no botão para fechar</p>
+        <div 
+          class="fixed inset-0 z-[10000] bg-zinc-950/60 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-300"
+          onClick={toggleExpand}
+        >
+          <div 
+            class="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="p-5 border-b flex items-center justify-between bg-white dark:bg-zinc-900">
+              <div class="flex items-center gap-3">
+                <div class="w-2 h-8 bg-primary rounded-full animate-pulse"></div>
+                <div>
+                  <h3 class="font-bold text-xl text-gray-900 dark:text-gray-100">Análise Expandida</h3>
+                  <p class="text-xs text-muted-foreground">Visão detalhada dos indicadores de performance</p>
+                </div>
+              </div>
+              <button
+                onClick={toggleExpand}
+                class="group p-2 px-4 rounded-xl hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all flex items-center gap-3 border border-transparent hover:border-red-100"
+              >
+                <span class="text-sm font-bold">FECHAR</span>
+                <Minimize size={22} class="group-hover:scale-110 transition-transform" />
+              </button>
+            </div>
+            
+            <div class="flex-1 p-8 bg-[#FAFAFA] dark:bg-zinc-950/50">
+              <div 
+                ref={expandedChartDiv}
+                id={`${chartId}-expanded`}
+                class="w-full h-full"
+              ></div>
+            </div>
+          </div>
         </div>
       </Show>
-      <div
-        ref={chartDiv}
-        id={chartId}
-        class={`w-full ${isExpanded() ? 'flex-1' : ''}`}
-        style={{ height: isExpanded() ? 'calc(100% - 60px)' : (props.height || '400px') }}
-      >
-        {/* Chart will be rendered here by Plotly.js */}
-      </div>
-    </div>
+    </>
   );
 };

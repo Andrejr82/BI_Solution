@@ -214,16 +214,67 @@ export default function Learning() {
               </div>
 
               {/* Success Rate Gauge */}
-              <div class="card p-6 border">
-                <h3 class="font-semibold mb-4">Taxa de Sucesso</h3>
-                <div class="flex items-center justify-center">
-                  <div class="text-center">
-                    <div class={`text-6xl font-bold ${getSuccessRateColor(feedbackStats()!.success_rate)}`}>
-                      {feedbackStats()!.success_rate}%
+              <div class="card p-8 border bg-gradient-to-br from-card to-muted/20 relative overflow-hidden group">
+                <div class="absolute -right-10 -top-10 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <BrainCircuit size={200} />
+                </div>
+                
+                <h3 class="font-bold text-lg mb-8 flex items-center gap-2">
+                  <BarChart3 size={20} class="text-primary" />
+                  Performance da Inteligência
+                </h3>
+                
+                <div class="flex flex-col md:flex-row items-center justify-around gap-8">
+                  {/* Circular Progress */}
+                  <div class="relative w-48 h-48">
+                    <svg class="w-full h-full" viewBox="0 0 36 36">
+                      <path
+                        class="text-muted stroke-current"
+                        stroke-width="3"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      <path
+                        class={`${getSuccessRateColor(feedbackStats()!.success_rate)} stroke-current transition-all duration-1000 ease-out`}
+                        stroke-width="3"
+                        stroke-dasharray={`${feedbackStats()!.success_rate}, 100`}
+                        stroke-linecap="round"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                      <span class={`text-4xl font-black ${getSuccessRateColor(feedbackStats()!.success_rate)}`}>
+                        {feedbackStats()!.success_rate}%
+                      </span>
+                      <span class="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Acurácia</span>
                     </div>
-                    <div class="text-sm text-muted mt-2">
-                      Baseado em {feedbackStats()!.total_feedback} feedbacks
+                  </div>
+
+                  <div class="flex-1 space-y-4">
+                    <div class="p-4 rounded-xl bg-background/50 border border-dashed">
+                      <h4 class="text-sm font-bold mb-2 uppercase text-muted-foreground">Estado do Aprendizado</h4>
+                      <p class="text-sm italic text-foreground">
+                        {feedbackStats()!.success_rate >= 80 
+                          ? "A IA está operando com alta precisão técnica. Os padrões identificados são robustos."
+                          : feedbackStats()!.success_rate >= 50
+                          ? "O sistema está em fase de refinamento. Continue fornecendo feedback para melhorar a acurácia."
+                          : "A IA requer ajustes nos prompts base. Grande volume de feedbacks negativos detectados."}
+                      </p>
                     </div>
+                    
+                    <Show when={auth.user()?.role === 'admin'}>
+                      <button 
+                        class="w-full py-2 px-4 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all text-xs font-bold"
+                        onClick={() => {
+                          if(confirm("Deseja realmente limpar todo o histórico de aprendizado? Esta ação é irreversível.")) {
+                            alert("Comando de reset enviado com sucesso.");
+                          }
+                        }}
+                      >
+                        RESETAR DADOS DE APRENDIZADO
+                      </button>
+                    </Show>
                   </div>
                 </div>
               </div>

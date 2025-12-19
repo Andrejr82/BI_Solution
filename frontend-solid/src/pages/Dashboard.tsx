@@ -311,13 +311,15 @@ export default function Dashboard() {
 
         {/* 3. Context7: Narrative Charts (The "Why") */}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div class="card bg-card border rounded-xl p-1 shadow-sm overflow-hidden flex flex-col h-[400px]">
+          {/* ✅ CORREÇÃO: Removido h-[400px] fixo para permitir fullscreen correto */}
+          <div class="card bg-card border rounded-xl p-1 shadow-sm overflow-hidden flex flex-col" style="min-height: 400px;">
             <div class="flex-1 min-h-0">
               <PlotlyChart
                 chartSpec={topProdutosChart}
                 chartId="top-produtos-chart"
                 enableDownload={false} // Clean look
                 onDataClick={handleProductClick}
+                height="380px"
               />
             </div>
             <div class="px-4 py-2 bg-muted/30 border-t text-xs text-muted flex justify-between items-center">
@@ -326,12 +328,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div class="card bg-card border rounded-xl p-1 shadow-sm overflow-hidden flex flex-col h-[400px]">
+          {/* ✅ CORREÇÃO: Removido h-[400px] fixo para permitir fullscreen correto */}
+          <div class="card bg-card border rounded-xl p-1 shadow-sm overflow-hidden flex flex-col" style="min-height: 400px;">
             <div class="flex-1 min-h-0">
               <PlotlyChart
                 chartSpec={vendasCategoriaChart}
                 chartId="vendas-categoria-chart"
                 enableDownload={false}
+                height="380px"
               />
             </div>
             <div class="px-4 py-2 bg-muted/30 border-t text-xs text-muted flex justify-between items-center">
@@ -376,8 +380,17 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+            {/* ✅ CORREÇÃO: Adicionado onClick para navegar ao Chat com query */}
             <div class="p-3 bg-muted/20 border-t text-center">
-              <button class="text-xs font-medium text-primary hover:underline">Ver ranking completo</button>
+              <button
+                class="text-xs font-medium text-primary hover:underline"
+                onClick={() => {
+                  localStorage.setItem('example_query', 'Mostre o ranking completo dos top 20 produtos mais vendidos com análise detalhada');
+                  navigate('/chat');
+                }}
+              >
+                Ver ranking completo
+              </button>
             </div>
           </div>
         </div>

@@ -18,6 +18,14 @@ interface SalesAnalysis {
     A: number;
     B: number;
     C: number;
+    detalhes: Array<{
+      PRODUTO: number;
+      NOME: string;
+      receita: number;
+      perc_acumulada: number;
+      classe: string;
+    }>;
+    receita_por_classe?: Record<string, number>;
   };
 }
 
@@ -180,47 +188,112 @@ export default function Analytics() {
       setGiroEstoqueChart(giroSpec);
     }
 
-    // 3. LOJAS CAÇULA - LIGHT THEME: Distribuição ABC
+    // 3. LOJAS CAÇULA - GRÁFICO DE PARETO REAL (ABC)
     const abc = analysisData.distribuicao_abc;
-    if (abc.A + abc.B + abc.C > 0) {
-      const abcSpec = {
-        data: [{
-          type: 'pie',
-          labels: ['Classe A (20%)', 'Classe B (30%)', 'Classe C (50%)'],
-          values: [abc.A, abc.B, abc.C],
-          marker: {
-            colors: ['#2D7A3E', '#C9A961', '#B94343'], // Verde success, Dourado, Vermelho terroso
-            line: { color: '#FFFFFF', width: 2 }
+    if (abc.detalhes && abc.detalhes.length > 0) {
+      const paretoSpec = {
+        data: [
+          {
+            type: 'bar',
+            x: abc.detalhes.map(p => p.NOME.substring(0, 20)),
+            y: abc.detalhes.map(p => p.receita),
+            name: 'Faturamento (R$)',
+            marker: {
+              color: abc.detalhes.map(p => 
+                p.classe === 'A' ? '#166534' : (p.classe === 'B' ? '#CA8A04' : '#991B1B')
+              ),
+              line: { color: '#FFFFFF', width: 1 },
+              opacity: 0.9
+            },
+            hovertemplate: '<b>%{x}</b><br>Receita: R$ %{y:,.2f}<br>Classe: %{customdata}<extra></extra>',
+            customdata: abc.detalhes.map(p => p.classe)
           },
-          textinfo: 'label+percent+value',
-          textposition: 'inside',
-          textfont: { size: 12, color: '#FFFFFF', family: 'Inter, sans-serif' },
-          hovertemplate: '<b>%{label}</b><br>Produtos: %{value}<br>%{percent}<extra></extra>'
-        }],
+          {
+            type: 'scatter',
+            mode: 'lines+markers',
+            x: abc.detalhes.map(p => p.NOME.substring(0, 20)),
+            y: abc.detalhes.map(p => p.perc_acumulada),
+            name: '% Acumulada',
+            yaxis: 'y2',
+            line: { color: '#1E293B', width: 3, shape: 'spline' },
+            marker: { 
+              color: '#1E293B', 
+              size: 8,
+              symbol: 'diamond'
+            },
+            hovertemplate: 'Contribuição Acumulada: %{y:.1f}%<extra></extra>'
+          }
+        ],
         layout: {
           title: {
-            text: 'Distribuição ABC (Curva de Pareto)',
-            font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
+            text: '<b>Curva de Pareto: Onde está o seu faturamento?</b><br><span style="font-size:12px;color:#64748B">A análise identifica os 20% de produtos que geram 80% do lucro</span>',
+            font: { size: 18, color: '#0F172A', family: 'Inter, sans-serif' },
+            x: 0.05
+          },
+          xaxis: {
+            tickangle: -45,
+            tickfont: { size: 10, color: '#475569', font: { weight: 'bold' } },
+            gridcolor: '#F1F5F9'
+          },
+          yaxis: {
+            title: 'Receita Individual (R$)',
+            titlefont: { size: 12, color: '#64748B', font: { weight: 'bold' } },
+            gridcolor: '#F1F5F9',
+            zeroline: false
+          },
+          yaxis2: {
+            title: '% Contribuição Acumulada',
+            titlefont: { size: 12, color: '#64748B', font: { weight: 'bold' } },
+            overlaying: 'y',
+            side: 'right',
+            range: [0, 105],
+            showgrid: false,
+            tickvals: [0, 20, 40, 60, 80, 95, 100],
+            ticktext: ['0%', '20%', '40%', '60%', '80%', '95%', '100%'],
+            tickfont: { size: 10, color: '#1E293B', font: { weight: 'bold' } }
+          },
+          legend: { 
+            orientation: 'h', 
+            x: 0.5, 
+            y: -0.25, 
+            xanchor: 'center',
+            bgcolor: 'rgba(255,255,255,0.7)',
+            bordercolor: '#E2E8F0',
+            borderwidth: 1
           },
           plot_bgcolor: '#FFFFFF',
           paper_bgcolor: '#FAFAFA',
-          margin: { l: 20, r: 20, t: 60, b: 20 },
-          font: { color: '#2D2D2D', family: 'Inter, sans-serif' },
-          showlegend: true,
-          legend: {
-            orientation: 'h',
-            x: 0.5,
-            y: -0.1,
-            xanchor: 'center',
-            font: { size: 10, color: '#6B6B6B', family: 'Inter, sans-serif' },
-            bgcolor: 'rgba(255,255,255,0.9)',
-            bordercolor: '#E5E5E5',
-            borderwidth: 1
-          }
+          margin: { l: 70, r: 70, t: 90, b: 130 },
+          shapes: [
+            // Linha de Corte de Pareto (80%)
+            {
+              type: 'line',
+              xref: 'paper', yref: 'y2',
+              x0: 0, x1: 1, y0: 80, y1: 80,
+              line: { color: '#166534', width: 2, dash: 'dashdot' }
+            },
+            // Anotação "Vital Few"
+            {
+              type: 'rect',
+              xref: 'paper', yref: 'paper',
+              x0: 0, x1: 0.2, y0: 0.8, y1: 1,
+              fillcolor: 'rgba(22, 101, 52, 0.05)',
+              line: { width: 0 }
+            }
+          ],
+          annotations: [
+            {
+              xref: 'paper', yref: 'y2',
+              x: 0.02, y: 85,
+              text: 'ZONA VITAL (80%)',
+              showarrow: false,
+              font: { color: '#166534', size: 10, weight: 'bold' }
+            }
+          ]
         },
-        config: { responsive: true }
+        config: { responsive: true, displayModeBar: false }
       };
-      setDistribuicaoABCChart(abcSpec);
+      setDistribuicaoABCChart(paretoSpec);
     }
   };
 
@@ -422,7 +495,7 @@ export default function Analytics() {
             {/* Distribuição ABC */}
             <div class="card p-6 border">
               <div class="flex justify-between items-center mb-4">
-                <h3 class="font-semibold">Distribuição ABC (Curva de Pareto)</h3>
+                <h3 class="font-semibold">Análise de Pareto (ABC por Receita)</h3>
                 <ChartDownloadButton
                   chartId="analytics-abc-chart"
                   filename="analytics_distribuicao_abc"
@@ -430,7 +503,7 @@ export default function Analytics() {
                 />
               </div>
               <Show
-                when={(data()!.distribuicao_abc.A + data()!.distribuicao_abc.B + data()!.distribuicao_abc.C) > 0}
+                when={data()!.distribuicao_abc.detalhes && data()!.distribuicao_abc.detalhes.length > 0}
                 fallback={
                   <div class="h-[400px] flex items-center justify-center text-muted">
                     <p>Nenhum dado de distribuição ABC disponível</p>
@@ -443,18 +516,72 @@ export default function Analytics() {
                   enableDownload={true}
                 />
               </Show>
+
+              {/* Summary of ABC classes */}
+              <Show when={data()!.distribuicao_abc.receita_por_classe}>
+                <div class="grid grid-cols-3 gap-2 mt-4">
+                  <div class="p-2 rounded bg-green-500/10 border border-green-500/20 text-center">
+                    <p class="text-[10px] text-green-700 font-bold uppercase">Classe A</p>
+                    <p class="text-sm font-bold">{data()!.distribuicao_abc.A} SKUs</p>
+                    <p class="text-[10px] text-muted-foreground">80% da Receita</p>
+                  </div>
+                  <div class="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-center">
+                    <p class="text-[10px] text-yellow-700 font-bold uppercase">Classe B</p>
+                    <p class="text-sm font-bold">{data()!.distribuicao_abc.B} SKUs</p>
+                    <p class="text-[10px] text-muted-foreground">15% da Receita</p>
+                  </div>
+                  <div class="p-2 rounded bg-red-500/10 border border-red-500/20 text-center">
+                    <p class="text-[10px] text-red-700 font-bold uppercase">Classe C</p>
+                    <p class="text-sm font-bold">{data()!.distribuicao_abc.C} SKUs</p>
+                    <p class="text-[10px] text-muted-foreground">5% da Receita</p>
+                  </div>
+                </div>
+              </Show>
             </div>
           </div>
 
           {/* Info Box */}
-          <div class="card p-4 border bg-blue-500/5 border-blue-500/30">
-            <div class="text-sm">
-              <strong>📊 Sobre a Curva ABC:</strong> A classificação ABC segue o princípio de Pareto (80/20):
-              <ul class="list-disc list-inside mt-2 space-y-1 text-muted">
-                <li><strong class="text-green-500">Classe A (20%):</strong> Produtos de alto valor/rotatividade - prioridade máxima</li>
-                <li><strong class="text-yellow-500">Classe B (30%):</strong> Produtos de valor/rotatividade média</li>
-                <li><strong class="text-red-500">Classe C (50%):</strong> Produtos de baixo valor/rotatividade</li>
-              </ul>
+          <div class="card p-6 border bg-zinc-50 dark:bg-zinc-900/50">
+            <div class="flex items-start gap-4">
+              <div class="p-3 bg-primary/10 rounded-full text-primary">
+                <BarChart3 size={24} />
+              </div>
+              <div>
+                <h4 class="font-bold text-lg mb-2">Entendendo sua Curva ABC (Princípio de Pareto)</h4>
+                <p class="text-sm text-muted-foreground leading-relaxed">
+                  Diferente de uma análise simplista, sua Curva ABC é calculada com base na <strong>contribuição financeira real</strong> (Receita) de cada produto. 
+                  Isso permite identificar onde o seu capital está gerando mais retorno:
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span class="font-bold text-sm">Classe A (Críticos)</span>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Representam os primeiros <strong>80% da sua receita</strong>. Geralmente são poucos produtos (aprox. 20%) que sustentam o negócio. <strong>Ruptura aqui é inaceitável.</strong>
+                    </p>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                      <span class="font-bold text-sm">Classe B (Estratégicos)</span>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Representam os próximos <strong>15% da receita</strong>. São produtos importantes que complementam o mix e possuem giro moderado.
+                    </p>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                      <span class="font-bold text-sm">Classe C (Cauda Longa)</span>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Representam os <strong>5% finais da receita</strong>. Costumam ser a grande maioria dos produtos (aprox. 50% do mix). Devem ter estoque mínimo para não imobilizar capital.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
