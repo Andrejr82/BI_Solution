@@ -128,105 +128,70 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
             raise ValueError(f"Schema do arquivo Parquet inválido: {errors}")
 
     # Create reverse mappings (moved outside if columns block)
-    reverse_mapping_sql = {v: k for k, v in COLUMN_MAPPING_SQL.items()}
-    reverse_mapping_parquet = {v: k for v, k in COLUMN_MAPPING_PARQUET.items()} # Should be k:v for reverse
+    # PRIMEIRO: Mapeamentos padrão Parquet (lowercase)
+    reverse_mapping = {v: k for k, v in COLUMN_MAPPING_PARQUET.items()}
+    # SEGUNDO: Mapeamentos SQL (Uppercase) - Sobrescreve anteriores para priorizar Uppercase (admmat.parquet)
+    for k, v in COLUMN_MAPPING_SQL.items():
+        reverse_mapping[v] = k
 
-    if isinstance(adapter, dict):
-        # Parquet direto
-        if columns:
-            # Map requested standard columns back to Parquet original names for loading
-            parquet_cols_to_load = []
-            
-            for col in columns:
-                if col in reverse_mapping_sql:
-                    parquet_cols_to_load.append(reverse_mapping_sql[col])
-                elif col in reverse_mapping_parquet:
-                    parquet_cols_to_load.append(reverse_mapping_parquet[col])
-                else:
-                    # Default: assume the column name is the same in Parquet
-                    parquet_cols_to_load.append(col) 
-            
-            # Ensure unique columns
-            parquet_cols_to_load = list(set(parquet_cols_to_load))
-            logger.debug(f"Loading parquet from {adapter['path']} with columns: {parquet_cols_to_load}")
-
-            df = pd.read_parquet(adapter['path'], columns=parquet_cols_to_load)
-        else:
-            df = pd.read_parquet(adapter['path'])
-
-        # Aplicar filtros manualmente
-        if filters:
-            for col, val in filters.items():
-                # Map filter key back to original parquet column name if necessary
-                mapped_col = col
-                if col in reverse_mapping_sql:
-                    mapped_col = reverse_mapping_sql[col]
-                elif col in reverse_mapping_parquet:
-                    mapped_col = reverse_mapping_parquet[col]
-                else:
-                    # Default: assume the column name is the same in Parquet
-                    mapped_col = col
-
-                if mapped_col in df.columns:
-                    df = df[df[mapped_col] == val]
-    else:
-        # 🚀 OTIMIZAÇÃO URGENTE: PRIORIZAR PARQUET (SQL Server muito lento - 5min/query)
-        # HybridAdapter (SQL ou Parquet automático)
-        try:
-            # Sempre tentar Parquet primeiro para performance máxima
-            import glob
-
-            parquet_path = adapter.file_path if hasattr(adapter, 'file_path') else os.path.join(os.getcwd(), 'data', 'parquet', 'admmat.parquet')
-
-            # Expandir wildcard se necessário
-            if '*' in parquet_path:
-                matched_files = glob.glob(parquet_path)
-                if matched_files:
-                    # Priorizar admmat.parquet se existir, senão pegar primeiro
-                    parquet_path = next((f for f in matched_files if 'admmat.parquet' in f), matched_files[0])
-
-            logger.info(f"🚀 OTIMIZAÇÃO: Usando Parquet direto (SQL muito lento) - {parquet_path}")
-
-            # Mapear colunas padrão para colunas do Parquet
-            if columns:
-                parquet_cols = []
-                for col in columns:
-                    if col == 'linha_verde':
-                        parquet_cols.append('estoque_lv')
-                    elif col == 'mc':
-                        parquet_cols.append('media_considerada_lv')
-                    elif col == 'estoque_gondola_lv':
-                        # Já é o nome correto do Parquet
-                        parquet_cols.append(col)
-                    elif col in ['ESTOQUE_GONDOLA', 'estoque_gondola']:
-                        # Mapear variações antigas para coluna correta
-                        parquet_cols.append('estoque_gondola_lv')
-                    else:
-                        parquet_cols.append(col)
-
-                df = pd.read_parquet(parquet_path, columns=parquet_cols)
+    # Mapear COLUNAS solicitadas
+    parquet_cols_to_load = None
+    if columns:
+        parquet_cols_to_load = []
+        for col in columns:
+            if col in reverse_mapping:
+                parquet_cols_to_load.append(reverse_mapping[col])
+            elif col == 'linha_verde':
+                parquet_cols_to_load.append('ESTOQUE_LV')
+            elif col == 'mc':
+                parquet_cols_to_load.append('MEDIA_CONSIDERADA_LV')
+            elif col in ['estoque_gondola_lv', 'ESTOQUE_GONDOLA', 'estoque_gondola']:
+                parquet_cols_to_load.append('ESTOQUE_GONDOLA_LV')
             else:
-                df = pd.read_parquet(parquet_path)
+                parquet_cols_to_load.append(col)
+        # Unique
+        parquet_cols_to_load = list(set([c for c in parquet_cols_to_load if c]))
+    
+    # Mapear FILTROS solicitados
+    duckdb_filters = {}
+    if filters:
+        for col, val in filters.items():
+            mapped_col = col
+            if col in reverse_mapping:
+                mapped_col = reverse_mapping[col]
+            elif col == 'linha_verde':
+                mapped_col = 'ESTOQUE_LV'
+            elif col == 'mc':
+                mapped_col = 'MEDIA_CONSIDERADA_LV'
+            
+            duckdb_filters[mapped_col] = val
 
-            # Aplicar filtros manualmente (SUPER RÁPIDO com Polars/Pandas)
-            if filters:
-                for col, val in filters.items():
-                    # Normalizar nome da coluna
-                    if col == 'linha_verde' and 'estoque_lv' in df.columns:
-                        col = 'estoque_lv'
-                    elif col == 'mc' and 'media_considerada_lv' in df.columns:
-                        col = 'media_considerada_lv'
+    try:
+        from app.infrastructure.data.duckdb_adapter import duckdb_adapter
+        logger.info(f"🚀 DuckDB Load: Cols={len(parquet_cols_to_load) if parquet_cols_to_load else 'All'}, Filters={list(duckdb_filters.keys())}")
+        
+        df = duckdb_adapter.load_data(
+            columns=parquet_cols_to_load,
+            filters=duckdb_filters
+        )
+        
+        logger.info(f"✅ DuckDB carregou {len(df)} registros")
 
-                    if col in df.columns:
-                        df = df[df[col] == val]
-
-            logger.info(f"✅ Parquet carregado com sucesso: {len(df)} registros")
-
-        except Exception as e:
-            # Fallback: usar HybridAdapter (Polars/SQL)
-            logger.info(f"⚠️ Fallback para HybridAdapter: {e}")
-            result = adapter.execute_query(filters or {})
-            df = pd.DataFrame(result)
+    except Exception as e:
+        logger.error(f"Erro Crítico no DuckDB: {e}", exc_info=True)
+        # Fallback de emergência (apenas se DuckDB falhar, o que é raro)
+        # Tentar ler com pandas puro sem filtros
+        logger.warning("⚠️ Tentando fallback para pd.read_parquet (lento)...")
+        PARQUET_PATH_DEFAULT = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
+        df = pd.read_parquet(PARQUET_PATH_DEFAULT, columns=parquet_cols_to_load)
+        # Aplicar filtros manualmente
+        if duckdb_filters:
+            for col, val in duckdb_filters.items():
+                 if col in df.columns:
+                     if isinstance(val, list):
+                         df = df[df[col].isin(val)]
+                     else:
+                         df = df[df[col] == val]
 
     # Normalizar colunas
     df = _normalize_dataframe(df)

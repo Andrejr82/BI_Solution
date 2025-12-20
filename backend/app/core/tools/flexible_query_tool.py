@@ -108,212 +108,99 @@ def consultar_dados_flexivel(
 ) -> Dict[str, Any]:
     """
     Ferramenta GENÉRICA e FLEXÍVEL para consultar dados do Parquet.
-    
-    Use esta ferramenta quando:
-    - Precisar buscar produtos por fabricante, nome, código
-    - Quiser filtrar por UNE, segmento, ou qualquer campo
-    - Precisar calcular totais, médias, contagens
-    - Quiser agrupar dados por categoria
-    
-    Args:
-        filtros: Dicionário de filtros (ex: {"nomesegmento": "TECIDOS", "une": 261})
-        colunas: Lista de colunas a retornar (None = todas)
-        agregacao: Tipo de agregação: "sum", "avg", "count", "min", "max"
-        coluna_agregacao: Coluna para agregar (ex: "VENDA_30DD", "ESTOQUE_UNE")
-        agrupar_por: Lista de colunas para agrupar (ex: ["NOMEFABRICANTE", "UNE"])
-        ordenar_por: Coluna para ordenar resultados
-        ordem_desc: Se True, ordem decrescente
-        limite: Número máximo de resultados
-    
-    Returns:
-        Dict com resultados da consulta (JSON-safe)
-    
-    Exemplos:
-        # Buscar produtos do segmento TECIDOS
-        >>> consultar_dados_flexivel(filtros={"nomesegmento": "TECIDOS"}, limite=10)
-        
-        # Total de vendas por UNE
-        >>> consultar_dados_flexivel(
-        ...     agregacao="sum",
-        ...     coluna_agregacao="VENDA_30DD",
-        ...     agrupar_por=["UNE"]
-        ... )
+    Garante alta performance usando cache centralizado.
     """
     try:
-        logger.info(f"📊 Consulta flexível - Filtros: {filtros}, Agregação: {agregacao}")
+        # HARD LIMIT: Previne estouro de contexto do LLM
+        if limite > 50:
+            limite = 50
+            
+        logger.info(f"📊 Consulta flexível otimizada - Filtros: {filtros}, Agregação: {agregacao}, Limite: {limite}")
         
-        # 1. Carregar Parquet diretamente
-        parquet_path = _get_parquet_path()
-        if not parquet_path or not os.path.exists(parquet_path):
-            return {
-                "error": "Arquivo Parquet não encontrado",
-                "total_resultados": 0,
-                "resultados": []
-            }
+        # 1. Mapeamento de colunas e filtros
+        from app.infrastructure.data.duckdb_adapter import duckdb_adapter
         
-        try:
-            df = pd.read_parquet(parquet_path)
-            logger.info(f"✅ Parquet carregado: {len(df)} registros, {len(df.columns)} colunas")
-        except Exception as e:
-            logger.error(f"❌ Erro ao carregar Parquet: {e}")
-            return {
-                "error": f"Erro ao carregar dados: {str(e)}",
-                "total_resultados": 0,
-                "resultados": []
-            }
-        
-        # 2. Aplicar filtros
-        if filtros:
-            for col_key, val in filtros.items():
-                # Ignorar valores complexos
-                if isinstance(val, dict):
-                    continue
-                
-                # Encontrar coluna real
-                actual_col = _find_column(df, col_key)
-                if actual_col is None:
-                    logger.warning(f"⚠️ Coluna '{col_key}' não encontrada")
-                    continue
-                
-                # Aplicar filtro
-                if isinstance(val, str):
-                    # Filtro texto: case-insensitive contains
-                    mask = df[actual_col].astype(str).str.upper().str.contains(val.upper(), na=False)
-                    df = df[mask]
-                    logger.info(f"Filtro texto: {actual_col} contém '{val}' → {len(df)} registros")
-                else:
-                    # Filtro exato
-                    df = df[df[actual_col] == val]
-                    logger.info(f"Filtro exato: {actual_col} == {val} → {len(df)} registros")
-        
-        if df.empty:
-            return {
-                "total_resultados": 0,
-                "resultados": [],
-                "mensagem": "Nenhum dado encontrado com os filtros aplicados."
-            }
-        
-        # 3. Aplicar agregação
+        # Mapear filtros para nomes reais do Parquet
+        duckdb_filters = {}
+        if filters:
+            for key, val in filters.items():
+                if isinstance(val, dict): continue # Skip complex nested filters for now
+                real_col = _find_column(pd.DataFrame(columns=list(COLUMN_MAPPING.values())), key)
+                # Fallback to direct mapping if _find_column fails without data
+                if not real_col:
+                     real_col = COLUMN_MAPPING.get(key.lower(), key)
+                duckdb_filters[real_col] = val
+
+        # 2. Executar consulta via DuckDB
         if agregacao and coluna_agregacao:
-            # Encontrar coluna de agregação
-            agg_col = _find_column(df, coluna_agregacao)
-            if agg_col is None:
-                return {
-                    "error": f"Coluna '{coluna_agregacao}' não encontrada",
-                    "colunas_disponiveis": list(df.columns)[:15],
-                    "total_resultados": 0,
-                    "resultados": []
-                }
-            
+            # Mapear colunas de agregação
+            real_agg_col = COLUMN_MAPPING.get(coluna_agregacao.lower(), coluna_agregacao)
+            real_group_cols = []
             if agrupar_por:
-                # Encontrar colunas de agrupamento
-                group_cols = []
-                for g in agrupar_por:
-                    gc = _find_column(df, g)
-                    if gc:
-                        group_cols.append(gc)
-                
-                if not group_cols:
-                    return {
-                        "error": f"Colunas de agrupamento não encontradas: {agrupar_por}",
-                        "total_resultados": 0,
-                        "resultados": []
-                    }
-                
-                # Agregar
-                agg_funcs = {"sum": "sum", "avg": "mean", "count": "count", "min": "min", "max": "max"}
-                agg_func = agg_funcs.get(agregacao, "sum")
-                
-                df_result = df.groupby(group_cols)[agg_col].agg(agg_func).reset_index()
-                df_result = df_result.rename(columns={agg_col: f"{agregacao}_{coluna_agregacao}"})
-            else:
-                # Agregação simples (sem agrupamento)
-                agg_funcs = {"sum": df[agg_col].sum, "avg": df[agg_col].mean, 
-                             "count": df[agg_col].count, "min": df[agg_col].min, "max": df[agg_col].max}
-                valor = agg_funcs.get(agregacao, df[agg_col].sum)()
-                
-                return {
-                    "total_resultados": 1,
-                    "resultado_agregado": {
-                        "agregacao": agregacao,
-                        "coluna": coluna_agregacao,
-                        "valor": _safe_serialize(valor)
-                    },
-                    "mensagem": f"{agregacao.upper()} de {coluna_agregacao}: {_safe_serialize(valor)}"
-                }
+                real_group_cols = [COLUMN_MAPPING.get(c.lower(), c) for c in agrupar_por]
+            
+            logger.info(f"📊 DuckDB Agregação: {agregacao}({real_agg_col}) GroupBy={real_group_cols}")
+            
+            df_result = duckdb_adapter.execute_aggregation(
+                agg_col=real_agg_col,
+                agg_func=agregacao,
+                group_by=real_group_cols,
+                filters=duckdb_filters,
+                limit=limite
+            )
+            
+            # Se for agregação escalar (sem group by), formatar retorno
+            if not real_group_cols and not df_result.empty:
+                 valor = df_result.iloc[0]['valor']
+                 return {"total_resultados": 1, "resultado_agregado": {"valor": _safe_serialize(valor)}, "mensagem": f"{agregacao.upper()}: {_safe_serialize(valor)}"}
+
         else:
-            df_result = df
+            # Consulta simples (Load Data)
+            # Mapear colunas solicitadas
+            real_cols = None
+            if colunas:
+                real_cols = [COLUMN_MAPPING.get(c.lower(), c) for c in colunas]
+            
+            # Ordenação
+            real_order = None
+            if ordenar_por:
+                real_sort_col = COLUMN_MAPPING.get(ordenar_por.lower(), ordenar_por)
+                direction = "DESC" if ordem_desc else "ASC"
+                real_order = f"{real_sort_col} {direction}"
+
+            logger.info(f"📊 DuckDB Consulta: Cols={real_cols}, Filters={list(duckdb_filters.keys())}")
+            
+            df_result = duckdb_adapter.load_data(
+                columns=real_cols,
+                filters=duckdb_filters,
+                limit=limite,
+                order_by=real_order
+            )
+
+        if df_result.empty:
+            return {"total_resultados": 0, "resultados": [], "mensagem": "Nenhum dado encontrado."}
+
+        # 5. OTIMIZAÇÃO DE COLUNAS: Retornar apenas o essencial para economizar tokens
+        # (Lógica mantida para garantir output limpo para o LLM)
+        df_final = df_result # Já vem filtrado do DuckDB se 'colunas' foi passado
         
-        # 4. Ordenar
-        if ordenar_por:
-            sort_col = _find_column(df_result, ordenar_por)
-            if sort_col:
-                df_result = df_result.sort_values(sort_col, ascending=not ordem_desc)
-        
-        # 5. Limitar resultados
-        df_result = df_result.head(limite)
-        
-        # 6. ⭐ CRÍTICO: Converter para formato JSON-safe
-        # Usar to_dict + serialização segura para evitar erros
+        # 6. Serializar
         resultados = []
-        for _, row in df_result.iterrows():
-            item = {}
-            for col in df_result.columns:
-                item[col] = _safe_serialize(row[col])
-            resultados.append(item)
-        
-        total = len(resultados)
-        logger.info(f"✅ Consulta retornou {total} resultados")
-        
-        # ⭐ NOVO: Gerar tabela Markdown para o LLM incluir na resposta
-        mensagem_tabela = f"{total} resultado(s) encontrado(s)"
-        
-        if total > 0 and total <= 50:  # Só gerar tabela para até 50 resultados
-            # Selecionar colunas mais relevantes para exibir
-            colunas_exibir = []
-            colunas_prioritarias = ['PRODUTO', 'NOME', 'VENDA_30DD', 'ESTOQUE_UNE', 'NOMESEGMENTO', 'NOMEFABRICANTE', 'UNE']
+        for _, row in df_final.iterrows():
+            resultados.append({col: _safe_serialize(row[col]) for col in df_final.columns})
             
-            # Adicionar colunas prioritárias que existem nos dados
-            for col in colunas_prioritarias:
-                if col in df_result.columns:
-                    colunas_exibir.append(col)
-            
-            # Se não temos colunas prioritárias, pegar as primeiras 5
-            if not colunas_exibir:
-                colunas_exibir = list(df_result.columns)[:5]
-            
-            # Limitar a 6 colunas para não ficar muito largo
-            colunas_exibir = colunas_exibir[:6]
-            
-            # Gerar tabela Markdown
-            mensagem_tabela = f"Aqui estão os {total} resultados:\n\n"
-            
-            # Cabeçalho
-            mensagem_tabela += "| " + " | ".join(colunas_exibir) + " |\n"
-            mensagem_tabela += "|" + "|".join(["---" for _ in colunas_exibir]) + "|\n"
-            
-            # Linhas de dados
-            for item in resultados:
-                valores = []
-                for col in colunas_exibir:
-                    val = item.get(col, "")
-                    # Formatar valor
-                    if val is None or val == "":
-                        val_str = "-"
-                    elif isinstance(val, float):
-                        val_str = f"{val:.2f}"
-                    else:
-                        val_str = str(val)
-                    # Truncar se muito longo
-                    if len(val_str) > 30:
-                        val_str = val_str[:27] + "..."
-                    valores.append(val_str)
-                mensagem_tabela += "| " + " | ".join(valores) + " |\n"
-        
+        # Gerar Markdown simplificado
+        mensagem_tabela = f"Exibindo os primeiros {len(resultados)} resultados:\n\n"
+        if len(resultados) > 0:
+            cols_to_show = df_final.columns[:5]
+            mensagem_tabela += "| " + " | ".join(cols_to_show) + " |\n"
+            mensagem_tabela += "|" + "|".join(["---" for _ in range(len(cols_to_show))]) + "|\n"
+            for item in resultados[:10]: # Limitar tabela markdown a 10 linhas no prompt
+                mensagem_tabela += "| " + " | ".join([str(item.get(c, "-"))[:20] for c in cols_to_show]) + " |\n"
+
         return {
-            "total_resultados": total,
+            "total_resultados": len(resultados),
             "resultados": resultados,
-            "limite_aplicado": limite,
             "mensagem": mensagem_tabela
         }
         
