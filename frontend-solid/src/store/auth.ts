@@ -47,30 +47,39 @@ function createAuthStore() {
   // Restaurar user do token ao inicializar (com proteção para SSR)
   const initializeAuth = () => {
     try {
-      if (typeof window === 'undefined' || !window.localStorage) {
+      if (typeof window === 'undefined' || !window.sessionStorage) {
         return;
       }
-      
-      const initToken = localStorage.getItem('token');
+
+      const initToken = sessionStorage.getItem('token');
       if (initToken) {
         const payload = validateAndDecodeToken(initToken);
         
         // Verificação ESTRITA: Se o payload for nulo ou token expirado, limpar TUDO.
         if (payload) {
+          // 🚨 CRITICAL FIX: Admin ALWAYS gets full access
+          let allowedSegments = payload.allowed_segments || [];
+          const role = payload.role || 'user';
+
+          if (role === 'admin' && !allowedSegments.includes('*')) {
+            console.warn('⚠️ Admin missing full access in token - forcing ["*"]');
+            allowedSegments = ['*'];
+          }
+
           const userData: User = {
             username: payload.username || payload.sub || 'user',
-            role: payload.role || 'user',
+            role: role,
             email: payload.email || `${payload.username || payload.sub}@agentbi.com`,
-            allowed_segments: payload.allowed_segments || []
+            allowed_segments: allowedSegments
           };
           setUser(userData);
           setToken(initToken);
           setIsAuthenticated(true);
-          console.log('🔄 Sessão restaurada com sucesso.');
+          console.log('🔄 Sessão restaurada com sucesso:', userData);
         } else {
           // Token inválido, malformado ou expirado -> Logout forçado imediato
           console.warn('⚠️ Token inválido detectado na inicialização - Limpando sessão.');
-          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
           setIsAuthenticated(false);
           setUser(null);
           setToken(null);
@@ -80,7 +89,7 @@ function createAuthStore() {
       }
     } catch (error) {
       console.error('❌ Erro crítico ao inicializar autenticação:', error);
-      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       setIsAuthenticated(false);
     }
   };
@@ -106,16 +115,25 @@ function createAuthStore() {
           return false;
         }
 
-        localStorage.setItem('token', access_token);
+        sessionStorage.setItem('token', access_token);
         setToken(access_token);
         setIsAuthenticated(true);
+
+        // 🚨 CRITICAL FIX: Admin ALWAYS gets full access
+        let allowedSegments = payload.allowed_segments || [];
+        const role = payload.role || 'user';
+
+        if (role === 'admin' && !allowedSegments.includes('*')) {
+          console.warn('⚠️ Admin missing full access in login - forcing ["*"]');
+          allowedSegments = ['*'];
+        }
 
         // Definir dados do usuário baseado no payload do JWT
         const userData: User = {
           username: payload.username || payload.sub || username,
-          role: payload.role || 'user',
+          role: role,
           email: payload.email || `${payload.username || username}@agentbi.com`,
-          allowed_segments: payload.allowed_segments || []
+          allowed_segments: allowedSegments
         };
 
         console.log('✅ Login successful. User:', userData);
@@ -135,7 +153,7 @@ function createAuthStore() {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
