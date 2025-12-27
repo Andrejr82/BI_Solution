@@ -46,7 +46,7 @@ export default function Diagnostics() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) {
         throw new Error('Token não encontrado. Faça login novamente.');
       }
@@ -82,7 +82,7 @@ export default function Diagnostics() {
     setTestResult(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) {
         throw new Error('Token não encontrado');
       }
