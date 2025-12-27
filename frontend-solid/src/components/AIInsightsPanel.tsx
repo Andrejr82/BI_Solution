@@ -168,10 +168,10 @@ export function AIInsightsPanel() {
                     </Show>
 
                     <div class="flex items-center justify-between mt-4 pt-4 border-t border-dashed">
-                      <div class="flex items-center gap-2 text-[10px] text-muted-foreground font-mono uppercase">
-                        <Sparkles size={10} />
-                        Gerado via Gemini 2.5
-                      </div>
+          <span class="flex items-center">
+            <div class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
+            Gerado via Gemini 3.0 Flash
+          </span>
                       <div class="text-[10px] text-muted-foreground">
                         {new Date(insight.created_at).toLocaleString('pt-BR')}
                       </div>

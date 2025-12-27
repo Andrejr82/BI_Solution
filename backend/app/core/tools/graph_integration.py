@@ -95,7 +95,7 @@ def processar_resposta_com_grafico(resposta: Any) -> Dict[str, Any]:
                     resultado["chart"] = caminho_grafico
                     resultado["chart_type"] = "matplotlib"
                     resultado["output"] = (
-                        f"{texto}\n\n🖼️ Gráfico gerado: {caminho_grafico}"
+                        f"{texto}\n\n[Grafico gerado]: {caminho_grafico}"
                     )
 
                     logger.info(f"Gráfico gerado com matplotlib: {caminho_grafico}")
@@ -116,7 +116,7 @@ def processar_resposta_com_grafico(resposta: Any) -> Dict[str, Any]:
                             resultado["chart"] = caminho
                             resultado["chart_type"] = "plotly"
                             resultado["output"] = (
-                                f"{texto}\n\n🖼️ Gráfico gerado: {caminho}"
+                                f"{texto}\n\n[Grafico gerado]: {caminho}"
                             )
 
                             logger.info(f"Gráfico gerado com Plotly: {caminho}")
@@ -126,7 +126,7 @@ def processar_resposta_com_grafico(resposta: Any) -> Dict[str, Any]:
 
             # Se chegou aqui, não conseguiu gerar o gráfico
             resultado["output"] = (
-                f"{texto}\n\n⚠️ Não foi possível gerar um gráfico com os dados fornecidos."
+                f"{texto}\n\n[Aviso]: Não foi possível gerar um gráfico com os dados fornecidos."
             )
             return resultado
 
@@ -136,11 +136,24 @@ def processar_resposta_com_grafico(resposta: Any) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Erro ao processar resposta com gráfico: {e}")
         return {
-            "output": f"{str(resposta)}\n\n⚠️ Erro ao processar gráfico: {e}",
+            "output": f"{str(resposta)}\n\n[Erro] ao processar gráfico: {e}",
             "error": str(e),
         }
 
 
 if __name__ == "__main__":
     print("Rodando como script...")
-    # TODO: Adicionar chamada a uma função principal se necessário
+    
+    # Teste simples da função
+    test_response = {
+        "output": "Por favor, gere um gráfico das vendas de tecidos.",
+        "data": [
+            {"Categoria": "Tecidos", "Vendas": 1500},
+            {"Categoria": "Papelaria", "Vendas": 1200},
+            {"Categoria": "Pintura", "Vendas": 800}
+        ]
+    }
+    
+    print("Processando resposta de teste...")
+    result = processar_resposta_com_grafico(test_response)
+    print("Resultado:", result)

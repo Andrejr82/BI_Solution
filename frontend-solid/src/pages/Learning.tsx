@@ -1,6 +1,7 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { BrainCircuit, ThumbsUp, ThumbsDown, AlertTriangle, TrendingUp, Search, BarChart3 } from 'lucide-solid';
 import api from '../lib/api';
+import auth from '../store/auth';
 
 // Types
 interface FeedbackStats {

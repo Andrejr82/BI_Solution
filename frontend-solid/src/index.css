@@ -16,8 +16,8 @@
   --popover: #FFFFFF; /* Branco puro */
   --popover-foreground: #2D2D2D; /* Cinza escuro quente */
 
-  /* Primary (Marrom Caçula - Tradicional) */
-  --primary: #8B7355; /* Marrom terroso/tradicional */
+  /* Primary (Verde Caçula - Identidade Visual) */
+  --primary: #78B928; /* Verde vibrante da marca */
   --primary-foreground: #FFFFFF; /* Branco para contraste */
 
   /* Secondary */
@@ -47,20 +47,20 @@
   /* Borders e Inputs */
   --border: #E5E5E5; /* Cinza claro para bordas */
   --input: #FFFFFF; /* Branco para inputs (com border) */
-  --ring: #8B7355; /* Marrom Caçula para focus ring */
+  --ring: #78B928; /* Verde Caçula para focus ring */
 
   /* Sidebar (levemente diferente do background) */
   --sidebar-background: #F8F8F8; /* Cinza muito claro */
   --sidebar-foreground: #2D2D2D; /* Cinza escuro quente */
-  --sidebar-primary: #8B7355; /* Marrom Caçula */
+  --sidebar-primary: #78B928; /* Verde Caçula */
   --sidebar-accent: #F5F5F5; /* Cinza claro */
 
-  /* Charts (cores terrosas para gráficos) */
-  --chart-1: #8B7355; /* Marrom Caçula */
-  --chart-2: #C9A961; /* Dourado/Bronze */
-  --chart-3: #6B7A5A; /* Verde oliva */
-  --chart-4: #CC8B3C; /* Laranja terroso */
-  --chart-5: #5B7B9A; /* Azul acinzentado */
+  /* Charts (Paleta Pétalas Caçula) */
+  --chart-1: #78B928; /* Verde Caçula (A) */
+  --chart-2: #00AEEF; /* Azul Ciano (B) */
+  --chart-3: #662D91; /* Roxo (C) */
+  --chart-4: #ED1C24; /* Vermelho (D) */
+  --chart-5: #F7941E; /* Laranja (E) */
 
   /* Radius (mantém 8px) */
   --radius: 0.5rem;
@@ -126,7 +126,7 @@ body {
   color: var(--primary-foreground); /* Branco */
 }
 .btn-primary:hover:not(:disabled) {
-  background-color: #6B5742; /* Primary Dark - hover */
+  background-color: #5A8D1E; /* Primary Dark - hover (Verde Escuro) */
 }
 .btn-outline {
   background: transparent;

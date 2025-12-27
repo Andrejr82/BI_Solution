@@ -151,10 +151,13 @@ async def get_transfer_suggestions(
     Integrates with `sugerir_transferencias_automaticas` tool.
     """
     try:
-        suggestions = sugerir_transferencias_automaticas(
-            segmento=segmento, une_origem_excluir=une_origem_excluir, limite=limit
-        )
-        return suggestions
+        # Fix: Use .invoke() for LangChain StructuredTool
+        suggestions = sugerir_transferencias_automaticas.invoke({
+            "segmento": segmento,
+            "une_origem_excluir": une_origem_excluir,
+            "limite": limit
+        })
+        return suggestions if isinstance(suggestions, list) else []
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

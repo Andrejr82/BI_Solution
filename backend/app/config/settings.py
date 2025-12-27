@@ -85,9 +85,7 @@ class Settings(BaseSettings):
     LEARNING_MAX_EXAMPLES: int = 1000
 
     # Security
-    SECRET_KEY: str = Field(
-        default="your-secret-key-change-in-production-min-32-chars-long"
-    )
+    SECRET_KEY: str = Field(default=None) # Must be set in environment
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -108,11 +106,11 @@ class Settings(BaseSettings):
     # Prometheus
     METRICS_ENABLED: bool = True
 
-    # AI / LLM - Usando Gemini 2.0 Flash Experimental (mais moderno e inteligente)
+    # AI / LLM - Usando Gemini 3 Flash Preview (modelo mais inteligente e rápido da Google)
     GEMINI_API_KEY: str | None = None
-    LLM_MODEL_NAME: str = "gemini-2.0-flash-exp"
-    INTENT_CLASSIFICATION_MODEL: str = "gemini-2.0-flash-exp"
-    CODE_GENERATION_MODEL: str = "gemini-2.0-flash-exp"
+    LLM_MODEL_NAME: str = "gemini-3-flash-preview"
+    INTENT_CLASSIFICATION_MODEL: str = "gemini-3-flash-preview"
+    CODE_GENERATION_MODEL: str = "gemini-3-flash-preview"
 
     # Data Sources
     PARQUET_DATA_PATH: str = Field(default="data/parquet/admmat.parquet")

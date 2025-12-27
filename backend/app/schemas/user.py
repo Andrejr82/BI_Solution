@@ -50,14 +50,34 @@ class UserResponse(UserBase):
 
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        """Custom validation to handle allowed_segments conversion from JSON string"""
+        """
+        Custom validation to handle allowed_segments conversion from JSON string.
+        FIXED: Use segments_list property from User model if available (handles parsing automatically).
+        """
+        # If obj is a User model instance with segments_list property, use it
+        if hasattr(obj, 'segments_list'):
+            # Create a dict from the object attributes
+            obj_dict = {
+                'id': obj.id,
+                'username': obj.username,
+                'email': obj.email,
+                'role': obj.role,
+                'is_active': obj.is_active,
+                'allowed_segments': obj.segments_list,  # ✅ Use parsed property
+                'last_login': obj.last_login,
+                'created_at': obj.created_at,
+                'updated_at': obj.updated_at
+            }
+            return super().model_validate(obj_dict, **kwargs)
+
+        # Fallback: If obj is dict or has allowed_segments as string
         if hasattr(obj, 'allowed_segments') and isinstance(obj.allowed_segments, str):
-            # Convert JSON string to list
             import json
             try:
                 obj.allowed_segments = json.loads(obj.allowed_segments) if obj.allowed_segments else []
             except (json.JSONDecodeError, TypeError):
                 obj.allowed_segments = []
+
         return super().model_validate(obj, **kwargs)
 
 

@@ -86,14 +86,16 @@ def gerar_grafico_vendas_por_categoria(
         manager = get_data_manager()
         df = manager.get_data()
 
-        if df is None or df.empty or "GRUPO" not in df.columns:
+        # FIXED: Use correct column name from admmat.parquet
+        grupo_col = "NOMEGRUPO" if "NOMEGRUPO" in df.columns else "GRUPO"
+        if df is None or df.empty or grupo_col not in df.columns:
             return {
                 "status": "error",
-                "message": "Não foi possível carregar dados de grupo ou a coluna 'GRUPO' não foi encontrada.",
+                "message": f"Não foi possível carregar dados ou coluna de grupo não encontrada. Colunas disponíveis: {list(df.columns[:10])}",
             }
 
         # Preparar dados
-        vendas_por_categoria = df["GRUPO"].value_counts().reset_index()
+        vendas_por_categoria = df[grupo_col].value_counts().reset_index()
         vendas_por_categoria.columns = ["grupo", "total"]
 
         if ordenar_por == "ascendente":
@@ -107,13 +109,20 @@ def gerar_grafico_vendas_por_categoria(
 
         df_chart = vendas_por_categoria.head(limite)
 
-        # Usar o novo gerador de gráficos
-        chart_generator = AdvancedChartGenerator()
-        fig = chart_generator.create_segmentation_chart(
-            df=df_chart,
-            segment_column="grupo",
-            value_column="total",
-            chart_type="donut",
+        # Create donut chart directly with Plotly
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=df_chart["grupo"],
+                    values=df_chart["total"],
+                    hole=0.4,  # Donut style
+                    hovertemplate="<b>%{label}</b><br>Qtd: %{value}<br>%{percent}<extra></extra>",
+                    marker=dict(
+                        colors=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+                    )
+                )
+            ]
         )
 
         # Customizações adicionais se necessário
@@ -158,9 +167,9 @@ def gerar_grafico_estoque_por_produto(
         if df is None or df.empty:
             return {"status": "error", "message": "Não foi possível carregar dados"}
 
-        # As colunas de estoque e nome são 'QTD' e 'DESCRIÇÃO'
-        estoque_col = 'QTD'
-        nome_col = 'DESCRIÇÃO'
+        # FIXED: Use correct column names from admmat.parquet
+        estoque_col = 'ESTOQUE_UNE' if 'ESTOQUE_UNE' in df.columns else 'QTD'
+        nome_col = 'NOME' if 'NOME' in df.columns else 'DESCRIÇÃO'
 
         if not estoque_col in df.columns or not nome_col in df.columns:
             return {
@@ -240,14 +249,14 @@ def gerar_comparacao_precos_categorias() -> Dict[str, Any]:
         if df is None or df.empty:
             return {"status": "error", "message": "Não foi possível carregar dados"}
 
-        # As colunas de categoria e preço são 'GRUPO' e 'VENDA UNIT R$'
-        categoria_col = 'GRUPO'
-        preco_col = 'VENDA UNIT R$'
+        # FIXED: Use correct column names from admmat.parquet  
+        categoria_col = 'NOMEGRUPO' if 'NOMEGRUPO' in df.columns else 'GRUPO'
+        preco_col = 'VENDA_30DD' if 'VENDA_30DD' in df.columns else 'VENDA UNIT R$'
 
         if not categoria_col in df.columns or not preco_col in df.columns:
             return {
                 "status": "error",
-                "message": "Colunas 'GRUPO' e/ou 'VENDA UNIT R$' não encontradas",
+                "message": f"Colunas necessárias não encontradas. Disponíveis: {list(df.columns[:10])}",
             }
 
         # Calcular preço médio por categoria
@@ -327,11 +336,11 @@ def gerar_analise_distribuicao_estoque() -> Dict[str, Any]:
         if df is None or df.empty:
             return {"status": "error", "message": "Não foi possível carregar dados"}
 
-        # A coluna de estoque é 'QTD'
-        estoque_col = 'QTD'
+        # FIXED: Use correct column name from admmat.parquet
+        estoque_col = 'ESTOQUE_UNE' if 'ESTOQUE_UNE' in df.columns else 'QTD'
 
         if not estoque_col in df.columns:
-            return {"status": "error", "message": "Coluna 'QTD' não encontrada"}
+            return {"status": "error", "message": f"Coluna de estoque não encontrada. Disponíveis: {list(df.columns[:10])}"}
 
         # Converter para numérico
         df[estoque_col] = pd.to_numeric(df[estoque_col], errors="coerce")
@@ -420,11 +429,11 @@ def gerar_grafico_pizza_categorias() -> Dict[str, Any]:
         if df is None or df.empty:
             return {"status": "error", "message": "Não foi possível carregar dados"}
 
-        # A coluna de categoria é 'GRUPO'
-        categoria_col = 'GRUPO'
+        # FIXED: Use correct column name from admmat.parquet
+        categoria_col = 'NOMEGRUPO' if 'NOMEGRUPO' in df.columns else 'GRUPO'
 
         if not categoria_col in df.columns:
-            return {"status": "error", "message": "Coluna 'GRUPO' não encontrada"}
+            return {"status": "error", "message": f"Coluna de categoria não encontrada. Disponíveis: {list(df.columns[:10])}"}
 
         # Contar por categoria
         categorias = df[categoria_col].value_counts()
@@ -481,15 +490,16 @@ def gerar_dashboard_analise_completa() -> Dict[str, Any]:
 
         from plotly.subplots import make_subplots
 
-        # Encontrar colunas
-        categoria_col = 'GRUPO'
-        estoque_col = 'QTD'
-        preco_col = 'VENDA UNIT R$'
-        nome_col = 'DESCRIÇÃO'
+        # FIXED: Use correct column names from admmat.parquet
+        categoria_col = 'NOMEGRUPO' if 'NOMEGRUPO' in df.columns else 'GRUPO'
+        estoque_col = 'ESTOQUE_UNE' if 'ESTOQUE_UNE' in df.columns else 'QTD'
+        preco_col = 'VENDA_30DD' if 'VENDA_30DD' in df.columns else 'VENDA UNIT R$'
+        nome_col = 'NOME' if 'NOME' in df.columns else 'DESCRIÇÃO'
 
-
-        if not all([categoria_col in df.columns, estoque_col in df.columns, preco_col in df.columns, nome_col in df.columns]):
-            return {"status": "error", "message": "Colunas necessárias não encontradas"}
+        required_cols = [categoria_col, estoque_col, preco_col, nome_col]
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            return {"status": "error", "message": f"Colunas não encontradas: {missing}. Disponíveis: {list(df.columns[:15])}"}
 
         # Preparar dados
         df_conv = df.copy()
@@ -768,6 +778,10 @@ def gerar_grafico_automatico(descricao: str) -> Dict[str, Any]:
         # Por padrão, gera dashboard completo
         logger.info("Tipo não reconhecido, gerando dashboard padrão")
         return gerar_dashboard_analise_completa.invoke({})
+
+
+# Alias para compatibilidade
+gerar_grafico_universal = gerar_grafico_automatico
 
 
 @tool
@@ -1108,21 +1122,29 @@ def gerar_ranking_produtos_mais_vendidos(top_n: int = 10) -> Dict[str, Any]:
         if df is None or df.empty:
             return {"status": "error", "message": "Não foi possível carregar dados."}
 
-        mes_cols = [col for col in df.columns if 'VENDA QTD' in col]
-        if not mes_cols:
-            return {"status": "error", "message": "Nenhuma coluna de vendas mensais encontrada."}
-
-        # Calcular vendas totais
-        df['VENDAS_TOTAIS'] = df[mes_cols].sum(axis=1)
+        # FIXED: Use correct column names from admmat.parquet
+        # Try VENDA_30DD first (preferred), or sum of MES_* columns
+        nome_col = 'NOME' if 'NOME' in df.columns else 'DESCRIÇÃO'
+        
+        if 'VENDA_30DD' in df.columns:
+            df['VENDAS_TOTAIS'] = pd.to_numeric(df['VENDA_30DD'], errors='coerce').fillna(0)
+        else:
+            # Fallback to MES_* columns
+            mes_cols = [col for col in df.columns if col.startswith('MES_')]
+            if not mes_cols:
+                return {"status": "error", "message": "Nenhuma coluna de vendas encontrada."}
+            for col in mes_cols:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            df['VENDAS_TOTAIS'] = df[mes_cols].sum(axis=1)
 
         # Preparar dados para o gráfico
         ranking_df = df.sort_values('VENDAS_TOTAIS', ascending=False).head(top_n)
-        ranking_df = ranking_df.sort_values('VENDAS_TOTAIS', ascending=True) # Para exibição correta no gráfico de barras horizontal
+        ranking_df = ranking_df.sort_values('VENDAS_TOTAIS', ascending=True)
 
         # Criar gráfico
         fig = go.Figure(go.Bar(
             x=ranking_df['VENDAS_TOTAIS'],
-            y=ranking_df['DESCRIÇÃO'],
+            y=ranking_df[nome_col],
             orientation='h',
             marker=dict(color='#2563EB'),
             text=ranking_df['VENDAS_TOTAIS'],
@@ -1145,7 +1167,7 @@ def gerar_ranking_produtos_mais_vendidos(top_n: int = 10) -> Dict[str, Any]:
             "chart_data": _export_chart_to_json(fig),
             "summary": {
                 "top_n": top_n,
-                "produtos": ranking_df[['DESCRIÇÃO', 'VENDAS_TOTAIS']].to_dict('records')
+                "produtos": ranking_df[[nome_col, 'VENDAS_TOTAIS']].to_dict('records')
             }
         }
 
@@ -1536,10 +1558,148 @@ def gerar_dashboard_dinamico(graficos: list) -> Dict[str, Any]:
     }
 
 
+@tool
+def gerar_visualizacao_customizada(
+    eixo_x: str,
+    eixo_y: str,
+    tipo_grafico: str,
+    titulo: str,
+    coluna_cor: str = None,
+    agregacao: str = None
+) -> Dict[str, Any]:
+    """
+    Cria uma visualização totalmente personalizada a partir dos dados.
+    Use esta ferramenta quando NENHUMA outra ferramenta específica atender ao pedido do usuário.
+    Permite cruzar quaisquer duas variáveis numéricas ou categóricas.
+
+    Args:
+        eixo_x: Nome da coluna para o eixo X (ex: 'DESCRIÇÃO', 'ESTOQUE', 'VENDA UNIT R$')
+        eixo_y: Nome da coluna para o eixo Y (ex: 'QTD', 'VENDA R$', 'LUCRO R$')
+        tipo_grafico: 'bar', 'line', 'scatter' (dispersão), 'histogram', 'box'
+        titulo: Título do gráfico
+        coluna_cor: (Opcional) Nome da coluna para agrupar por cores (ex: 'GRUPO')
+        agregacao: (Opcional) 'soma', 'media', 'contagem' (se precisar agrupar dados)
+
+    Returns:
+        Gráfico Plotly customizado
+    """
+    logger.info(f"Gerando visualização customizada: {tipo_grafico} | {eixo_x} vs {eixo_y}")
+
+    try:
+        manager = get_data_manager()
+        df = manager.get_data()
+
+        if df is None or df.empty:
+            return {"status": "error", "message": "Dados não disponíveis"}
+
+        # Validação básica de colunas
+        cols_existentes = df.columns
+        if eixo_x not in cols_existentes:
+            # Tentar match aproximado case-insensitive
+            match_x = next((c for c in cols_existentes if c.upper() == eixo_x.upper()), None)
+            if match_x: eixo_x = match_x
+            else: return {"status": "error", "message": f"Coluna X '{eixo_x}' não encontrada"}
+
+        if eixo_y not in cols_existentes:
+            match_y = next((c for c in cols_existentes if c.upper() == eixo_y.upper()), None)
+            if match_y: eixo_y = match_y
+            else: return {"status": "error", "message": f"Coluna Y '{eixo_y}' não encontrada"}
+
+        df_chart = df.copy()
+
+        # Converter numéricos
+        for col in [eixo_y, eixo_x]:
+            # Se parece numérico, converter
+            if df_chart[col].dtype == object:
+                try:
+                    df_chart[col] = pd.to_numeric(df_chart[col])
+                except:
+                    pass # Manter como texto se falhar
+
+        # Agregação se solicitada
+        if agregacao:
+            grp_cols = [eixo_x]
+            if coluna_cor and coluna_cor in df_chart.columns:
+                grp_cols.append(coluna_cor)
+            
+            agg_func = 'sum' if agregacao == 'soma' else 'mean' if agregacao == 'media' else 'count'
+            
+            df_chart = df_chart.groupby(grp_cols)[eixo_y].agg(agg_func).reset_index()
+
+        # Limitar dados para não travar o frontend se for scatter de muitos pontos
+        if len(df_chart) > 2000:
+            df_chart = df_chart.sample(2000)
+
+        # Construir Gráfico
+        fig = go.Figure()
+
+        if tipo_grafico == 'scatter':
+            fig.add_trace(go.Scatter(
+                x=df_chart[eixo_x],
+                y=df_chart[eixo_y],
+                mode='markers',
+                marker=dict(
+                    color=df_chart[coluna_cor] if coluna_cor and coluna_cor in df_chart.columns else '#2563EB',
+                    size=8,
+                    opacity=0.7
+                ),
+                text=df_chart['DESCRIÇÃO'] if 'DESCRIÇÃO' in df_chart.columns else None
+            ))
+        
+        elif tipo_grafico == 'bar':
+            fig.add_trace(go.Bar(
+                x=df_chart[eixo_x],
+                y=df_chart[eixo_y],
+                marker_color='#2563EB'
+            ))
+
+        elif tipo_grafico == 'line':
+            df_chart = df_chart.sort_values(eixo_x)
+            fig.add_trace(go.Scatter(
+                x=df_chart[eixo_x],
+                y=df_chart[eixo_y],
+                mode='lines+markers'
+            ))
+
+        elif tipo_grafico == 'box':
+            fig.add_trace(go.Box(
+                y=df_chart[eixo_y],
+                x=df_chart[eixo_x] if eixo_x else None,
+                boxpoints='outliers'
+            ))
+
+        elif tipo_grafico == 'histogram':
+            fig.add_trace(go.Histogram(
+                x=df_chart[eixo_x]
+            ))
+
+        fig = _apply_chart_customization(fig, title=titulo)
+        fig.update_xaxes(title_text=eixo_x)
+        fig.update_yaxes(title_text=eixo_y)
+
+        return {
+            "status": "success",
+            "chart_type": f"custom_{tipo_grafico}",
+            "chart_data": _export_chart_to_json(fig),
+            "summary": {
+                "tipo": tipo_grafico,
+                "pontos": len(df_chart),
+                "eixos": f"{eixo_x} vs {eixo_y}"
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Erro em visualização customizada: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
 # Lista de todas as ferramentas de gráficos disponíveis
 chart_tools = [
     # Ferramentas de análise e consulta
     listar_graficos_disponiveis,  # NOVO: Lista todos os gráficos disponíveis
+
+    # Customização flexível (SOTA 2025)
+    gerar_visualizacao_customizada,
 
     # Gráficos individuais
     gerar_grafico_vendas_por_categoria,

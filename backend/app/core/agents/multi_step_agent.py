@@ -43,7 +43,7 @@ class MultiStepAgent:
     4. (Loop): Se necessário, refina e tenta novamente
     """
     
-    MAX_ITERATIONS = 3
+    MAX_ITERATIONS = 6  # Aumentado de 3 para 6 para permitir queries mais complexas
     
     def __init__(self, agent, validator=None):
         """

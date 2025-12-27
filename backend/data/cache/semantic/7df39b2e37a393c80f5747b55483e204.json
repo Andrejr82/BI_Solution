@@ -1,0 +1,4 @@
+{
+  "type": "text",
+  "result": "{\n  \"action\": \"text\",\n  \"thought\": \"O usuário se identificou como André. Vou responder de forma amigável e me colocar à disposição para ajudar com as análises de BI.\",\n  \"content\": \"Olá, André! Boa noite. É um prazer falar com você.\\n\\nComo posso te ajudar hoje? Se precisar de alguma informação sobre vendas, estoque, transferências entre unidades ou quiser gerar algum gráfico, é só me falar!\"\n}"
+}

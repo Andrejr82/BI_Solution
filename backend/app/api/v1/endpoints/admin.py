@@ -176,6 +176,43 @@ async def create_user(
                 full_name=user_data.username,  # Can be enhanced later
                 allowed_segments=user_data.allowed_segments # Added allowed_segments
             )
+            
+            # --- SYNC WITH SQL SERVER (AUTHORIZATION) ---
+            # Ensure the user exists locally for permissions/segments check
+            try:
+                # Check if user exists locally (by ID or Username)
+                user_id = uuid.UUID(new_user["id"])
+                
+                result = await db.execute(select(User).where(User.id == user_id))
+                local_user = result.scalar_one_or_none()
+                
+                if not local_user:
+                    # Create local user record
+                    hashed_dummy = "EXTERNAL_AUTH_SUPABASE" 
+                    local_user = User(
+                        id=user_id,
+                        username=user_data.username,
+                        email=user_data.email,
+                        hashed_password=hashed_dummy,
+                        role=user_data.role,
+                        is_active=True,
+                        allowed_segments=json.dumps(user_data.allowed_segments) if user_data.allowed_segments else "[]"
+                    )
+                    db.add(local_user)
+                else:
+                    # Update existing local user
+                    local_user.username = user_data.username
+                    local_user.email = user_data.email
+                    local_user.role = user_data.role
+                    if user_data.allowed_segments is not None:
+                        local_user.allowed_segments = json.dumps(user_data.allowed_segments)
+                
+                await db.commit()
+            except Exception as e:
+                # Log error but don't fail the request (Supabase creation worked)
+                # logger.error(f"Failed to sync new user to SQL Server: {e}")
+                print(f"Failed to sync new user to SQL Server: {e}")
+
             return new_user
         except Exception as e:
             raise HTTPException(
@@ -254,6 +291,25 @@ async def update_user(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="User not found"
                 )
+
+            # --- SYNC WITH SQL SERVER (AUTHORIZATION) ---
+            try:
+                # Check if user exists locally
+                u_id = uuid.UUID(user_id)
+                result = await db.execute(select(User).where(User.id == u_id))
+                local_user = result.scalar_one_or_none()
+                
+                if local_user:
+                    if "username" in update_data: local_user.username = update_data["username"]
+                    if "email" in update_data: local_user.email = update_data["email"]
+                    if "role" in update_data: local_user.role = update_data["role"]
+                    if "is_active" in update_data: local_user.is_active = update_data["is_active"]
+                    if "allowed_segments" in update_data: 
+                        local_user.allowed_segments = json.dumps(update_data["allowed_segments"])
+                    
+                    await db.commit()
+            except Exception as e:
+                print(f"Failed to sync updated user to SQL Server: {e}")
 
             return updated_user
         except HTTPException:

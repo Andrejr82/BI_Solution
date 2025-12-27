@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Mostre os top 5 produtos mais vendidos"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico solicitado:"
+    }
+  ]
+}

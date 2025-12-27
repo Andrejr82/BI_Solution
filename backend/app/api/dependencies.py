@@ -84,6 +84,16 @@ async def get_current_user(
 
                 if not user.is_active:
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+
+                # 🚨 CRITICAL FIX: Enforce admin = ["*"] rule when loading from Parquet
+                if user.role == "admin":
+                    # Force admin to always have full access
+                    user.allowed_segments = json.dumps(["*"])
+
+                # Set context for RLS
+                from app.core.context import set_current_user_context
+                set_current_user_context(user)
+
                 return user
         except Exception:
             pass  # Will try Supabase fallback
@@ -109,6 +119,13 @@ async def get_current_user(
                 except:
                     pass
                 
+
+                # 🚨 CRITICAL FIX: Ensure admin ALWAYS has full access
+                allowed_segments_data = user_metadata.get("allowed_segments", [])
+                if role == "admin":
+                    # Admin always gets ["*"] regardless of metadata
+                    allowed_segments_data = ["*"]
+
                 user = User(
                     id=uuid.UUID(str(user_id)),
                     username=user_metadata.get("username", auth_user.user.email.split("@")[0]),
@@ -116,13 +133,18 @@ async def get_current_user(
                     role=role,
                     is_active=True,
                     hashed_password="",  # Not needed for Supabase auth
-                    allowed_segments=json.dumps(user_metadata.get("allowed_segments", [])),
+                    allowed_segments=json.dumps(allowed_segments_data),
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
                     last_login=datetime.now(timezone.utc)
                 )
+                
+                # Set context for RLS
+                from app.core.context import set_current_user_context
+                set_current_user_context(user)
+                
                 return user
-        except Exception as e:
+        except Exception:
             pass  # Will raise credentials_exception
 
     raise credentials_exception
@@ -251,6 +273,9 @@ async def get_current_user_from_token(token: str) -> User:
     from pathlib import Path
     from datetime import datetime, timezone
     import sys
+    from app.config.settings import get_settings
+
+    settings = get_settings()
     
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -272,193 +297,91 @@ async def get_current_user_from_token(token: str) -> User:
     except JWTError:
         raise credentials_exception
     
-    # Read from Parquet
+    # PRIORITY 1: Try Parquet first
     docker_path = Path("/app/data/parquet/users.parquet")
     dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
     parquet_path = docker_path if docker_path.exists() else dev_path
     
-    if not parquet_path.exists():
-        raise credentials_exception
-    
-    try:
-        df = pl.read_parquet(parquet_path)
-        user_data = df.filter(pl.col("id") == user_id)
-        
-        if len(user_data) == 0:
-            raise credentials_exception
-        
-        # CORREÇÃO: Definir user_row antes de usar
-        user_row = user_data.row(0, named=True)
-        
-        user = User(
-            id=uuid.UUID(str(user_row["id"])),
-            username=user_row["username"],
-            email=user_row.get("email", ""),
-            role=user_row["role"],
-            is_active=user_row.get("is_active", True),
-            hashed_password=user_row["hashed_password"],
-            allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
-            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-            last_login=user_row.get("last_login")
-        )
-        
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Inactive user"
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception:
-        raise credentials_exception
-
-
-
-def require_role(*allowed_roles: str):
-    """
-    Dependency to require specific roles
-    
-    Usage:
-        @router.get("/admin")
-        async def admin_endpoint(user: User = Depends(require_role("admin"))):
-            ...
-    """
-    async def role_checker(
-        current_user: Annotated[User, Depends(get_current_active_user)]
-    ) -> User:
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied. Required roles: {', '.join(allowed_roles)}"
-            )
-        return current_user
-    
-    return role_checker
-
-
-def require_permission(permission: str):
-    """
-    Dependency to require specific permission
-    
-    Usage:
-        @router.get("/reports")
-        async def get_reports(user: User = Depends(require_permission("VIEW_REPORTS"))):
-            ...
-    """
-    # Permission mapping (same as frontend)
-    ROLE_PERMISSIONS = {
-        "admin": ["*"],  # All permissions
-        "user": [
-            "VIEW_ANALYTICS", "VIEW_REPORTS", "CREATE_REPORTS", 
-            "EDIT_REPORTS", "USE_CHAT"
-        ],
-        "viewer": ["VIEW_ANALYTICS", "VIEW_REPORTS"],
-    }
-    
-    async def permission_checker(
-        current_user: Annotated[User, Depends(get_current_active_user)]
-    ) -> User:
-        user_permissions = ROLE_PERMISSIONS.get(current_user.role, [])
-        
-        if "*" not in user_permissions and permission not in user_permissions:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied. Required permission: {permission}"
-            )
-        return current_user
-    
-    return permission_checker
-
-
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> User:
-    """Get current active user"""
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
-        )
-    return current_user
-
-
-async def get_current_user_from_token(token: str) -> User:
-    """
-    Get current user from raw JWT token string
-    Used for SSE endpoints where EventSource doesn't support custom headers
-    """
-    import polars as pl
-    from pathlib import Path
-    from datetime import datetime, timezone
-    import sys
-    
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    # Decode JWT
-    try:
-        payload = decode_token(token)
-        
-        if payload.get("type") != "access":
-            raise credentials_exception
-        
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
+    if parquet_path.exists():
+        try:
+            df = pl.read_parquet(parquet_path)
+            user_data = df.filter(pl.col("id") == user_id)
             
-    except JWTError:
-        raise credentials_exception
-    
-    # Read from Parquet
-    docker_path = Path("/app/data/parquet/users.parquet")
-    dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
-    parquet_path = docker_path if docker_path.exists() else dev_path
-    
-    if not parquet_path.exists():
-        raise credentials_exception
-    
-    try:
-        df = pl.read_parquet(parquet_path)
-        user_data = df.filter(pl.col("id") == user_id)
-        
-        if len(user_data) == 0:
-            raise credentials_exception
-        
-        # CORREÇÃO: Definir user_row antes de usar
-        user_row = user_data.row(0, named=True)
-        
-        user = User(
-            id=uuid.UUID(str(user_row["id"])),
-            username=user_row["username"],
-            email=user_row.get("email", ""),
-            role=user_row["role"],
-            is_active=user_row.get("is_active", True),
-            hashed_password=user_row["hashed_password"],
-            allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
-            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-            last_login=user_row.get("last_login")
-        )
-        
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Inactive user"
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception:
-        raise credentials_exception
+            if len(user_data) > 0:
+                user_row = user_data.row(0, named=True)
+                
+                user = User(
+                    id=uuid.UUID(str(user_row["id"])),
+                    username=user_row["username"],
+                    email=user_row.get("email", ""),
+                    role=user_row["role"],
+                    is_active=user_row.get("is_active", True),
+                    hashed_password=user_row["hashed_password"],
+                    allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
+                    created_at=user_row.get("created_at", datetime.now(timezone.utc)),
+                    updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
+                    last_login=user_row.get("last_login")
+                )
+                
+                if not user.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Inactive user"
+                    )
+                
+                # Set context for RLS
+                from app.core.context import set_current_user_context
+                set_current_user_context(user)
+                
+                return user
+        except HTTPException:
+            raise
+        except Exception:
+            pass # Fallback to Supabase
+
+    # PRIORITY 2: Try Supabase if user not found in Parquet
+    if settings.USE_SUPABASE_AUTH:
+        try:
+            from app.core.supabase_client import get_supabase_admin_client
+            admin_client = get_supabase_admin_client()
+            
+            auth_user = admin_client.auth.admin.get_user_by_id(user_id)
+            if auth_user and auth_user.user:
+                user_metadata = auth_user.user.user_metadata or {}
+                
+                # Get role from user_profiles table
+                role = "user"
+                try:
+                    from app.core.supabase_client import get_supabase_client
+                    supabase = get_supabase_client()
+                    profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+                    if profile_response.data and len(profile_response.data) > 0:
+                        role = profile_response.data[0].get("role", "user")
+                except:
+                    pass
+                
+                user = User(
+                    id=uuid.UUID(str(user_id)),
+                    username=user_metadata.get("username", auth_user.user.email.split("@")[0]),
+                    email=auth_user.user.email or "",
+                    role=role,
+                    is_active=True,
+                    hashed_password="",  # Not needed for Supabase auth
+                    allowed_segments=json.dumps(user_metadata.get("allowed_segments", [])),
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                    last_login=datetime.now(timezone.utc)
+                )
+                
+                # Set context for RLS
+                from app.core.context import set_current_user_context
+                set_current_user_context(user)
+                
+                return user
+        except Exception as e:
+            pass  # Will raise credentials_exception
+
+    raise credentials_exception
 
 
 

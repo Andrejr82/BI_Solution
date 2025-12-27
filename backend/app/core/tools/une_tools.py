@@ -168,20 +168,20 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
 
     try:
         from app.infrastructure.data.duckdb_adapter import duckdb_adapter
-        logger.info(f"🚀 DuckDB Load: Cols={len(parquet_cols_to_load) if parquet_cols_to_load else 'All'}, Filters={list(duckdb_filters.keys())}")
+        logger.info(f"[DUCKDB] Load: Cols={len(parquet_cols_to_load) if parquet_cols_to_load else 'All'}, Filters={list(duckdb_filters.keys())}")
         
         df = duckdb_adapter.load_data(
             columns=parquet_cols_to_load,
             filters=duckdb_filters
         )
         
-        logger.info(f"✅ DuckDB carregou {len(df)} registros")
+        logger.info(f"[OK] DuckDB carregou {len(df)} registros")
 
     except Exception as e:
         logger.error(f"Erro Crítico no DuckDB: {e}", exc_info=True)
         # Fallback de emergência (apenas se DuckDB falhar, o que é raro)
         # Tentar ler com pandas puro sem filtros
-        logger.warning("⚠️ Tentando fallback para pd.read_parquet (lento)...")
+        logger.warning("[FALLBACK] Tentando fallback para pd.read_parquet (lento)...")
         PARQUET_PATH_DEFAULT = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
         df = pd.read_parquet(PARQUET_PATH_DEFAULT, columns=parquet_cols_to_load)
         # Aplicar filtros manualmente

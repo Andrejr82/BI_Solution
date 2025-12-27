@@ -2,46 +2,6 @@
   "history": [
     {
       "role": "user",
-      "content": "quais sao os top 10 de vendas na une 2365"
-    },
-    {
-      "role": "assistant",
-      "content": "Não consegui encontrar essa informação no momento."
-    },
-    {
-      "role": "user",
-      "content": "quais são os top 20 de vendas na une 2365"
-    },
-    {
-      "role": "assistant",
-      "content": "Não consegui encontrar essa informação no momento.\n"
-    },
-    {
-      "role": "user",
-      "content": "quais são  os top 10 na une 2365"
-    },
-    {
-      "role": "assistant",
-      "content": "Não consegui encontrar essa informação no momento.\n"
-    },
-    {
-      "role": "user",
-      "content": "quais sao os top 20 de vendas na une 2365"
-    },
-    {
-      "role": "assistant",
-      "content": "Os 20 produtos mais vendidos na UNE 2365 são:\n"
-    },
-    {
-      "role": "user",
-      "content": "Quais são os top 20 de vendas na une 2365"
-    },
-    {
-      "role": "assistant",
-      "content": "Não consegui encontrar essa informação no momento.\n"
-    },
-    {
-      "role": "user",
       "content": "Quais são os top 20 de vendas na une 2365"
     },
     {
@@ -79,6 +39,46 @@
     {
       "role": "assistant",
       "content": "Não consigo gerar gráficos diretamente. Mas posso fornecer os dados que você precisa para criar o gráfico! 😉\n\nPara o ranking de vendas dos segmentos na UNE 2365, posso te mostrar o total de vendas por segmento. Que tal? 📊\n"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de vendas ranking tecidos une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Não consigo gerar gráficos diretamente. Mas posso fornecer os dados que você precisa para criar o gráfico! 😉\n\nPara o ranking de vendas de tecidos na UNE 2365, posso te mostrar o total de vendas. Que tal? 📊\n"
+    },
+    {
+      "role": "user",
+      "content": "pode ser"
+    },
+    {
+      "role": "assistant",
+      "content": "Não consegui encontrar essa informação no momento.\n"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de vendas ranking tecidos une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Não consigo gerar gráficos diretamente. Mas posso fornecer os dados que você precisa para criar o gráfico! 😉\n\nPara o ranking de vendas de tecidos na UNE 2365, posso te mostrar o total de vendas. Que tal? 📊\n"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de barras ranking de vendas segmentos une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Erro: Object of type MapComposite is not JSON serializable"
+    },
+    {
+      "role": "user",
+      "content": "quais produto estão com ruptura na une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Não consegui encontrar essa informação no momento.\n"
     }
   ]
 }

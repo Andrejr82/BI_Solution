@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Compare vendas de TECIDOS vs PAPELARIA vs ESCOLAR nos últimos 30 dias com gráfico"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    }
+  ]
+}

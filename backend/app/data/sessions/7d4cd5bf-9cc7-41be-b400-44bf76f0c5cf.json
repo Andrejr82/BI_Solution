@@ -1,0 +1,36 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "qual é a previsao de tempo para amanha no rio de janeiro"
+    },
+    {
+      "role": "assistant",
+      "content": "Sinto muito, mas não tenho acesso a informações de previsão do tempo em tempo real. Meu foco e especialidade são dados de **Business Intelligence**, como estoque, vendas, logística e precificação de produtos.\n\nSe precisar de alguma informação sobre o desempenho de vendas no Rio de Janeiro ou o status do estoque em alguma unidade (UNE) da região, estou à disposição para ajudar!"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de vendas do produto 59294 em todas as unes"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Erro: 400 Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, function call `default_api:gerar_grafico_automatico` , position 4. Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures for more details."
+    },
+    {
+      "role": "user",
+      "content": "qual é a previsão do tempo parao rio de janeiro amanhã"
+    },
+    {
+      "role": "assistant",
+      "content": "Sinto muito, mas como sou um assistente focado em **Business Intelligence e análise de dados internos**, não tenho acesso a serviços de meteorologia em tempo real para fornecer a previsão do tempo.\n\nSe você precisar de dados sobre vendas, estoque ou logística (por exemplo, como o clima pode ter afetado as vendas em uma UNE no Rio de Janeiro no passado), posso tentar ajudar com as ferramentas de análise que tenho disponíveis!"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de vendas do produto 59294 em todas as  unes"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Erro: 400 Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, function call `default_api:gerar_grafico_automatico` , position 4. Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures for more details."
+    }
+  ]
+}

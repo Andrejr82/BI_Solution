@@ -31,12 +31,12 @@ def test_2_model_config():
         model = settings.LLM_MODEL_NAME
         print(f"   Modelo configurado: {model}")
         
-        if "2.0" in model or "2-0" in model:
-            print("✅ Modelo Gemini 2.0 configurado corretamente")
+        if "gemini-3-flash-preview" in model:
+            print("✅ Modelo Gemini 3 Flash Preview configurado corretamente")
             return True
         else:
             print(f"⚠️  Modelo ainda é: {model}")
-            print("   Esperado: gemini-2.0-flash-exp")
+            print("   Esperado: gemini-3-flash-preview")
             return False
     except Exception as e:
         print(f"❌ Erro ao verificar modelo: {e}")

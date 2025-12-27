@@ -50,6 +50,16 @@ class LLMFactory:
     def _get_gemini_adapter() -> Optional[BaseLLMAdapter]:
         """Tenta inicializar adaptador Gemini."""
         try:
+            # Preferir o adaptador V3 (Novo SDK google-genai)
+            try:
+                from app.core.llm_gemini_adapter_v3 import GeminiLLMAdapterV3
+                if settings.GEMINI_API_KEY:
+                    adapter = GeminiLLMAdapterV3()
+                    LLMFactory._logger.info("Adaptador Gemini V3 inicializado com sucesso")
+                    return adapter
+            except ImportError:
+                LLMFactory._logger.warning("Gemini V3 (google-genai) não disponível, tentando fallback V1")
+
             from app.core.llm_gemini_adapter import GeminiLLMAdapter
 
             if not settings.GEMINI_API_KEY:

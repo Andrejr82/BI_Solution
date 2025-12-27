@@ -1,0 +1,24 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "quais sao os grupos em queda de vendas na une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "olá boa tarde. gere um gráfico de vendas do produto 59294 em todas as unes"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "boa tarde. gere um gráfico de vendas do produto 59294 em todas as unes"
+    }
+  ]
+}

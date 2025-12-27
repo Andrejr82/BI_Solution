@@ -133,7 +133,7 @@ def validate_column(
     # 2. Tentar normalizar usando COLUMN_MAP
     normalized = normalize_column_name(column)
     if normalized in available_columns:
-        logger.info(f"✅ Coluna '{column}' normalizada para '{normalized}'")
+        logger.info(f"[OK] Coluna '{column}' normalizada para '{normalized}'")
         result = (True, normalized, [normalized])
         VALIDATION_CACHE[cache_key] = result
         return result
@@ -142,7 +142,7 @@ def validate_column(
     column_lower = column.lower()
     for col in available_columns:
         if col.lower() == column_lower:
-            logger.info(f"✅ Coluna '{column}' encontrada com case diferente: '{col}'")
+            logger.info(f"[OK] Coluna '{column}' encontrada com case diferente: '{col}'")
             result = (True, col, [col])
             VALIDATION_CACHE[cache_key] = result
             return result
@@ -170,7 +170,7 @@ def validate_column(
                 if real_name not in suggestions:
                     suggestions.insert(0, real_name)
 
-        logger.warning(f"⚠️ Coluna '{column}' não encontrada. Sugestões: {suggestions}")
+        logger.warning(f"[WARN] Coluna '{column}' não encontrada. Sugestões: {suggestions}")
 
     # 5. Retornar resultado ou levantar exceção
     if raise_on_error:
@@ -248,7 +248,7 @@ def safe_select_columns(
     # Aplicar select com colunas corrigidas
     df_result = df.select(valid_cols)
 
-    logger.info(f"✅ safe_select: {len(valid_cols)}/{len(columns)} colunas selecionadas")
+    logger.info(f"[OK] safe_select: {len(valid_cols)}/{len(columns)} colunas selecionadas")
     if validation["corrected"]:
         logger.info(f"   Correções: {validation['corrected']}")
     if validation["invalid"]:
@@ -300,7 +300,7 @@ def validate_query_code(
     columns_used = extract_columns_from_query(query_code)
 
     if not columns_used:
-        logger.warning("⚠️ Nenhuma coluna detectada no código da query")
+        logger.warning("[WARN] Nenhuma coluna detectada no código da query")
         return {
             "valid": True,
             "original_code": query_code,
@@ -320,7 +320,7 @@ def validate_query_code(
             corrected_code = corrected_code.replace(f'"{old_name}"', f'"{new_name}"')
             corrected_code = corrected_code.replace(f"'{old_name}'", f"'{new_name}'")
 
-        logger.info(f"✅ Código corrigido: {len(validation['corrected'])} substituições")
+        logger.info(f"[OK] Código corrigido: {len(validation['corrected'])} substituições")
 
     return {
         "valid": validation["all_valid"],
@@ -338,4 +338,4 @@ def clear_validation_cache():
     global VALIDATION_CACHE
     VALIDATION_CACHE.clear()
     get_available_columns_cached.cache_clear()
-    logger.info("✅ Cache de validação limpo")
+    logger.info("[OK] Cache de validação limpo")

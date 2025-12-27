@@ -89,17 +89,21 @@ class SemanticCache:
     def get(self, query: str) -> Optional[Dict[str, Any]]:
         """
         Busca resposta em cache.
-        
+
         Args:
             query: Pergunta do usuário
-            
+
         Returns:
             Resposta cacheada ou None se não encontrada/expirada
         """
         key = self._generate_key(query)
-        
+        normalized = self._normalize_query(query)
+
+        logger.debug(f"Cache GET - Query: '{query}' | Normalized: '{normalized}' | Key: {key}")
+
         if key not in self._index:
             self.misses += 1
+            logger.debug(f"Cache MISS - Key not in index")
             return None
         
         entry = self._index[key]

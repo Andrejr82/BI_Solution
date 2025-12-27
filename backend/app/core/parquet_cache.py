@@ -46,22 +46,22 @@ class ParquetCache:
         with self._lock:
             # Cache hit - move to end (most recently used)
             if parquet_name in self._cache:
-                logger.info(f"✅ Cache HIT: {parquet_name}")
+                logger.info(f"[OK] Cache HIT: {parquet_name}")
                 self._cache.move_to_end(parquet_name)
                 return self._cache[parquet_name]
 
             # Cache miss - load from disk
-            logger.info(f"⚠️  Cache MISS: {parquet_name} - Loading from disk...")
+            logger.info(f"[MISS] Cache MISS: {parquet_name} - Loading from disk...")
             df = self._load_parquet(parquet_name)
 
             # Add to cache
             self._cache[parquet_name] = df
-            logger.info(f"✅ Loaded {parquet_name}: {len(df):,} rows × {len(df.columns)} columns")
+            logger.info(f"[OK] Loaded {parquet_name}: {len(df):,} rows x {len(df.columns)} columns")
 
             # Evict least recently used if exceeding limit
             if len(self._cache) > self._max_size:
                 evicted_key, evicted_df = self._cache.popitem(last=False)
-                logger.warning(f"🗑️  Cache EVICT: {evicted_key} (LRU policy - {len(evicted_df):,} rows freed)")
+                logger.warning(f"[WARN] Cache EVICT: {evicted_key} (LRU policy - {len(evicted_df):,} rows freed)")
 
             return df
 

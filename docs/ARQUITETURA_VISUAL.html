@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquitetura do Agent Solution BI</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+    </script>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1200px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Diagrama de Arquitetura - Agent Solution BI</h1>
+    <div class="mermaid">
+        C4Container
+        title Diagrama de Contêineres - Sistema de BI Agent Solution
+
+        Person(user, "Usuário", "Usuário de Negócios acessando Dashboards")
+
+        Container_Boundary(frontend, "Frontend Logic (SolidJS)") {
+        Container(web_app, "Aplicação Web", "SolidJS, Vite, Tailwind", "Interface SPA reativa, Chat UI, Dashboards")
+        Container(auth_store, "Auth Store", "Solid Signals", "Gerenciamento de Estado de Sessão")
+        }
+
+        Container_Boundary(backend, "Backend Logic (FastAPI)") {
+        Container(api, "API Gateway", "FastAPI", "Endpoints REST, SSE para Chat, Auth Middleware")
+
+        Container_Boundary(agents, "Sistema de Agentes (Core)") {
+        Component(router, "Caculinha BI Agent", "Router Principal", "Interpreta intenção e delega")
+        Component(code_gen, "Code Gen Agent", "Especialista Python", "Gera código para análise de dados")
+        Component(product_agent, "Product Agent", "Especialista de Produto", "Análise de Mix, Rupturas e Estoque")
+        Component(multi_step, "Multi-Step Agent", "Orquestrador", "Resolve tarefas complexas em etapas")
+        Component(rag, "RAG System", "FAISS/Embeddings", "Recuperação de Queries e Contexto")
+        }
+
+        Container(data_layer, "Hybrid Data Adapter", "Python Class", "Abstração de acesso a dados (SQL/Parquet)")
+        }
+
+        System_Ext(gemini, "Google Gemini API", "LLM Service", "Motor de Inteligência (Flash 3.0)")
+
+        Container_Boundary(persistence, "Persistência de Dados") {
+        SystemDb(supabase, "Supabase", "PostgreSQL", "Autenticação e Perfis")
+        SystemDb(sqlserver, "SQL Server", "Relacional", "ERP, Vendas, Estoque (Produção)")
+        SystemDb(parquet, "Parquet Files", "Arquivo Local", "Dados Analíticos (Performance/Offline)")
+        SystemDb(vector_db, "Vector Store", "FAISS", "Índice de Embeddings para RAG")
+        }
+
+        Rel(user, web_app, "Interage", "HTTPS")
+        Rel(web_app, api, "Requisições API", "JSON/SSE")
+
+        Rel(api, router, "Envia Prompt")
+        Rel(router, gemini, "Decide Roteamento")
+
+        Rel(router, code_gen, "Delega Análise Ad-hoc")
+        Rel(router, product_agent, "Delega Perguntas de Produto")
+        Rel(router, multi_step, "Delega Tarefas Complexas")
+
+        Rel(code_gen, gemini, "Gera Código")
+        Rel(product_agent, gemini, "Analisa Contexto")
+
+        Rel(code_gen, data_layer, "Executa Query (Polars)")
+        Rel(product_agent, data_layer, "Consulta Dados")
+
+        Rel(rag, vector_db, "Busca Similaridade")
+        Rel(agents, rag, "Enriquece Contexto")
+
+        Rel(data_layer, supabase, "Auth/User Profile")
+        Rel(data_layer, sqlserver, "SQL Queries")
+        Rel(data_layer, parquet, "Leitura Otimizada")
+    </div>
+</body>
+
+</html>

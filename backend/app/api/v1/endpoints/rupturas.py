@@ -52,17 +52,17 @@ async def get_critical_rupturas(
             # UNE pode ser string ou int - tentar conversão
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"🔍 Filtro UNE recebido: '{une}'")
+            logger.info(f"[FILTER] Filtro UNE recebido: '{une}'")
             
             try:
                 une_val = int(une)
                 df = df.filter(pl.col("UNE") == une_val)
-                logger.info(f"📊 Filtro UNE aplicado como INT: {df.height} registros")
+                logger.info(f"[OK] Filtro UNE aplicado como INT: {df.height} registros")
             except (ValueError, Exception) as e:
                 # Se falhar, tentar como string
-                logger.warning(f"⚠️ Conversão para int falhou, tentando como string: {e}")
+                logger.warning(f"[WARN] Conversão para int falhou, tentando como string: {e}")
                 df = df.filter(pl.col("UNE").cast(pl.Utf8) == str(une))
-                logger.info(f"📊 Filtro UNE aplicado como STRING: {df.height} registros")
+                logger.info(f"[OK] Filtro UNE aplicado como STRING: {df.height} registros")
 
         # Definição de ruptura crítica:
         # CD=0 + Loja < Linha Verde + Vendas > 0
@@ -91,10 +91,7 @@ async def get_critical_rupturas(
 
         return rupturas.to_dicts()
     except Exception as e:
-        import traceback
-        with open("rupturas_error.log", "a") as f:
-            f.write(f"Error in endpoint: {e}\n")
-            traceback.print_exc(file=f)
+        logger.error(f"Error in critical rupturas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -114,10 +111,7 @@ async def get_segmentos(
         segmentos = df.select("NOMESEGMENTO").unique().sort("NOMESEGMENTO").to_series().to_list()
         return [s for s in segmentos if s is not None and str(s).strip()]
     except Exception as e:
-        import traceback
-        with open("rupturas_error.log", "a") as f:
-            f.write(f"Error in endpoint: {e}\n")
-            traceback.print_exc(file=f)
+        logger.error(f"Error in critical rupturas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -137,10 +131,7 @@ async def get_unes(
         unes = df.select("UNE").unique().sort("UNE").to_series().to_list()
         return [str(u) for u in unes if u is not None]
     except Exception as e:
-        import traceback
-        with open("rupturas_error.log", "a") as f:
-            f.write(f"Error in endpoint: {e}\n")
-            traceback.print_exc(file=f)
+        logger.error(f"Error in critical rupturas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -202,8 +193,5 @@ async def get_rupturas_summary(
             "valor_estimado": 0  # Pode ser calculado se houver coluna de custo
         }
     except Exception as e:
-        import traceback
-        with open("rupturas_error.log", "a") as f:
-            f.write(f"Error in endpoint: {e}\n")
-            traceback.print_exc(file=f)
+        logger.error(f"Error in critical rupturas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

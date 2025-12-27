@@ -1,0 +1,84 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Compare as vendas de TECIDOS vs PAPELARIA no último mês"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Quais produtos estão em ruptura mas têm estoque no CD?"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Mostre a curva ABC dos produtos por receita"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está a análise da curva ABC dos produtos com maior volume de vendas (receita) nos últimos 30 dias. \n\nOs itens abaixo representam o topo da categoria \"A\", ou seja, os produtos que geram o maior impacto no faturamento:\n\n| Produto | Volume de Vendas (30 dias) |\n| :--- | :--- |\n| **PAPEL CHAMEX A4 75GRS 500FLS** | 45.048 |\n| **PAPEL 40KG 96X66 120G/M BRANCO** | 28.971 |\n| **TNT 40GRS 100%O LG 1.40 035 BRANCO** | 25.544 |\n| **TNT 40GRS 100%O LG 1.40 034 PRETO** | 23.308 |\n| **TNT 40GRS 100%O LG 1.40 029 AZUL ROYAL** | 17.063 |\n| **TNT 40GRS 100%O LG 1.40 065 VERMELHO** | 15.242 |\n| **SACOLA DE PAPEL KRAFT 22X18X10** | 14.207 |\n| **BOBINA TERMICA 80MM X 40M BRANCA** | 12.668 |\n| **BANDEIRINHA PLASTICA C/10MTS** | 12.037 |\n| **REFIL P/PISTOLA QUENTE FINA** | 11.882 |\n\nO gráfico acima ilustra visualmente essa distribuição, destacando a predominância de itens de papelaria e TNT no topo do faturamento recente."
+    },
+    {
+      "role": "user",
+      "content": "Mostre produtos mais vendidos na UNE 1"
+    },
+    {
+      "role": "assistant",
+      "content": "Resposta processada, mas nenhum texto foi gerado. Por favor, tente reformular sua pergunta."
+    },
+    {
+      "role": "user",
+      "content": "Quais produtos do fabricante KIT têm melhor giro?"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Crie um gráfico de barras dos top 5 segmentos por vendas"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico com os 5 segmentos que lideram as vendas:\n\nO segmento de **Armarinho e Confecção** ocupa a primeira posição, seguido de perto por **Papelaria** e **Tecidos**. Juntos, esses cinco segmentos representam um volume significativo do faturamento recente, totalizando mais de 3 milhões em vendas."
+    },
+    {
+      "role": "user",
+      "content": "Mostre a tendência de vendas dos últimos 30 dias"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está a tendência de vendas dos últimos 30 dias, detalhada pelos principais grupos de produtos:\n\nO gráfico mostra que o grupo **TNT** lidera o volume de vendas no período, seguido por **Fitas de Cetim** e **Linhas de Costura**. Juntos, os 10 principais grupos somaram um faturamento de aproximadamente **R$ 847.467,17** nos últimos 30 dias. \n\nEssa distribuição destaca a forte demanda por itens de armarinho e tecidos técnicos na composição da receita mensal."
+    },
+    {
+      "role": "user",
+      "content": "Faça um gráfico de pizza mostrando distribuição de vendas por categoria"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está a distribuição das vendas por categoria (segmento):\n\nO gráfico de pizza mostra que o segmento de **Armarinho e Confecção** é o principal motor de vendas, seguido por **Papelaria** e **Tecidos**. No total, as 10 principais categorias somaram um volume de vendas de aproximadamente **R$ 3,63 milhões**.\n\nEssa visualização permite identificar rapidamente quais áreas do negócio possuem maior representatividade no faturamento total."
+    },
+    {
+      "role": "user",
+      "content": "Mostre produtos com COLUNA_INEXISTENTE maior que 100"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, mas não encontrei a coluna \"COLUNA_INEXISTENTE\" em nossa base de dados. \n\nPara que eu possa te ajudar com essa consulta, você poderia utilizar uma das colunas disponíveis? As principais são:\n\n*   **ESTOQUE_UNE**: Estoque atual na loja.\n*   **VENDA_30DD**: Vendas dos últimos 30 dias.\n*   **PRECO_VENDA**: Preço de venda do produto.\n*   **ESTOQUE_LV**: Linha verde (estoque ideal).\n\nSe você deseja ver, por exemplo, produtos com estoque maior que 100 ou vendas acima de 100, basta me avisar!"
+    },
+    {
+      "role": "user",
+      "content": "Mostre os top 10000 produtos por vendas"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    }
+  ]
+}

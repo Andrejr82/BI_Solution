@@ -6,15 +6,16 @@ This script indexes the entire codebase (Python + TypeScript) using:
 - LlamaIndex for document processing
 - Gemini Embeddings for semantic search
 - FAISS for vector storage
+- Incremental Indexing for efficiency
 
 Usage:
     python scripts/index_codebase.py
 
 Output:
-    ./storage/ - FAISS index and metadata
+    ./storage/ - FAISS index, docstore, and metadata
 
 Author: Antigravity AI
-Date: 2025-12-15
+Date: 2025-12-19
 """
 
 import os
@@ -44,11 +45,16 @@ try:
         VectorStoreIndex,
         SimpleDirectoryReader,
         StorageContext,
-        Document
+        Document,
+        load_index_from_storage
     )
+    from llama_index.core.ingestion import IngestionPipeline, DocstoreStrategy
+    from llama_index.core.storage.docstore import SimpleDocumentStore
+    from llama_index.core.node_parser import SentenceSplitter
     from llama_index.core.settings import Settings
     from llama_index.llms.gemini import Gemini
     from llama_index.embeddings.gemini import GeminiEmbedding
+    from llama_index.core.vector_stores import SimpleVectorStore
 except ImportError as e:
     import traceback
     logger.error(f"Missing dependencies: {e}")
@@ -69,9 +75,9 @@ def configure_llamaindex():
     logger.info("Configuring LlamaIndex with Gemini...")
     
     try:
-        # Usar modelo confirmado na lista
+        # Usar Gemini 3.0 Flash para resumo se configurado
         Settings.llm = Gemini(
-            model_name="models/gemini-2.0-flash",
+            model_name="models/gemini-3-flash-preview",
             api_key=api_key,
             temperature=0.1,
         )
@@ -81,7 +87,7 @@ def configure_llamaindex():
             api_key=api_key,
         )
         
-        logger.info("LlamaIndex configured (Gemini 2.0 Flash + Text Embedding 004)")
+        logger.info("LlamaIndex configured (Gemini 3.0 Flash + Text Embedding 004)")
         
     except Exception as e:
         logger.error(f"❌ Failed to configure Gemini: {e}")
@@ -123,7 +129,7 @@ def load_code_documents(base_path: Path) -> list:
         ".js": "javascript"
     }
     
-    logger.info("📂 Loading code files...")
+    logger.info("[INFO] Loading code files...")
     
     for code_dir in code_dirs:
         if not code_dir.exists():
@@ -169,12 +175,17 @@ def load_code_documents(base_path: Path) -> list:
                         "filename": file_path.name
                     }
                 )
+                
+                # CRITICAL for UPSERTS: Set doc_id to a stable hash or path
+                # Using file_path as doc_id allows tracking same file updates
+                doc.doc_id = str(file_path.relative_to(base_path))
+                
                 documents.append(doc)
                 
             except Exception as e:
                 logger.warning(f"  Error reading {file_path}: {e}")
     
-    logger.info(f"✅ Loaded {len(documents)} files")
+    logger.info(f"[SUCCESS] Loaded {len(documents)} files")
     logger.info(f"   Total lines: {stats['total_lines']:,}")
     logger.info(f"   Functions: {stats['total_functions']:,}")
     logger.info(f"   Classes: {stats['total_classes']:,}")
@@ -183,34 +194,50 @@ def load_code_documents(base_path: Path) -> list:
     return documents, stats
 
 
-def create_index(documents: list, storage_path: Path):
+def create_or_update_index(documents: list, storage_path: Path):
     """
-    Create FAISS index from documents.
+    Create or update index using standard VectorStoreIndex (Full Refresh).
     
     Args:
         documents: List of Document objects
-        storage_path: Path to save index
+        storage_path: Path to save/load index
     """
-    logger.info("🔨 Creating Index...")
+    logger.info("[INFO] Initializing Indexing...")
     
-    # Create index (using default SimpleVectorStore which is JSON based)
-    # This is more robust on Windows than FAISS for this scale
-    Settings.embed_model = GeminiEmbedding(
-        model_name="models/text-embedding-004",
-        api_key=os.getenv("GEMINI_API_KEY")
+    storage_path.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize Storage Context with Simple stores (In-Memory/JSON)
+    # We use a fresh context to ensure consistency between VectorStore and DocStore
+    logger.info("   Creating new storage context...")
+    vector_store = SimpleVectorStore()
+    docstore = SimpleDocumentStore()
+    
+    storage_context = StorageContext.from_defaults(
+        vector_store=vector_store,
+        docstore=docstore
     )
 
-    logger.info("   Generating embeddings (this may take a while)...")
+    # Create Index from Documents
+    # This automatically handles chunking, embedding, and insertion into all stores
+    logger.info("   Building index from documents (calculating embeddings)...")
+    
+    # Set transformations explicitly to ensure correct embedding model is used
+    Settings.transformations = [
+        SentenceSplitter(chunk_size=1024, chunk_overlap=20),
+        Settings.embed_model,
+    ]
+    
     index = VectorStoreIndex.from_documents(
         documents,
+        storage_context=storage_context,
         show_progress=True
     )
-    
-    # Persist index
-    storage_path.mkdir(parents=True, exist_ok=True)
+
+    # Persist Storage
+    logger.info("   Persisting storage...")
     index.storage_context.persist(persist_dir=str(storage_path))
     
-    logger.info(f"✅ Index saved to {storage_path}")
+    logger.info(f"[SUCCESS] Index updated and saved to {storage_path}")
 
 
 def save_stats(stats: dict, storage_path: Path):
@@ -229,13 +256,13 @@ def save_stats(stats: dict, storage_path: Path):
     with open(stats_file, 'w', encoding='utf-8') as f:
         json.dump(stats_data, f, indent=2)
     
-    logger.info(f"✅ Stats saved to {stats_file}")
+    logger.info(f"[SUCCESS] Stats saved to {stats_file}")
 
 
 def main():
     """Main indexing function."""
     logger.info("=" * 60)
-    logger.info("Code Indexer - Generating RAG Index")
+    logger.info("Code Indexer - Generating RAG Index (Incremental)")
     logger.info("=" * 60)
     
     # Configure LlamaIndex
@@ -249,9 +276,9 @@ def main():
         logger.error("No documents found to index")
         sys.exit(1)
     
-    # Create index
+    # Create or update index
     storage_path = base_path / "storage"
-    create_index(documents, storage_path)
+    create_or_update_index(documents, storage_path)
     
     # Save stats
     save_stats(stats, storage_path)
@@ -260,7 +287,7 @@ def main():
     logger.info("Indexing complete!")
     logger.info("=" * 60)
     logger.info(f"Index location: {storage_path}")
-    logger.info(f"Total files indexed: {stats['total_files']}")
+    logger.info(f"Total files scanned: {stats['total_files']}")
     logger.info(f"Total lines of code: {stats['total_lines']:,}")
     logger.info("")
     logger.info("You can now use the Code Chat feature!")

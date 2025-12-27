@@ -2,7 +2,7 @@ import { A, useLocation } from '@solidjs/router';
 import auth from '@/store/auth';
 import {
   LayoutDashboard, MessageSquare, PieChart, FileText, Settings, LogOut,
-  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield, Lightbulb, HelpCircle, Code
+  AlertTriangle, Truck, BookOpen, Terminal, Database, Lock, Shield, Lightbulb, HelpCircle, Code, Info
 } from 'lucide-solid';
 import { For, Show, children } from 'solid-js';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -44,6 +44,7 @@ export default function Layout(props: any) {
       items: [
         { href: '/diagnostics', icon: Database, label: 'Diagnóstico DB', roles: ['admin'] },
         { href: '/help', icon: HelpCircle, label: 'Ajuda', roles: ['admin', 'user'] },
+        { href: '/about', icon: Info, label: 'Sobre', roles: ['admin', 'user'] },
         { href: '/profile', icon: Lock, label: 'Alterar Senha', roles: ['admin', 'user'] },
         { href: '/admin', icon: Shield, label: 'Administração', roles: ['admin'] },
       ]

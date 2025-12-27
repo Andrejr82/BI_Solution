@@ -1,0 +1,359 @@
+{
+  "type": "code_result",
+  "result": {
+    "result": [
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2599,
+        "estoque": 1041.0,
+        "venda_30d": 1221.0,
+        "linha_verde": 47.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2720,
+        "estoque": 459.0,
+        "venda_30d": 926.0,
+        "linha_verde": 211.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2906,
+        "estoque": 340.0,
+        "venda_30d": 810.0,
+        "linha_verde": 336.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2952,
+        "estoque": 114.0,
+        "venda_30d": 288.0,
+        "linha_verde": 399.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3038,
+        "estoque": 238.0,
+        "venda_30d": 824.0,
+        "linha_verde": 112.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3054,
+        "estoque": 960.0,
+        "venda_30d": 935.0,
+        "linha_verde": 109.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3091,
+        "estoque": 628.0,
+        "venda_30d": 874.0,
+        "linha_verde": 34.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3116,
+        "estoque": 551.0,
+        "venda_30d": 491.0,
+        "linha_verde": 112.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3281,
+        "estoque": 188.0,
+        "venda_30d": 490.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3318,
+        "estoque": 1648.0,
+        "venda_30d": 937.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3387,
+        "estoque": 257.0,
+        "venda_30d": 359.0,
+        "linha_verde": 339.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3404,
+        "estoque": 116.0,
+        "venda_30d": 553.0,
+        "linha_verde": 275.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3481,
+        "estoque": 155.0,
+        "venda_30d": 381.0,
+        "linha_verde": 48.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3499,
+        "estoque": 385.0,
+        "venda_30d": 435.0,
+        "linha_verde": 518.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3577,
+        "estoque": 405.0,
+        "venda_30d": 572.0,
+        "linha_verde": 465.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3578,
+        "estoque": 302.0,
+        "venda_30d": 297.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 5570,
+        "estoque": 310.0,
+        "venda_30d": 816.0,
+        "linha_verde": 550.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 5822,
+        "estoque": 372.0,
+        "venda_30d": 172.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 1,
+        "estoque": 2321.0,
+        "venda_30d": 3667.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 3,
+        "estoque": 2532.0,
+        "venda_30d": 4915.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 35,
+        "estoque": 1047.0,
+        "venda_30d": 1561.0,
+        "linha_verde": 1552.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 57,
+        "estoque": 626.0,
+        "venda_30d": 2999.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 61,
+        "estoque": 170.0,
+        "venda_30d": 0.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 64,
+        "estoque": 522.0,
+        "venda_30d": 1660.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 79,
+        "estoque": 930.0,
+        "venda_30d": 2348.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 81,
+        "estoque": 916.0,
+        "venda_30d": 1386.0,
+        "linha_verde": 1500.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 135,
+        "estoque": 1320.0,
+        "venda_30d": 1048.0,
+        "linha_verde": 414.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 148,
+        "estoque": 1320.0,
+        "venda_30d": 1684.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 265,
+        "estoque": 604.0,
+        "venda_30d": 2206.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 520,
+        "estoque": 867.0,
+        "venda_30d": 2094.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 1685,
+        "estoque": 732.0,
+        "venda_30d": 1361.0,
+        "linha_verde": 1241.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 1974,
+        "estoque": 599.0,
+        "venda_30d": 665.0,
+        "linha_verde": 664.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2365,
+        "estoque": 926.0,
+        "venda_30d": 2322.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2401,
+        "estoque": 271.0,
+        "venda_30d": 760.0,
+        "linha_verde": 0.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      },
+      {
+        "codigo": 59294,
+        "nome": "PAPEL CHAMEX A4 75GRS 500FLS",
+        "une": 2586,
+        "estoque": 2680.0,
+        "venda_30d": 2991.0,
+        "linha_verde": 96.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 137832.0
+      }
+    ],
+    "chart_spec": null
+  },
+  "chart_spec": null
+}

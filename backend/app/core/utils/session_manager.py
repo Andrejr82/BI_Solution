@@ -12,10 +12,21 @@ class SessionManager:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_file_path(self, session_id: str) -> Path:
+        # Security: Validate session_id is a valid UUID or strictly alphanumeric to prevent path traversal
+        import uuid
+        try:
+            uuid.UUID(session_id)
+        except ValueError:
+            # Check for strictly alphanumeric if not UUID (legacy sessions might be simple strings?)
+            # But strictly disallow ".." or slashes
+            if not session_id.isalnum():
+                 logger.error(f"Invalid session_id format (potential path traversal): {session_id}")
+                 raise ValueError("Invalid session_id format")
+        
         return self.storage_dir / f"{session_id}.json"
 
-    def get_history(self, session_id: str) -> List[Dict[str, str]]:
-        """Retrieves chat history for a given session ID."""
+    def get_history(self, session_id: str, user_id: str) -> List[Dict[str, str]]:
+        """Retrieves chat history for a given session ID, verified by user_id."""
         file_path = self._get_file_path(session_id)
         if not file_path.exists():
             return []
@@ -23,26 +34,34 @@ class SessionManager:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                
+                # Security: Verify ownership
+                if data.get("user_id") and str(data.get("user_id")) != str(user_id):
+                    logger.warning(f"IDOR Attempt: User {user_id} tried to access session {session_id} owned by {data.get('user_id')}")
+                    return []
+                    
                 return data.get("history", [])
         except Exception as e:
             logger.error(f"Error reading session {session_id}: {e}")
             return []
 
-    def add_message(self, session_id: str, role: str, content: str):
-        """Adds a message to the session history."""
+    def add_message(self, session_id: str, role: str, content: str, user_id: str):
+        """Adds a message to the session history, ensuring user_id is stored."""
         file_path = self._get_file_path(session_id)
-        history = self.get_history(session_id)
+        history = self.get_history(session_id, user_id)
         
         history.append({"role": role, "content": content})
         
         # Limit history length to prevent context window explosion (e.g., last 20 messages)
-        # This is a basic optimization. RAG/Summarization would be better for long term.
         if len(history) > 20:
             history = history[-20:]
 
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump({"history": history}, f, ensure_ascii=False, indent=2)
+                json.dump({
+                    "user_id": str(user_id),
+                    "history": history
+                }, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"Error saving session {session_id}: {e}")
 

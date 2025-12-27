@@ -13,7 +13,7 @@ The Agent Solution BI project is a full-stack application that provides a conver
 *   **Database/Storage**:
     *   **Authentication**: Hybrid system using Supabase (primary) with a Parquet file fallback (`users.parquet`) for local/offline development.
     *   **Business Data**: SQL Server (structured data) and Parquet files (analytical data).
-*   **Language Model**: Google Gemini 2.5 Flash.
+*   **Language Model**: Google Gemini 3.0 Flash.
 *   **Orchestration**: Node.js scripts (`npm run dev`) and `concurrently` for managing processes.
 
 ## Architecture

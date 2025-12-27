@@ -4,7 +4,7 @@ Code RAG Service - Semantic Code Search with LlamaIndex + Gemini
 
 Provides semantic search and analysis of the entire codebase using:
 - LlamaIndex for RAG (Retrieval-Augmented Generation)
-- Gemini 2.5 Flash for LLM
+- Gemini 3.0 Flash for LLM
 - GeminiEmbedding for semantic search
 - FAISS for vector storage
 
@@ -41,6 +41,9 @@ class CodeRAGService:
         # ./backend/app/core/code_rag_service.py -> ../../../storage
         self._storage_path = Path(__file__).resolve().parents[3] / "storage"
         self._initialized = False
+        self._index_stats = None
+        self._index = None
+        self._query_engine = None
         
     def _ensure_initialized(self) -> bool:
         """
@@ -54,20 +57,24 @@ class CodeRAGService:
             return True
             
         try:
-            logger.info("🔧 Initializing Code RAG Service...")
-            logger.info(f"📁 Storage Path: {self._storage_path}")
+            logger.info("Initializing Code RAG Service...")
+            logger.info(f"Storage Path: {self._storage_path}")
             
-            # Check if storage exists
-            if not self._storage_path.exists():
-                logger.error(f"❌ Storage path does not exist: {self._storage_path}")
-                logger.error("Please run: python scripts/index_codebase.py")
-                return False
-
             # Check if Gemini API key is configured
             if not settings.GEMINI_API_KEY:
-                logger.error("❌ GEMINI_API_KEY not configured")
+                logger.error("[ERROR] GEMINI_API_KEY not configured. Cannot initialize RAG service.")
                 return False
-            
+
+            # Check if storage directory exists
+            if not self._storage_path.exists():
+                logger.error(f"[ERROR] Storage path does not exist: {self._storage_path}")
+                logger.error("[ACTION REQUIRED] Run 'python scripts/index_codebase.py' to generate the index.")
+                return False
+                
+            # Check for essential index files (simple validation)
+            if not (self._storage_path / "docstore.json").exists() and not (self._storage_path / "index_store.json").exists():
+                 logger.warning(f"[WARN] Index files not found in {self._storage_path}. Service might fail to load index.")
+
             # Import LlamaIndex components (lazy import)
             try:
                 from llama_index.core import (
@@ -79,62 +86,77 @@ class CodeRAGService:
                 from llama_index.llms.gemini import Gemini
                 from llama_index.embeddings.gemini import GeminiEmbedding
             except ImportError as e:
-                logger.error(f"❌ Missing dependencies (ImportError): {e}")
-                logger.error("Install with: pip install llama-index llama-index-vector-stores-faiss llama-index-llms-gemini llama-index-embeddings-gemini")
+                logger.error(f"[ERROR] Missing dependencies (ImportError): {e}")
+                logger.error("[ACTION REQUIRED] Install dependencies with 'pip install llama-index llama-index-llms-gemini llama-index-embeddings-gemini'")
                 return False
             
             # Configure LlamaIndex Settings
-            # Usando modelos estáveis: gemini-1.5-flash e text-embedding-004
-            Settings.llm = Gemini(
-                model_name="models/gemini-2.0-flash", 
-                api_key=settings.GEMINI_API_KEY,
-                temperature=0.1,
-            )
+            # Using gemini-3-flash-preview as requested
+            try:
+                Settings.llm = Gemini(
+                    model_name="models/gemini-3-flash-preview", 
+                    api_key=settings.GEMINI_API_KEY,
+                    temperature=0.1,
+                )
+                
+                Settings.embed_model = GeminiEmbedding(
+                    model_name="models/text-embedding-004",
+                    api_key=settings.GEMINI_API_KEY,
+                )
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to configure Gemini models: {e}")
+                return False
             
-            Settings.embed_model = GeminiEmbedding(
-                model_name="models/text-embedding-004",
-                api_key=settings.GEMINI_API_KEY,
-            )
-            
-            # Load FAISS index
+            # Load index
             logger.info("Loading index from storage...")
-            storage_context = StorageContext.from_defaults(
-                persist_dir=str(self._storage_path)
-            )
-            
-            self._index = load_index_from_storage(storage_context)
-            self._query_engine = self._index.as_query_engine(
-                similarity_top_k=5,
-                response_mode="tree_summarize"
-            )
+            try:
+                storage_context = StorageContext.from_defaults(
+                    persist_dir=str(self._storage_path)
+                )
+                
+                self._index = load_index_from_storage(storage_context)
+                self._query_engine = self._index.as_query_engine(
+                    similarity_top_k=5,
+                    response_mode="tree_summarize"
+                )
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to load index from storage: {e}")
+                logger.error("[ACTION REQUIRED] The index might be corrupted or incompatible. Try re-running 'python scripts/index_codebase.py'.")
+                return False
             
             # Load index statistics
             stats_file = self._storage_path / "index_stats.json"
             if stats_file.exists():
-                with open(stats_file, 'r', encoding='utf-8') as f:
-                    self._index_stats = json.load(f)
+                try:
+                    with open(stats_file, 'r', encoding='utf-8') as f:
+                        self._index_stats = json.load(f)
+                except Exception as e:
+                    logger.warning(f"[WARN] Failed to load index stats: {e}")
             
             self._initialized = True
-            logger.info("✅ Code RAG Service initialized successfully")
+            logger.info("Code RAG Service initialized successfully")
             return True
             
         except Exception as e:
             # CRITICAL: Log the full traceback to understand why it fails
             import traceback
             trace = traceback.format_exc()
-            logger.error(f"❌ Failed to initialize RAG service: {e}\n{trace}")
+            logger.error(f"[FATAL] Failed to initialize RAG service: {e}\n{trace}")
             return False
     
     def get_index_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the code index.
-        
+
         Returns:
             Dict with index statistics
         """
+        # Ensure service is initialized before returning stats
+        self._ensure_initialized()
+
         if self._index_stats:
             return self._index_stats
-        
+
         # Default stats if not loaded
         return {
             "status": "not_indexed",
@@ -167,7 +189,7 @@ class CodeRAGService:
         if not self._ensure_initialized():
             return {
                 "response": (
-                    "❌ **Serviço RAG não disponível**\n\n"
+                    "[ERRO] **Serviço RAG não disponível**\n\n"
                     "O índice de código não foi encontrado ou o serviço não pôde ser inicializado.\n\n"
                     "**Possíveis causas:**\n"
                     "1. GEMINI_API_KEY não configurada\n"
@@ -201,7 +223,7 @@ class CodeRAGService:
                 full_query = f"Contexto da conversa:\n{context_str}\n\nPergunta atual: {message}"
             
             # Query the RAG engine
-            logger.info(f"🔍 Querying codebase: {message[:100]}...")
+            logger.info(f"[QUERY] Querying codebase: {message[:100]}...")
             response = self._query_engine.query(full_query)
             
             # Extract source nodes (code references)
@@ -232,7 +254,7 @@ class CodeRAGService:
         except Exception as e:
             logger.error(f"Error querying codebase: {e}", exc_info=True)
             return {
-                "response": f"❌ **Erro ao processar consulta**\n\n{str(e)}",
+                "response": f"[ERRO] **Erro ao processar consulta**\n\n{str(e)}",
                 "code_references": [],
                 "metadata": {
                     "response_time": 0,

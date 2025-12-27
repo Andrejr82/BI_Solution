@@ -21,20 +21,21 @@ class DataScopeService:
     def __init__(self):
         # Determine path once
         docker_path = Path("/app/data/parquet/admmat.parquet")
-        dev_path = Path(__file__).parent.parent.parent / "data" / "parquet" / "admmat.parquet"
-        
+        # Fix: Point to local backend/app/data/parquet/admmat.parquet
+        dev_path = Path(__file__).parent.parent / "data" / "parquet" / "admmat.parquet"
+
         if docker_path.exists():
             self.parquet_path = str(docker_path)
         else:
             self.parquet_path = str(dev_path)
-            
+
         logger.info(f"DataScopeService: Initialized with Lazy Path: {self.parquet_path}")
 
     def _get_base_lazyframe(self) -> pl.LazyFrame:
         """
         Returns a base LazyFrame with global filters applied.
         WORKAROUND: Uses read_parquet().lazy() instead of scan_parquet() 
-        to avoid 'assertion left == right failed' panic in streaming engine.
+        to avoid 'assertion left == right failed' panic in streaming engine (Polars 1.34.0).
         """
         # lf = pl.scan_parquet(self.parquet_path)
         # Using eager read + lazy conversion to bypass streaming reader bug
@@ -42,7 +43,7 @@ class DataScopeService:
             lf = pl.read_parquet(self.parquet_path).lazy()
         except Exception as e:
             logger.error(f"Failed to read parquet file eagerly: {e}")
-            # Fallback to scan if read fails (though scan is likely to fail too if it's the same bug)
+            # Fallback to scan if read fails
             lf = pl.scan_parquet(self.parquet_path)
         
         # GLOBAL FILTER: Apply allowed UNEs whitelist if configured
@@ -70,7 +71,8 @@ class DataScopeService:
             lf = self._get_base_lazyframe()
             
             # 1. Apply User Permission Filters
-            if not user or user.role == "admin" or "*" in user.segments_list:
+            # DEFENSIVE FIX: Also check username='admin' in case token has wrong role
+            if not user or user.role == "admin" or user.username == "admin" or "*" in user.segments_list:
                 # Admin or Full Access: No segment filter
                 pass
             else:
@@ -81,7 +83,7 @@ class DataScopeService:
                 
                 # Check schema for column name (optimization: cached schema could be better)
                 schema = lf.collect_schema()
-                segment_col = "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
+                segment_col = "nomesegmento" if "nomesegmento" in schema.names() else "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
                 
                 if segment_col in schema.names():
                     lf = lf.filter(pl.col(segment_col).is_in(allowed_segments))
@@ -98,7 +100,7 @@ class DataScopeService:
             result_df = lf.collect()
             
             elapsed = time.perf_counter() - start_time
-            logger.info(f"⚡ Filtro LAZY (via Eager) para {user.username}: {result_df.height} linhas em {elapsed:.4f}s")
+            logger.info(f"[INFO] Filtro LAZY (via Eager) para {user.username}: {result_df.height} linhas em {elapsed:.4f}s")
             
             return result_df
 
@@ -114,7 +116,7 @@ class DataScopeService:
         try:
             lf = self._get_base_lazyframe()
             
-            if not user or user.role == "admin" or "*" in user.segments_list:
+            if not user or user.role == "admin" or user.username == "admin" or "*" in user.segments_list:
                 return lf
             
             allowed_segments = user.segments_list
@@ -122,7 +124,7 @@ class DataScopeService:
                 return self._get_empty_lazyframe(lf)
             
             schema = lf.collect_schema()
-            segment_col = "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
+            segment_col = "nomesegmento" if "nomesegmento" in schema.names() else "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
             
             if segment_col in schema.names():
                 return lf.filter(pl.col(segment_col).is_in(allowed_segments))
@@ -154,7 +156,7 @@ class DataScopeService:
         try:
             lf = self._get_base_lazyframe()
             schema = lf.collect_schema()
-            segment_col = "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
+            segment_col = "nomesegmento" if "nomesegmento" in schema.names() else "NOMESEGMENTO" if "NOMESEGMENTO" in schema.names() else "SEGMENTO"
             
             if segment_col in schema.names():
                 # Efficient unique value extraction

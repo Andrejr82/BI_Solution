@@ -168,8 +168,8 @@ export default function Rupturas() {
         text: top10.map(r => Math.round(r.NECESSIDADE)),
         textposition: 'outside',
         textfont: { color: '#2D2D2D', family: 'Inter, sans-serif' },
-        hovertemplate: '<b>%{x}</b><br>Necessidade: %{y:.0f} un<extra></extra>',
-        customdata: top10.map(r => r.PRODUTO)
+        hovertemplate: '<b>%{x}</b><br>Loja: %{customdata[1]}<br>Necessidade: %{y:.0f} un<extra></extra>',
+        customdata: top10.map(r => [r.PRODUTO, r.UNE_NOME || 'N/A'])
       }],
       layout: {
         title: {
@@ -347,11 +347,12 @@ export default function Rupturas() {
     const items = data();
     if (items.length === 0) return;
 
-    const headers = ['Produto', 'Nome', 'UNE', 'Segmento', 'Grupo', 'Venda 30d', 'Estoque UNE', 'Estoque CD', 'Linha Verde', 'Criticidade %', 'Necessidade'];
+    const headers = ['Produto', 'Nome', 'UNE', 'Loja', 'Segmento', 'Grupo', 'Venda 30d', 'Estoque UNE', 'Estoque CD', 'Linha Verde', 'Criticidade %', 'Necessidade'];
     const rows = items.map(item => [
       item.PRODUTO,
       item.NOME,
       item.UNE,
+      item.UNE_NOME || '',
       item.NOMESEGMENTO || '',
       (item as any).NOMEGRUPO || '',
       item.VENDA_30DD,
@@ -683,8 +684,8 @@ export default function Rupturas() {
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <p class="text-sm text-muted">UNE</p>
-                  <p class="font-medium">{selectedProduct()!.UNE}</p>
+                  <p class="text-sm text-muted">UNE / Loja</p>
+                  <p class="font-medium">{selectedProduct()!.UNE} - {selectedProduct()!.UNE_NOME || 'N/A'}</p>
                 </div>
                 <div>
                   <p class="text-sm text-muted">Segmento</p>
@@ -767,6 +768,7 @@ export default function Rupturas() {
                   <tr class="border-b">
                     <th class="text-left p-2 font-semibold">Código</th>
                     <th class="text-left p-2 font-semibold">Produto</th>
+                    <th class="text-left p-2 font-semibold">UNE / Loja</th>
                     <th class="text-right p-2 font-semibold">Criticidade</th>
                     <th class="text-right p-2 font-semibold">Necessidade</th>
                     <th class="text-right p-2 font-semibold">Venda 30d</th>
@@ -778,7 +780,13 @@ export default function Rupturas() {
                     {(produto) => (
                       <tr class="border-b hover:bg-muted/50 transition-colors">
                         <td class="p-2 font-mono text-xs">{produto.PRODUTO}</td>
-                        <td class="p-2 max-w-[250px] truncate" title={produto.NOME}>{produto.NOME}</td>
+                        <td class="p-2 max-w-[200px] truncate" title={produto.NOME}>{produto.NOME}</td>
+                        <td class="p-2">
+                          <div class="flex flex-col">
+                            <span class="text-xs font-mono">{produto.UNE}</span>
+                            <span class="text-[10px] text-muted-foreground truncate max-w-[100px]" title={produto.UNE_NOME}>{produto.UNE_NOME}</span>
+                          </div>
+                        </td>
                         <td class="p-2 text-right">
                           <span class={`px-2 py-0.5 rounded text-xs font-bold ${produto.CRITICIDADE_PCT >= 75 ? 'bg-red-500/20 text-red-500' :
                             produto.CRITICIDADE_PCT >= 50 ? 'bg-orange-500/20 text-orange-500' :
@@ -868,7 +876,10 @@ export default function Rupturas() {
                             <div class="text-xs text-muted-foreground font-mono">{item.PRODUTO}</div>
                           </td>
                           <td class="px-4 py-3">
-                            <span class="px-2 py-1 bg-secondary rounded text-xs font-mono">{item.UNE}</span>
+                            <div class="flex flex-col">
+                              <span class="px-2 py-1 bg-secondary rounded text-xs font-mono w-fit">{item.UNE}</span>
+                              <span class="text-[10px] text-muted-foreground mt-1 truncate max-w-[120px]" title={item.UNE_NOME}>{item.UNE_NOME}</span>
+                            </div>
                           </td>
                           <td class="px-4 py-3 text-right font-medium">
                             <div class="flex items-center justify-end gap-1 text-green-500">

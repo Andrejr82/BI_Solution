@@ -23,6 +23,7 @@ import Examples from './pages/Examples';
 import Help from './pages/Help';
 import SharedConversation from './pages/SharedConversation';
 import CodeChat from './pages/CodeChat';
+import About from './pages/About';
 
 // Importar Store de Autenticação
 import auth from './store/auth';
@@ -99,6 +100,7 @@ function App() {
         <Route path="/code-chat" component={() => <RoleRoute component={<CodeChat />} requiredRole="admin" />} />
         <Route path="/diagnostics" component={() => <RoleRoute component={<Diagnostics />} requiredRole="admin" />} />
         <Route path="/help" component={() => <PrivateRoute component={<Help />} />} />
+        <Route path="/about" component={() => <PrivateRoute component={<About />} />} />
         <Route path="/profile" component={() => <PrivateRoute component={<Profile />} />} />
         <Route path="/admin" component={() => <RoleRoute component={<Admin />} requiredRole="admin" />} />
       </Route>

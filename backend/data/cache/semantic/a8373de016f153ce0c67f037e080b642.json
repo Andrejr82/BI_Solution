@@ -1,0 +1,39 @@
+{
+  "type": "code_result",
+  "result": {
+    "result": [
+      {
+        "codigo": 25,
+        "nome": "CANETA BIC CRISTAL DURA 1.0 AZUL R.835205",
+        "une": 2599,
+        "estoque": 23.0,
+        "venda_30d": 58.0,
+        "linha_verde": 46.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 745.08
+      },
+      {
+        "codigo": 25,
+        "nome": "CANETA BIC CRISTAL DURA 1.0 AZUL R.835205",
+        "une": 2720,
+        "estoque": 20.0,
+        "venda_30d": 66.0,
+        "linha_verde": 68.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 745.08
+      },
+      {
+        "codigo": 25,
+        "nome": "CANETA BIC CRISTAL DURA 1.0 AZUL R.835205",
+        "une": 2906,
+        "estoque": 15.0,
+        "venda_30d": 20.0,
+        "linha_verde": 13.0,
+        "segmento": "PAPELARIA",
+        "estoque_cd": 745.08
+      }
+    ],
+    "chart_spec": null
+  },
+  "chart_spec": null
+}

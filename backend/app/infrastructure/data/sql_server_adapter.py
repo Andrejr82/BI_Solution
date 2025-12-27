@@ -7,6 +7,7 @@ import aioodbc
 from typing import Any, Dict, List, Optional
 
 from app.infrastructure.data.base import DatabaseAdapter
+from app.core.utils.serializers import TypeConverter
 
 logger = logging.getLogger(__name__)
 
@@ -42,21 +43,43 @@ class SQLServerAdapter(DatabaseAdapter):
             self._pool = None
             logger.info("SQL Server connection pool closed.")
 
-    async def execute_query(self, query: str) -> List[Dict[str, Any]]:
-        """Executes a SQL query asynchronously."""
+    async def execute_query(self, query: str, params: Optional[list] = None) -> List[Dict[str, Any]]:
+        """
+        Executes a SQL query asynchronously with safe serialization.
+        Supports parameterized queries to prevent SQL Injection.
+        """
         if not self._pool:
             await self.connect()
-        
+
         async with self._pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 logger.debug(f"Executing query: {query}")
-                await cursor.execute(query)
-                
+                if params:
+                    await cursor.execute(query, params)
+                else:
+                    await cursor.execute(query)
+
                 if cursor.description:
                     columns = [column[0] for column in cursor.description]
                     rows = await cursor.fetchall()
-                    results = [dict(zip(columns, row)) for row in rows]
-                    logger.debug(f"Query returned {len(results)} rows.")
+
+                    # Converter Row objects para dicts
+                    results = []
+                    for row in rows:
+                        try:
+                            # Tenta usar _mapping (SQLAlchemy Row)
+                            if hasattr(row, '_mapping'):
+                                results.append(TypeConverter.convert(dict(row._mapping)))
+                            else:
+                                # Fallback: zip com colunas e converter tipos
+                                row_dict = dict(zip(columns, row))
+                                results.append(TypeConverter.convert(row_dict))
+                        except Exception as e:
+                            logger.warning(f"Row conversion error: {e}, using basic fallback")
+                            # Último recurso: conversão simples
+                            results.append(dict(zip(columns, row)))
+
+                    logger.debug(f"Query returned {len(results)} rows (serialization-safe).")
                     return results
                 else:
                     return []

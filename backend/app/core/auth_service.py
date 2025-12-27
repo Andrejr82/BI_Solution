@@ -66,7 +66,7 @@ class AuthService:
         # Priority 1: Supabase Auth (if enabled)
         if self.use_supabase:
             try:
-                user_data = await self._auth_from_supabase(username, password)
+                user_data = await self._auth_from_supabase(username, password, db)
                 if user_data:
                     security_logger.info(f"User '{username}' authenticated via Supabase")
                     return user_data
@@ -127,17 +127,25 @@ class AuthService:
 
         # Parse allowed_segments
         allowed_segments = []
+        role = user.role
+
         if user.allowed_segments:
             try:
                 allowed_segments = json.loads(user.allowed_segments)
-            except:
+            except Exception as e:
+                security_logger.warning(f"Failed to parse allowed_segments for '{username}' from SQL: {e}")
                 allowed_segments = []
+
+        # 🚨 CRITICAL FIX: Admin ALWAYS gets full access (SQL Server path)
+        if role == "admin":
+            allowed_segments = ["*"]
+            security_logger.info(f"Admin user '{username}' (SQL Server) granted full access (allowed_segments=['*'])")
 
         return {
             "id": str(user.id),
             "username": user.username,
             "email": user.email or "",
-            "role": user.role,
+            "role": role,
             "is_active": user.is_active,
             "allowed_segments": allowed_segments
         }
@@ -145,7 +153,8 @@ class AuthService:
     async def _auth_from_supabase(
         self,
         username: str,
-        password: str
+        password: str,
+        db: Optional[AsyncSession] = None
     ) -> Optional[dict]:
         """Authenticate from Supabase Auth"""
         try:
@@ -195,23 +204,58 @@ class AuthService:
                 return None
 
             user = response.session.user
+            user_id = str(user.id)
 
-            # Buscar metadados adicionais (role) se existir tabela user_profiles
-            role = "user"  # Default
-            try:
-                profile_response = supabase.table("user_profiles").select("*").eq("id", str(user.id)).execute()
-                if profile_response.data and len(profile_response.data) > 0:
-                    role = profile_response.data[0].get("role", "user")
-            except Exception as e:
-                logger.warning(f"Could not fetch user profile from Supabase: {e}")
+            # 🔧 FIX: Authorization logic based on USE_SQL_SERVER setting
+            role = "user"
+            allowed_segments = []
 
-            # Get allowed_segments from user_metadata
-            user_metadata = user.user_metadata or {}
-            allowed_segments = user_metadata.get("allowed_segments", [])
+            if self.use_sql_server and db:
+                # Option 1: SQL Server is enabled and DB session was passed
+                # Get role and segments from SQL Server
+                try:
+                    from sqlalchemy import text
+                    import json
+
+                    result = await db.execute(
+                        select(User).where(User.id == user.id)
+                    )
+                    db_user = result.scalar_one_or_none()
+                    if db_user:
+                        role = db_user.role
+                        if db_user.allowed_segments:
+                            try:
+                                allowed_segments = json.loads(db_user.allowed_segments)
+                            except:
+                                allowed_segments = []
+                        security_logger.info(f"Permissions for '{username}' loaded from SQL Server")
+                except Exception as e:
+                    security_logger.error(f"Failed to fetch permissions from SQL Server for '{username}': {e}")
+
+            else:
+                # Option 2: SQL Server disabled OR db session not available
+                # Get role from Supabase user_profiles table
+                try:
+                    profile_resp = supabase.table("user_profiles").select("role, username").eq("id", user_id).execute()
+                    if profile_resp.data:
+                        role = profile_resp.data[0].get("role", "user")
+                        security_logger.info(f"User '{username}' role loaded from Supabase user_profiles: {role}")
+                    else:
+                        security_logger.warning(f"No profile found for '{username}' in user_profiles table")
+                except Exception as profile_error:
+                    security_logger.error(f"Could not fetch profile from Supabase for '{username}': {profile_error}")
+                    # Fallback to user_metadata (LESS SECURE)
+                    user_metadata = user.user_metadata or {}
+                    role = user_metadata.get("role", "user")
+
+            # 🚨 CRITICAL FIX: Admin ALWAYS gets full access (Supabase path)
+            if role == "admin":
+                allowed_segments = ["*"]
+                security_logger.info(f"Admin user '{username}' (Supabase) granted full access (allowed_segments=['*'])")
 
             return {
-                "id": str(user.id),
-                "username": email.split("@")[0],  # Extrair username do email
+                "id": user_id,
+                "username": username,
                 "email": user.email or email,
                 "role": role,
                 "is_active": True,
@@ -267,19 +311,28 @@ class AuthService:
 
             # Parse allowed_segments
             allowed_segments = []
+            role = user_row["role"]
+
             if "allowed_segments" in user_row and user_row["allowed_segments"]:
                 try:
                     # It should be a JSON string
                     allowed_segments = json.loads(user_row["allowed_segments"])
-                except:
+                except Exception as e:
                     # Fallback if it's not JSON (e.g. legacy data)
+                    security_logger.warning(f"Failed to parse allowed_segments for '{username}': {e}")
                     allowed_segments = []
+
+            # 🚨 CRITICAL FIX: Admin ALWAYS gets full access
+            # Regardless of what's stored in DB, admin role = all segments
+            if role == "admin":
+                allowed_segments = ["*"]
+                security_logger.info(f"Admin user '{username}' granted full access (allowed_segments=['*'])")
 
             return {
                 "id": str(user_row["id"]),
                 "username": user_row["username"],
                 "email": user_row.get("email", ""),
-                "role": user_row["role"],
+                "role": role,
                 "is_active": user_row.get("is_active", True),
                 "allowed_segments": allowed_segments
             }

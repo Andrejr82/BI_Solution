@@ -28,16 +28,16 @@ class ParquetDataSource:
         dev_path = MAIN_DATA_FILE
 
         self.file_path = docker_path if docker_path.exists() else dev_path
-        logger.info(f"📊 Usando arquivo: {self.file_path}")
+        logger.info(f"[FILE] Usando arquivo: {self.file_path}")
 
     def connect(self) -> bool:
         """Verifica se arquivo Parquet existe."""
         if self.file_path.exists():
             self._connected = True
-            logger.info(f"✓ Parquet conectado: {self.file_path}")
+            logger.info(f"[OK] Parquet conectado: {self.file_path}")
             return True
 
-        logger.error(f"✗ Arquivo não encontrado: {self.file_path}")
+        logger.error(f"[ERROR] Arquivo não encontrado: {self.file_path}")
         self._connected = False
         return False
 
@@ -48,7 +48,7 @@ class ParquetDataSource:
     def _load_data(self, force_reload: bool = False) -> pd.DataFrame:
         """
         Carrega os dados do arquivo Parquet usando ParquetCache global.
-        ✅ OTIMIZADO: Usa cache global ao invés de cache local.
+        [OK]: OTIMIZADO: Usa cache global ao invés de cache local.
         """
         try:
             # Usar ParquetCache global (já retorna Polars DataFrame)
@@ -56,15 +56,15 @@ class ParquetDataSource:
 
             # Converter de Polars para Pandas (necessário para compatibilidade com ferramentas existentes)
             df = df_polars.to_pandas()
-            logger.info(f"✓ Dados obtidos do cache: {df.shape}")
+            logger.info(f"[OK] Dados obtidos do cache: {df.shape}")
 
             return df
 
         except FileNotFoundError as e:
-            logger.error(f"✗ ERRO CRÍTICO: Arquivo não encontrado: {self.file_path}")
+            logger.error(f"[ERROR] ERRO CRÍTICO: Arquivo não encontrado: {self.file_path}")
             raise
         except Exception as e:
-            logger.error(f"✗ ERRO ao ler Parquet: {e}")
+            logger.error(f"[ERROR] ERRO ao ler Parquet: {e}")
             raise
 
     def get_data(self, limit: int = None) -> pd.DataFrame:

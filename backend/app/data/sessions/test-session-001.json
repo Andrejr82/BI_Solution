@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Ola, quais sao as principais funcionalidades que voce oferece?"
+    },
+    {
+      "role": "assistant",
+      "content": "Olá! É um prazer apresentar como posso ajudar você. Como seu Assistente de BI, sou capaz de realizar análises profundas sobre a operação da Caculinha, além de conversar sobre diversos outros assuntos.\n\nAqui estão as minhas principais funcionalidades:\n\n1.  **Análise de Vendas e Estoque:** Posso consultar rapidamente o desempenho de vendas (últimos 30 dias), níveis de estoque atual, estoque no CD e a situação de qualquer produto, fabricante ou segmento.\n2.  **Geração de Gráficos e Visualizações:** Se você precisar visualizar dados, posso gerar gráficos de barras, pizza, linhas e rankings. Basta pedir, por exemplo, \"mostre um gráfico das vendas por segmento\".\n3.  **Gestão de Abastecimento e Rupturas:** Consigo identificar quais produtos estão em situação crítica (estoque zerado no CD e baixo na loja) e listar o que precisa ser reabastecido em cada unidade.\n4.  **Transferências Inteligentes:** Posso sugerir e validar a movimentação de mercadorias entre lojas (UNEs) para equilibrar o estoque, garantindo que o produto esteja onde a demanda é maior.\n5.  **Cálculo de Preços e Descontos:** Aplico automaticamente as regras de negócio da empresa para calcular preços finais, considerando se é atacado ou varejo, o ranking do produto e a forma de pagamento escolhida.\n6.  **Consultas Flexíveis:** Você pode me pedir rankings dos \"top 10 produtos mais vendidos\", comparar o estoque entre lojas ou buscar detalhes específicos de um fabricante.\n\nAlém disso, sou um assistente conversacional completo. Posso ajudar com dúvidas gerais, redação de textos ou apenas bater um papo.\n\nComo posso ajudar você a começar hoje? Quer ver um ranking de vendas ou consultar o estoque de algum setor específico?"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Mostre os top 5 produtos mais vendidos"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui estão os 5 produtos mais vendidos nos últimos 30 dias. O destaque fica para o **Papel Chamex A4**, que lidera as vendas com mais de 45 mil unidades.\n\n| PRODUTO | NOME | VENDAS (30 DIAS) |\n| :--- | :--- | :--- |\n| 1000000000000000000 | PAPEL CHAMEX A4 75GRS 500FLS | 45.048,00 |\n| 1000000000000000000 | PAPEL 40KG 96X66 120G/M BRANCO | 28.971,00 |\n| 1000000000000000000 | TNT 40GRS 100%O LG 1.40 035 BRANCO | 25.544,00 |\n| 1000000000000000000 | TNT 40GRS 100%O LG 1.40 034 PRETO | 23.308,00 |\n| 1000000000000000000 | TNT 40GRS 100%O LG 1.40 029 AZUL ROYAL | 17.063,43 |\n\nAqui está o gráfico solicitado:"
+    }
+  ]
+}

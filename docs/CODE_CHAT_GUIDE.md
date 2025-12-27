@@ -1,8 +1,7 @@
 # Code Chat - Agente Fullstack Completo
 
-## 🎯 O que é?
-
-Um **agente de IA fullstack** que pode responder qualquer pergunta sobre seu projeto usando RAG (Retrieval-Augmented Generation) com Gemini 2.5 Flash.
+## Visão Geral
+O Code Chat do Agente BI utiliza o modelo **Gemini 3.0 Flash** para responder perguntas sobre o código-fonte. O sistema usa RAG (Retrieval Augmented Generation) para injetar o contexto dos arquivos relevantes no prompt da IA.
 
 ## ✨ Funcionalidades
 

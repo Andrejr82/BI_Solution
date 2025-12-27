@@ -49,7 +49,7 @@ class HybridDataAdapter(DatabaseAdapter):
         # 1. Inicializar Parquet (sempre necessário como fallback)
         # Usar configuração centralizada do settings.py
         parquet_path = settings.PARQUET_FILE_PATH
-        logger.info(f"📂 Usando arquivo Parquet: {parquet_path}")
+        logger.info(f"[PARQUET] Usando arquivo Parquet: {parquet_path}")
         self.parquet_adapter = ParquetAdapter(parquet_path)
 
         # 2. Inicializar SQL Server se habilitado
@@ -66,21 +66,22 @@ class HybridDataAdapter(DatabaseAdapter):
             self.current_source = "parquet"
 
     async def connect(self) -> None:
-        """Tenta conectar ao SQL Server (apenas para check), mas garante Parquet para queries."""
+        """Tenta conectar ao SQL Server e define a fonte primária com base na disponibilidade."""
         if self.use_sql_server and self.sql_adapter:
             try:
-                # Tentar conectar com timeout apenas para garantir que o serviço está de pé se necessário
+                # Tentar conectar com timeout
                 await asyncio.wait_for(self.sql_adapter.connect(), timeout=self.sql_timeout)
                 self.sql_available = True
-                # self.current_source = "sql_server" # REMOVIDO: Forçar Parquet como fonte de dados
-                logger.info("✅ Conectado ao SQL Server (Disponível para Sync/Auth).")
+                self.current_source = "sql_server"
+                logger.info("[SQL OK] Conectado ao SQL Server. Fonte de dados definida como SQL Server.")
             except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"⚠️ Falha ao conectar SQL Server: {e}. Operando apenas com Parquet.")
+                logger.warning(f"[FALLBACK] Falha ao conectar SQL Server: {e}. Fallback para Parquet ativado.")
                 self.sql_available = False
+                self.current_source = "parquet"
+        else:
+            self.current_source = "parquet"
         
-        # Parquet "conecta" (lazy)
-        # Garantir que a fonte atual seja SEMPRE parquet para queries
-        self.current_source = "parquet"
+        # Parquet "conecta" (lazy) para estar pronto para fallback
         await self.parquet_adapter.connect()
 
     async def disconnect(self) -> None:
@@ -91,10 +92,29 @@ class HybridDataAdapter(DatabaseAdapter):
 
     async def execute_query(self, query_filters: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
         """
-        Executa query EXCLUSIVAMENTE no Parquet.
-        Aceita kwargs (ex: required_columns, query_text)
+        Executa query com fallback automático: SQL Server -> Parquet.
         """
-        if self.parquet_adapter:
+        result = []
+        used_source = self.current_source
+
+        # Tentar SQL Server primeiro se for a fonte atual
+        if self.current_source == "sql_server" and self.sql_adapter:
+            try:
+                # SQL Adapter deve suportar a mesma interface ou kwargs
+                result = await self.sql_adapter.execute_query(query_filters, **kwargs)
+                return result
+            except Exception as e:
+                logger.error(f"[ERROR] Erro na consulta SQL Server: {e}")
+                if self.fallback_enabled:
+                    logger.info("[FALLBACK] Tentando fallback para Parquet...")
+                    used_source = "parquet"
+                    # Não alteramos self.current_source permanentemente aqui, apenas para esta query
+                    # ou poderíamos alterar se quiséssemos "downgrade" automático
+                else:
+                    raise e
+        
+        # Executar no Parquet (se for a fonte atual ou fallback)
+        if used_source == "parquet" and self.parquet_adapter:
             return await self.parquet_adapter.execute_query(query_filters, **kwargs)
         
         return []

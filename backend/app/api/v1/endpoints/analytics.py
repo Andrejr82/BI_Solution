@@ -207,9 +207,13 @@ async def get_sales_analysis(
                 "distribuicao_abc": {"A": 0, "B": 0, "C": 0, "detalhes": []}
             }
 
-        # Determinar nomes corretos das colunas
-        categoria_col = "NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else ("CATEGORIA" if "CATEGORIA" in df.columns else None)
-        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else ("SEGMENTO" if "SEGMENTO" in df.columns else None)
+        # Determinar nomes corretos das colunas (suporta tanto maiúsculas quanto minúsculas)
+        categoria_col = "nomecategoria" if "nomecategoria" in df.columns else ("NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else ("CATEGORIA" if "CATEGORIA" in df.columns else None))
+        segmento_col = "nomesegmento" if "nomesegmento" in df.columns else ("NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else ("SEGMENTO" if "SEGMENTO" in df.columns else None))
+        produto_col = "codigo" if "codigo" in df.columns else "PRODUTO"
+        nome_col = "nome_produto" if "nome_produto" in df.columns else "NOME"
+        venda_col = "venda_30_d" if "venda_30_d" in df.columns else "VENDA_30DD"
+        estoque_col = "estoque_atual" if "estoque_atual" in df.columns else "ESTOQUE_UNE"
 
         # Aplicar filtros se fornecidos
         if categoria and categoria_col:
@@ -220,13 +224,17 @@ async def get_sales_analysis(
         # Função auxiliar para casting seguro
         def safe_cast_col(col_name):
             if col_name not in df.columns: return pl.lit(0).cast(pl.Float64)
+            # Se já for numérico, não precisa converter de string
+            col_type = df.schema[col_name]
+            if col_type in [pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.Int16, pl.Int8]:
+                return pl.col(col_name).fill_null(0).cast(pl.Float64)
             return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
 
         # 1. Vendas por Categoria (Top 10)
         vendas_categoria = []
-        if categoria_col:
+        if categoria_col and venda_col in df.columns:
             df_cat = df.group_by(categoria_col).agg([
-                safe_cast_col("VENDA_30DD").sum().alias("vendas")
+                safe_cast_col(venda_col).sum().alias("vendas")
             ]).sort("vendas", descending=True).head(10)
 
             for row in df_cat.iter_rows(named=True):
@@ -237,13 +245,13 @@ async def get_sales_analysis(
 
         # 2. Giro de Estoque (Top 15)
         giro_estoque = []
-        if "VENDA_30DD" in df.columns and "ESTOQUE_UNE" in df.columns:
+        if venda_col in df.columns and estoque_col in df.columns and produto_col in df.columns and nome_col in df.columns:
             df_giro = df.with_columns([
-                safe_cast_col("VENDA_30DD").alias("v_clean"),
-                safe_cast_col("ESTOQUE_UNE").alias("e_clean")
+                safe_cast_col(venda_col).alias("v_clean"),
+                safe_cast_col(estoque_col).alias("e_clean")
             ]).filter(
                 (pl.col("v_clean") > 0) & (pl.col("e_clean") > 0)
-            ).group_by("PRODUTO", "NOME").agg([
+            ).group_by(produto_col, nome_col).agg([
                 pl.col("v_clean").sum().alias("vendas"),
                 pl.col("e_clean").mean().alias("estoque_medio")
             ]).with_columns([
@@ -252,56 +260,57 @@ async def get_sales_analysis(
 
             for row in df_giro.iter_rows(named=True):
                 giro_estoque.append({
-                    "produto": str(row["PRODUTO"]),
-                    "nome": str(row["NOME"])[:40],
+                    "produto": str(row[produto_col]),
+                    "nome": str(row[nome_col])[:40],
                     "giro": round(float(row["giro"]), 2)
                 })
 
         # 3. Distribuição ABC (Princípio de Pareto - Dataset Completo)
         distribuicao_abc = {"A": 0, "B": 0, "C": 0, "detalhes": [], "receita_por_classe": {}}
-        
-        # Usamos MES_01 para faturamento ou VENDA_30DD se MES_01 estiver zerado
+
+        # Usamos MES_01 para faturamento ou venda_col se MES_01 estiver zerado
         # No varejo, Pareto pode ser por Valor ou Volume
-        val_col = "MES_01" if "MES_01" in df.columns else "VENDA_30DD"
-        
-        df_abc_raw = df.with_columns([
-            safe_cast_col(val_col).alias("valor_clean")
-        ]).filter(pl.col("valor_clean") > 0)
+        val_col = "MES_01" if "MES_01" in df.columns else venda_col
 
-        if not df_abc_raw.is_empty():
-            # Ordenar por valor decrescente
-            df_abc = df_abc_raw.select([
-                pl.col("PRODUTO"), 
-                pl.col("NOME"), 
-                pl.col("valor_clean").alias("receita")
-            ]).sort("receita", descending=True)
+        if val_col in df.columns and produto_col in df.columns and nome_col in df.columns:
+            df_abc_raw = df.with_columns([
+                safe_cast_col(val_col).alias("valor_clean")
+            ]).filter(pl.col("valor_clean") > 0)
 
-            total_receita = df_abc.select(pl.col("receita").sum()).item()
-            
-            if total_receita > 0:
-                # Calcular Acumulado
-                df_abc = df_abc.with_columns([
-                    (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
-                ])
+            if not df_abc_raw.is_empty():
+                # Ordenar por valor decrescente
+                df_abc = df_abc_raw.select([
+                    pl.col(produto_col).alias("PRODUTO"),
+                    pl.col(nome_col).alias("NOME"),
+                    pl.col("valor_clean").alias("receita")
+                ]).sort("receita", descending=True)
 
-                # Classificação ABC (80/15/5)
-                df_abc = df_abc.with_columns([
-                    pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
-                    .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
-                    .otherwise(pl.lit("C")).alias("classe")
-                ])
+                total_receita = df_abc.select(pl.col("receita").sum()).item()
 
-                # Resultados
-                resumo = df_abc.group_by("classe").agg([
-                    pl.count().alias("qtd"),
-                    pl.col("receita").sum().alias("soma")
-                ])
-                
-                for row in resumo.iter_rows(named=True):
-                    distribuicao_abc[row["classe"]] = row["qtd"]
-                    distribuicao_abc["receita_por_classe"][row["classe"]] = row["soma"]
+                if total_receita > 0:
+                    # Calcular Acumulado
+                    df_abc = df_abc.with_columns([
+                        (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
+                    ])
 
-                distribuicao_abc["detalhes"] = df_abc.head(20).to_dicts()
+                    # Classificação ABC (80/15/5)
+                    df_abc = df_abc.with_columns([
+                        pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
+                        .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
+                        .otherwise(pl.lit("C")).alias("classe")
+                    ])
+
+                    # Resultados
+                    resumo = df_abc.group_by("classe").agg([
+                        pl.count().alias("qtd"),
+                        pl.col("receita").sum().alias("soma")
+                    ])
+
+                    for row in resumo.iter_rows(named=True):
+                        distribuicao_abc[row["classe"]] = row["qtd"]
+                        distribuicao_abc["receita_por_classe"][row["classe"]] = row["soma"]
+
+                    distribuicao_abc["detalhes"] = df_abc.head(20).to_dicts()
 
         return {
             "vendas_por_categoria": vendas_categoria,

@@ -67,12 +67,19 @@ async def login(
             detail="Inactive user"
         )
 
+    # 🚨 CRITICAL FIX: Double-check admin permissions before creating token
+    # This is a safety net in case AuthService somehow fails to set it correctly
+    allowed_segments = user_data.get("allowed_segments", [])
+    if user_data["role"] == "admin" and "*" not in allowed_segments:
+        logger.warning(f"Admin user '{user_data['username']}' missing full access - forcing ['*']")
+        allowed_segments = ["*"]
+
     # Generate tokens
     token_data = {
         "sub": user_data["id"],
         "username": user_data["username"],
         "role": user_data["role"],
-        "allowed_segments": user_data.get("allowed_segments", [])
+        "allowed_segments": allowed_segments
     }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
@@ -90,22 +97,46 @@ async def login_form(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ) -> Token:
-    """Login endpoint that accepts form data (used by HTML login page)."""
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(password, user.hashed_password):
+    """
+    Login endpoint that accepts form data (used by HTML login page).
+    🚨 FIXED: Now uses AuthService like /login endpoint to ensure consistency.
+    """
+    from app.core.auth_service import auth_service
+    from app.config.settings import settings
+
+    # 🚨 CRITICAL FIX: Use AuthService instead of direct DB query
+    # This ensures allowed_segments is included and admin gets ["*"]
+    user_data = await auth_service.authenticate_user(
+        username=username,
+        password=password,
+        db=db if settings.USE_SQL_SERVER else None,
+    )
+
+    if not user_data:
         security_logger.warning(f"Failed login (form) attempt for username: {username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not user.is_active:
+
+    if not user_data.get("is_active", False):
         security_logger.warning(f"Inactive user '{username}' attempted to log in (form).")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-    user.last_login = datetime.now(timezone.utc)
-    await db.commit()
-    token_data = {"sub": str(user.id), "username": user.username, "role": user.role}
+
+    # 🚨 CRITICAL FIX: Ensure admin always gets full access
+    allowed_segments = user_data.get("allowed_segments", [])
+    if user_data["role"] == "admin" and "*" not in allowed_segments:
+        logger.warning(f"Admin user '{username}' (form) missing full access - forcing ['*']")
+        allowed_segments = ["*"]
+
+    # ✅ NOW INCLUDES allowed_segments like /login endpoint
+    token_data = {
+        "sub": user_data["id"],
+        "username": user_data["username"],
+        "role": user_data["role"],
+        "allowed_segments": allowed_segments
+    }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     security_logger.info(f"User '{username}' logged in successfully (form).")
@@ -131,11 +162,19 @@ async def refresh_token(
         if not user or not user.is_active:
             security_logger.warning(f"Refresh token for non-existent or inactive user ID: {user_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+        # 🚨 CRITICAL FIX: Use segments_list property for correct parsing
+        # And enforce admin = ["*"] rule
+        allowed_segments = user.segments_list if hasattr(user, "segments_list") else []
+        if user.role == "admin" and "*" not in allowed_segments:
+            logger.warning(f"Admin user '{user.username}' missing full access in refresh - forcing ['*']")
+            allowed_segments = ["*"]
+
         token_data = {
-            "sub": str(user.id), 
-            "username": user.username, 
+            "sub": str(user.id),
+            "username": user.username,
             "role": user.role,
-            "allowed_segments": getattr(user, "allowed_segments", [])
+            "allowed_segments": allowed_segments
         }
         access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)

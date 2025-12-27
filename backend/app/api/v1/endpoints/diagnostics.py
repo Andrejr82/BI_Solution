@@ -128,10 +128,11 @@ async def test_sql_connection(
             message="SQL Server está desabilitado (USE_SQL_SERVER=false)"
         )
 
-    if not settings.DATABASE_URL:
+    # Verificar se temos a connection string do pyodbc
+    if not settings.PYODBC_CONNECTION_STRING:
         return ConnectionTestResult(
             success=False,
-            message="DATABASE_URL não configurado"
+            message="PYODBC_CONNECTION_STRING não configurado no .env"
         )
 
     try:
@@ -141,9 +142,9 @@ async def test_sql_connection(
 
         async def _test():
             try:
-                # Criar conexão temporária
+                # Criar conexão temporária usando a connection string ODBC
                 conn = await asyncio.wait_for(
-                    aioodbc.connect(dsn=str(settings.DATABASE_URL)),
+                    aioodbc.connect(dsn=settings.PYODBC_CONNECTION_STRING),
                     timeout=5.0
                 )
 

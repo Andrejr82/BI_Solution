@@ -1,0 +1,36 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "ola boa noite. como estao as vendas dos tecidos oxford em todas as unes ?"
+    },
+    {
+      "role": "assistant",
+      "content": "Olá! Boa noite! 😊 As vendas dos tecidos Oxford em todas as UNEs somam R$ 14.9 mil nos últimos 30 dias.\n\n| NOMESEGMENTO   |   VENDA_30DD |\n|:---------------|-------------:|\n| TECIDOS OXFORD |      14900.3 |"
+    },
+    {
+      "role": "user",
+      "content": "gere um rankig de vendas dos segmentos na une 2365"
+    },
+    {
+      "role": "assistant",
+      "content": "Com certeza! Aqui está o ranking de vendas dos segmentos na UNE 2365:\n\n| NOMESEGMENTO   |   VENDA_30DD |\n|:---------------|-------------:|\n| PAPELARIA      |       548.11 |\n| AVIAMENTOS     |       423.97 |\n| TECIDOS        |       389.14 |\n| ARMARINHO      |       178.76 |\n| TINTURARIA     |        26.9  |\n| DECORACAO      |        18.4  |\n| BAZAR          |         0    |\n| INFORMATICA    |         0    |\n| BRINQUEDOS     |         0    |\n| PRESENTES      |         0    |\n| UTILIDADES     |         0    |\n"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico de vendas dos top 10 tecidos na une 1685"
+    },
+    {
+      "role": "assistant",
+      "content": "Não foi possível gerar o gráfico no momento. Aparentemente, houve um problema ao carregar os dados ou a coluna 'GRUPO' não foi encontrada. 😔"
+    },
+    {
+      "role": "user",
+      "content": "gere um gráfico top 10 tecidos na une 1"
+    },
+    {
+      "role": "assistant",
+      "content": "Não foi possível gerar o gráfico no momento. Aparentemente, houve um problema na geração do gráfico. 😔"
+    }
+  ]
+}

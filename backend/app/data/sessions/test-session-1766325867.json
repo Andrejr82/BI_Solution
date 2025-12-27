@@ -1,0 +1,84 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Compare as vendas de TECIDOS vs PAPELARIA no último mês"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Quais produtos estão em ruptura mas têm estoque no CD?"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Mostre a curva ABC dos produtos por receita"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico solicitado:"
+    },
+    {
+      "role": "user",
+      "content": "Mostre produtos mais vendidos na UNE 1"
+    },
+    {
+      "role": "assistant",
+      "content": "Resposta processada, mas nenhum texto foi gerado. Por favor, tente reformular sua pergunta."
+    },
+    {
+      "role": "user",
+      "content": "Quais produtos do fabricante KIT têm melhor giro?"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    },
+    {
+      "role": "user",
+      "content": "Crie um gráfico de barras dos top 5 segmentos por vendas"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico com os 5 segmentos que mais venderam no último período.\n\nO segmento de **ARMARINHO E CONFECÇÃO** lidera o ranking, seguido de perto por **PAPELARIA** e **TECIDOS**. Juntos, esses cinco segmentos representam um volume significativo das vendas totais."
+    },
+    {
+      "role": "user",
+      "content": "Mostre a tendência de vendas dos últimos 30 dias"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico de tendência de vendas por segmento nos últimos 30 dias.\n\nComo podemos observar, os segmentos de **ARMARINHO E CONFECÇÃO**, **PAPELARIA** e **TECIDOS** apresentam os maiores volumes de venda, consolidando-se como os principais motores de receita no período. Essa visualização permite identificar quais categorias estão com maior tração e demanda atual."
+    },
+    {
+      "role": "user",
+      "content": "Faça um gráfico de pizza mostrando distribuição de vendas por categoria"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico de pizza com a distribuição das vendas por segmento.\n\nComo podemos observar, o segmento de **ARMARINHO E CONFECÇÃO** detém a maior fatia das vendas, seguido por **PAPELARIA** e **TECIDOS**. Juntos, esses três segmentos representam a grande maioria do volume de vendas total, que soma aproximadamente **R$ 3,63 milhões** entre as 10 principais categorias."
+    },
+    {
+      "role": "user",
+      "content": "Mostre produtos com COLUNA_INEXISTENTE maior que 100"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, mas não encontrei a coluna \"COLUNA_INEXISTENTE\" em nossa base de dados. \n\nPara que eu possa te ajudar com essa consulta, você poderia utilizar uma das colunas disponíveis? As principais são:\n\n*   **ESTOQUE_UNE**: Estoque atual na loja.\n*   **VENDA_30DD**: Vendas dos últimos 30 dias.\n*   **PRECO_VENDA**: Preço de venda do produto.\n*   **ESTOQUE_LV**: Linha verde (estoque ideal).\n\nSe você deseja ver, por exemplo, produtos com estoque maior que 100 ou vendas acima de 100, basta me avisar!"
+    },
+    {
+      "role": "user",
+      "content": "Mostre os top 10000 produtos por vendas"
+    },
+    {
+      "role": "assistant",
+      "content": "Desculpe, encontrei um erro ao processar sua solicitação: Maximum conversation turns exceeded."
+    }
+  ]
+}

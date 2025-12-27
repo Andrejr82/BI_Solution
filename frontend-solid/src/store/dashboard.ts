@@ -73,7 +73,7 @@ function createDashboardStore() {
 
   // Iniciar polling automaticamente apenas se estiver logado (verificação feita na view)
   createEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token && !state.isLive) {
         startPolling();
     }

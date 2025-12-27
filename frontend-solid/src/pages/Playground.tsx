@@ -228,7 +228,7 @@ print(response.json())
               <Cpu size={16} class="text-purple-500" />
               <div>
                  <div class="text-[10px] text-muted uppercase tracking-wider font-semibold">Modelo</div>
-                 <div class="text-sm font-mono font-bold">{modelInfo()?.model || 'Gemini 2.5'}</div>
+                 <div class="text-sm font-mono font-bold">{modelInfo()?.model || 'Gemini 3.0 Flash'}</div>
               </div>
            </div>
 

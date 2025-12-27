@@ -1,12 +1,272 @@
 {
-  "4af9e0afa4dadaeb5614db70f88dc35e": {
-    "query": "top 10 vendas une 2365",
-    "normalized": "top 10 vendas une 2365",
-    "timestamp": 1765759462.8141553
+  "8e5c349b3e270b3704520127be33fa65": {
+    "query": "quais grupos do segmento tecidos estão em queda na une 2365",
+    "normalized": "quais grupos do segmento tecidos estão em queda na une 2365",
+    "timestamp": 1766117831.7677453
   },
-  "d4b134fe46f80acf19ed53bf2ad21011": {
-    "query": "gere um gráfico de ranking de vendas dos swegmentos na une 2365",
-    "normalized": "gere um gráfico de ranking de vendas dos swegmentos na une 2365",
-    "timestamp": 1765835006.3810897
+  "30b85e0c920ef58a145e421522e1d320": {
+    "query": "Quais UNEs têm maior volume de VENDA_30DD?",
+    "normalized": "quais unes têm maior volume de venda_30dd",
+    "timestamp": 1766118437.6897979
+  },
+  "810199084a94a86aa58b3a4b781154f2": {
+    "query": "quero as vendas totais de todos os segmentos na une 1685",
+    "normalized": "quero as vendas totais de todos os segmentos na une 1685",
+    "timestamp": 1766134898.8199546
+  },
+  "50f970ddb739f3bccf489574d5e9f52c": {
+    "query": "quero o total de vendas dessses segmentos na une 1685",
+    "normalized": "quero o total de vendas dessses segmentos na une 1685",
+    "timestamp": 1766134950.3937378
+  },
+  "43fa78def25e84fac067b8fb288e9e2e": {
+    "query": "me de o total de vendas dos segmentos da une 3318",
+    "normalized": "me de o total de vendas dos segmentos da une 3318",
+    "timestamp": 1766134975.5027103
+  },
+  "d3fad6791c9660e38a2f45cd008d4a34": {
+    "query": "bom dia. quais sao os grupos no segmento tecidos com rututura na une2365",
+    "normalized": "bom dia quais sao os grupos no segmento tecidos com rututura na une2365",
+    "timestamp": 1766136979.9475346
+  },
+  "6754a149174668fa433aa956f20bbfc4": {
+    "query": "me de um gráfico com ranking de vendas de todas as lojas",
+    "normalized": "me de um gráfico com ranking de vendas de todas as lojas",
+    "timestamp": 1766137077.5286818
+  },
+  "e1d62205f6ca070d6a8cf5af653bccc2": {
+    "query": "qual é a previsão de tempo para hooje no rio de janeiro",
+    "normalized": "qual é a previsão de tempo para hooje no rio de janeiro",
+    "timestamp": 1766137140.5745945
+  },
+  "40df51f64b3e2d39580faf89c7d54be0": {
+    "query": "qual é a tenddencia de vendas para o volta as aulas 2026",
+    "normalized": "qual é a tenddencia de vendas para o volta as aulas 2026",
+    "timestamp": 1766137167.0725102
+  },
+  "6dcba9a072715735fde48bac4d242334": {
+    "query": "Analise detalhadamente o desempenho de vendas do produto \"PAPEL CHAMEX A4 75GRS 500FLS\" (SKU: 59294)",
+    "normalized": "analise detalhadamente o desempenho de vendas do produto \"papel chamex a4 75grs 500fls\" (sku 59294)",
+    "timestamp": 1766138640.9136267
+  },
+  "3d5008de9076b3ec11b619f8220288e2": {
+    "query": "gere um gráfico de vendas comparativo do produto 369947 em todas as lojas",
+    "normalized": "gere um gráfico de vendas comparativo do produto 369947 em todas as lojas",
+    "timestamp": 1766192979.1905468
+  },
+  "42855106065dc471b5a91887187f1bac": {
+    "query": "Ola, quais sao as principais funcionalidades que voce oferece?",
+    "normalized": "ola quais sao as principais funcionalidades que voce oferece",
+    "timestamp": 1766324322.929614
+  },
+  "cc57f8346af46448819d7e2fa325154e": {
+    "query": "Olá! Como você pode me ajudar?",
+    "normalized": "olá como você pode me ajudar",
+    "timestamp": 1766324904.3802202
+  },
+  "34e9d20e2057865814feb72f09871385": {
+    "query": "Quais tipos de análise você consegue fazer?",
+    "normalized": "quais tipos de análise você consegue fazer",
+    "timestamp": 1766324993.6699479
+  },
+  "c1b3f04a75f3fb05db2ca121d576e22c": {
+    "query": "Mostre os top 10 produtos por vendas nos últimos 30 dias",
+    "normalized": "mostre os top 10 produtos por vendas nos últimos 30 dias",
+    "timestamp": 1766325036.841536
+  },
+  "4835859d6237f0e5c4872856ed83a9a6": {
+    "query": "Compare as vendas de TECIDOS vs PAPELARIA no último mês",
+    "normalized": "compare as vendas de tecidos vs papelaria no último mês",
+    "timestamp": 1766325089.4623263
+  },
+  "e357ee777e1edb11a0db3f54c1b5d46c": {
+    "query": "Quais produtos estão em ruptura mas têm estoque no CD?",
+    "normalized": "quais produtos estão em ruptura mas têm estoque no cd",
+    "timestamp": 1766325102.0703263
+  },
+  "987e4691d1096173ce5fa33386242e60": {
+    "query": "Mostre produtos mais vendidos na UNE 1",
+    "normalized": "mostre produtos mais vendidos na une 1",
+    "timestamp": 1766325130.4652398
+  },
+  "ecba6a400e1bbd276239529c6ccb3058": {
+    "query": "Quais produtos do fabricante KIT têm melhor giro?",
+    "normalized": "quais produtos do fabricante kit têm melhor giro",
+    "timestamp": 1766325166.5251632
+  },
+  "49b65803b8bd245937e20d6e97be37f2": {
+    "query": "Mostre produtos com COLUNA_INEXISTENTE maior que 100",
+    "normalized": "mostre produtos com coluna_inexistente maior que 100",
+    "timestamp": 1766325232.1455784
+  },
+  "789ac87dfe4c43efc4031b09f1875ab7": {
+    "query": "Mostre os top 10000 produtos por vendas",
+    "normalized": "mostre os top 10000 produtos por vendas",
+    "timestamp": 1766325258.1845534
+  },
+  "d058f40d4c4b146b5b4de12e4e17fe81": {
+    "query": "Compare vendas de TECIDOS vs PAPELARIA vs ESCOLAR nos últimos 30 dias com gráfico",
+    "normalized": "compare vendas de tecidos vs papelaria vs escolar nos últimos 30 dias com gráfico",
+    "timestamp": 1766326435.7427995
+  },
+  "71cba9b24acf25a2e0e7342407565648": {
+    "query": "quais sao os grupos em queda de vendas na une 2365",
+    "normalized": "quais sao os grupos em queda de vendas na une 2365",
+    "timestamp": 1766327098.0731401
+  },
+  "95748cde41d3b6cc66cc0b8fae47fa86": {
+    "query": "olá boa tarde. gere um gráfico de vendas do produto 59294 em todas as unes",
+    "normalized": "olá boa tarde gere um gráfico de vendas do produto 59294 em todas as unes",
+    "timestamp": 1766330401.554393
+  },
+  "5348653381fa50634b2ee8dd001954bc": {
+    "query": "qual é a previsao de tempo para amanha no rio de janeiro",
+    "normalized": "qual é a previsao de tempo para amanha no rio de janeiro",
+    "timestamp": 1766357696.5177426
+  },
+  "e499cc4d23451f05c823b77cc22f91bf": {
+    "query": "qual é a previsão do tempo parao rio de janeiro amanhã",
+    "normalized": "qual é a previsão do tempo parao rio de janeiro amanhã",
+    "timestamp": 1766361271.0359838
+  },
+  "95ec80d9464c5051aec255043444bb57": {
+    "query": "boa noite. qual é a previsão do tempo para o rio de janeiro amanha",
+    "normalized": "boa noite qual é a previsão do tempo para o rio de janeiro amanha",
+    "timestamp": 1766363542.836129
+  },
+  "d9b7294e98179dc8e496ac32f933006a": {
+    "query": "então gere um gráfico comparativo de vendas do produto 369947 em todasas unes",
+    "normalized": "então gere um gráfico comparativo de vendas do produto 369947 em todasas unes",
+    "timestamp": 1766363657.7450767
+  },
+  "8a03571643a8c08a45b0cca61485d720": {
+    "query": "me de os dados acima em gráfico de barras",
+    "normalized": "me de os dados acima em gráfico de barras",
+    "timestamp": 1766363755.6123044
+  },
+  "9e49cb43bdc537a363dcaea074917292": {
+    "query": "ola bom dia. qual é a previsão de tempo para o rio de janeiro hoje",
+    "normalized": "ola bom dia qual é a previsão de tempo para o rio de janeiro hoje",
+    "timestamp": 1766395734.3112013
+  },
+  "dfb55e042df58956f554a0e8f36d467a": {
+    "query": "qual é a previsão de tempo pra hoje no rio de janeiro",
+    "normalized": "qual é a previsão de tempo pra hoje no rio de janeiro",
+    "timestamp": 1766395866.9328713
+  },
+  "7df39b2e37a393c80f5747b55483e204": {
+    "query": "ola boa noite, andré por aqui.",
+    "normalized": "ola boa noite andré por aqui",
+    "timestamp": 1766445301.3252313
+  },
+  "38a9f8390c4525a049f90e66b77853af": {
+    "query": "ola boa noite, andre maurico por aqui. tudo bem",
+    "normalized": "ola boa noite andre maurico por aqui tudo bem",
+    "timestamp": 1766445735.779048
+  },
+  "4ae3b266361e3b75ba3db6bbdb23502d": {
+    "query": "olá boa noite tudo bem,andre mauricio por  aqui",
+    "normalized": "olá boa noite tudo bemandre mauricio por aqui",
+    "timestamp": 1766445919.8340566
+  },
+  "24758a433ecd09604de2b51b7f880c40": {
+    "query": "ola boa noite tudo bem",
+    "normalized": "ola boa noite tudo bem",
+    "timestamp": 1766454459.3558166
+  },
+  "6c8b56b3fed46216805ed78f30cf704d": {
+    "query": "me de uma analise compelta do produto 59294 em todas as unes",
+    "normalized": "me de uma analise compelta do produto 59294 em todas as unes",
+    "timestamp": 1766454485.3802853
+  },
+  "a865aeae97a831c7e57b0e19176f28b2": {
+    "query": "me de um relatorio de vendas do produto 59294 em todas as unes",
+    "normalized": "me de um relatorio de vendas do produto 59294 em todas as unes",
+    "timestamp": 1766457572.5504842
+  },
+  "25767916627907e8f7d274ae0afc0fc8": {
+    "query": "\"me dê um relatório de vendas do produto 59294 em todas as unes",
+    "normalized": "\"me dê um relatório de vendas do produto 59294 em todas as unes",
+    "timestamp": 1766458027.0264874
+  },
+  "c0d8285d1c57552e23e3bfddf40716a0": {
+    "query": "realize uma analise de vendas do produto 369947 em todas as lojas. me respondam com um resumo do desempenho,rupturas e excessos",
+    "normalized": "realize uma analise de vendas do produto 369947 em todas as lojas me respondam com um resumo do desempenhorupturas e excessos",
+    "timestamp": 1766483649.5531263
+  },
+  "ba6dd1e8424534cc960b62ce9cb6ad95": {
+    "query": "qual é o estoque do produto 369947 em todas as lojas",
+    "normalized": "qual é o estoque do produto 369947 em todas as lojas",
+    "timestamp": 1766483693.8893855
+  },
+  "5a74b6b99cd2592d468c14cc2bc97985": {
+    "query": "gere um relatório de vendas do produto 25 em todas as lojas",
+    "normalized": "gere um relatório de vendas do produto 25 em todas as lojas",
+    "timestamp": 1766531482.882667
+  },
+  "3070057a28f8ee68d1fdf381a97341aa": {
+    "query": "Gere um relatório de vendas do produto 25",
+    "normalized": "gere um relatório de vendas do produto 25",
+    "timestamp": 1766532373.7907524
+  },
+  "a8373de016f153ce0c67f037e080b642": {
+    "query": "realize uma analise do produto 25 e me de um relatorio de vendas em todas as unes",
+    "normalized": "realize uma analise do produto 25 e me de um relatorio de vendas em todas as unes",
+    "timestamp": 1766533066.033817
+  },
+  "eff06dfeca50cc20a09ec8dcc2a3061c": {
+    "query": "realize uma analise no produto 369947 em todas as unes",
+    "normalized": "realize uma analise no produto 369947 em todas as unes",
+    "timestamp": 1766568885.3580294
+  },
+  "96828792686798e29666234032ded85d": {
+    "query": "qual é a situação do produto 369947 em todas as unes ?",
+    "normalized": "qual é a situação do produto 369947 em todas as unes",
+    "timestamp": 1766569279.6518462
+  },
+  "66d11dacffcc933c743c2ae1f15f5a6c": {
+    "query": "qual é a situação do produto 59294 em todas as unes?",
+    "normalized": "qual é a situação do produto 59294 em todas as unes",
+    "timestamp": 1766569438.125695
+  },
+  "1af96ff6522dab74ed93ee0bc381f2bc": {
+    "query": "gere um gráfico de vendas do produto 59294 em todas as unes",
+    "normalized": "gere um gráfico de vendas do produto 59294 em todas as unes",
+    "timestamp": 1766594799.352462
+  },
+  "8bab08c1b014ec512c97e71311829c37": {
+    "query": "gere um gráfico comparativo de vendas do produto 369947 em todas as lojas",
+    "normalized": "gere um gráfico comparativo de vendas do produto 369947 em todas as lojas",
+    "timestamp": 1766766087.3699226
+  },
+  "b7bb7c15be6d0d34f747db4ca1a18381": {
+    "query": "gere um gráfico de vendas do produto 369947 em todas lojas",
+    "normalized": "gere um gráfico de vendas do produto 369947 em todas lojas",
+    "timestamp": 1766768396.5237145
+  },
+  "ab20561f0e7cf8533c3a5962bdd8010f": {
+    "query": "gere um gráfico de vendas dos segmentos da une 2365",
+    "normalized": "gere um gráfico de vendas dos segmentos da une 2365",
+    "timestamp": 1766770250.6355598
+  },
+  "ffe54fd058c60c46606515b6ff81d2f3": {
+    "query": "Gere um gráfico de vendas por categoria da une ",
+    "normalized": "gere um gráfico de vendas por categoria da une",
+    "timestamp": 1766770948.21624
+  },
+  "011b21d8372d76ba7afd7c2cca042f2a": {
+    "query": "gere gráfico ranking segmentos une 2365",
+    "normalized": "gere gráfico ranking segmentos une 2365",
+    "timestamp": 1766779659.0639987
+  },
+  "7d09111971bed181f4c204dc940c61c3": {
+    "query": "gere um gráfico de ranking vendas de todos os segmentos da une 2365",
+    "normalized": "gere um gráfico de ranking vendas de todos os segmentos da une 2365",
+    "timestamp": 1766780361.5257115
+  },
+  "c09f0d62a9b7a6487121f46bc5b6e46d": {
+    "query": "gere um gráfico de ranking de vendas dos segmentos na une 2365",
+    "normalized": "gere um gráfico de ranking de vendas dos segmentos na une 2365",
+    "timestamp": 1766827823.0905132
   }
 }

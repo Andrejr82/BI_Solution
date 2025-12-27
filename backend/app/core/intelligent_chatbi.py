@@ -27,8 +27,8 @@ class IntelligentChatBI:
         
         genai.configure(api_key=api_key)
         
-        # Usar modelo ESTÁVEL (não experimental)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Usar modelo mais recente e inteligente
+        self.model = genai.GenerativeModel('gemini-3-flash-preview')
         
         # Carregar schema do Parquet
         self.schema = self._load_schema()

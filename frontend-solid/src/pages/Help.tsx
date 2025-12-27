@@ -40,7 +40,7 @@ export default function Help() {
     },
     {
       pergunta: 'O que são os "AI Insights" no Dashboard?',
-      resposta: 'São análises proativas geradas pelo Gemini 2.5 que cruzam dados de venda, estoque e crescimento. A IA identifica anomalias (como o TNT sem estoque na loja mas com 16 mil unidades no CD) e sugere planos de ação imediatos.'
+      resposta: 'São análises proativas geradas pelo Gemini 3.0 Flash que cruzam dados de venda, estoque e crescimento. A IA identifica anomalias (como o TNT sem estoque na loja mas com 16 mil unidades no CD) e sugere planos de ação imediatos.'
     },
     {
       pergunta: 'Posso exportar dados para Excel?',

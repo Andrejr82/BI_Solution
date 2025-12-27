@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Mostre um grMostre um grafico das vendas por segmento"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico das vendas por segmento.\n\nOs dados mostram que o segmento de **Armarinho e Confecção** lidera as vendas, seguido por **Papelaria** e **Tecidos**. No total, os 10 principais segmentos movimentaram aproximadamente **R$ 3,63 milhões** no período analisado.\n\n**Destaques:**\n*   **Armarinho e Confecção:** R$ 881.937\n*   **Papelaria:** R$ 778.096\n*   **Tecidos:** R$ 610.686"
+    }
+  ]
+}

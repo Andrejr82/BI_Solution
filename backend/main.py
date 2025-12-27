@@ -72,6 +72,12 @@ async def lifespan(app: FastAPI):
         logger.warning("data_adapter_failed", error=str(e))
         logger.info("continuing_without_data_adapter")
     
+    # ✅ PERFORMANCE FIX: Warmup removido para startup rápido
+    # Dados agora são carregados sob demanda (lazy loading)
+    # Primeira query pode levar ~1-2s, mas startup é instantâneo
+    # Trade-off: Startup 15s+ → <3s | Primeira query +1s
+    logger.info("startup_optimized: Using lazy data loading (no warmup)")
+
     yield
     
     # Shutdown

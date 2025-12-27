@@ -1,0 +1,20 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Mostre os top 5 produtos mais vendidos"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui está o gráfico solicitado:"
+    },
+    {
+      "role": "user",
+      "content": "Mostre os top 5 produtos mais vendidos"
+    },
+    {
+      "role": "assistant",
+      "content": "Aqui estão os 5 produtos mais vendidos, liderados pelo Papel Chamex A4:\n\n1. **PAPEL CHAMEX A4 75GRS 500FLS**: 45.048 unidades\n2. **PAPEL 40KG 96X66 120G/M BRANCO**: 28.971 unidades\n3. **TNT 40GRS 100%O LG 1.40 035 BRANCO**: 25.544 unidades\n4. **TNT 40GRS 100%O LG 1.40 034 PRETO**: 23.308 unidades\n5. **TNT 40GRS 100%O LG 1.40 029 AZUL ROYAL**: 17.063 unidades"
+    }
+  ]
+}

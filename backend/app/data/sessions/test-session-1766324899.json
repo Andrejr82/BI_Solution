@@ -1,0 +1,12 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Olá! Como você pode me ajudar?"
+    },
+    {
+      "role": "assistant",
+      "content": "Olá! É um prazer falar com você.\n\nComo seu Assistente de BI da Caculinha, posso te ajudar de diversas formas, desde conversas gerais até análises profundas de dados. Aqui estão alguns exemplos do que posso fazer por você:\n\n1.  **Análise de Vendas:** Posso informar o total de vendas por loja (UNE), segmento ou fabricante, além de identificar os produtos mais vendidos.\n2.  **Gestão de Estoque:** Consigo verificar a disponibilidade de produtos, identificar itens em falta (rupturas) e sugerir o que precisa ser abastecido.\n3.  **Gráficos e Visualizações:** Se você quiser ver os dados de forma visual, posso gerar rankings e comparativos em gráficos de barras, pizza ou linhas.\n4.  **Transferências entre Lojas:** Posso sugerir e validar a movimentação de produtos entre unidades para equilibrar o estoque.\n5.  **Cálculo de Preços:** Ajudo a calcular o preço final de produtos aplicando as políticas de desconto e formas de pagamento da empresa.\n6.  **Conhecimentos Gerais:** Além dos dados, estou aqui para responder qualquer dúvida do dia a dia, como curiosidades, informações geográficas ou auxílio em tarefas gerais.\n\nComo posso facilitar o seu trabalho hoje? Se quiser começar, pode me pedir algo como: *\"Quais são os 10 produtos mais vendidos?\"* ou *\"Gere um gráfico de vendas por segmento\"*."
+    }
+  ]
+}

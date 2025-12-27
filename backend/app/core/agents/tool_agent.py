@@ -121,7 +121,7 @@ class ToolAgent:
             if chat_history is None:
                 chat_history = []
 
-            config = RunnableConfig(recursion_limit=10)
+            config = RunnableConfig(recursion_limit=25)  # Aumentado de 10 para 25 para queries complexas
 
             self.logger.debug(
                 f"Invocando agente com query: {query} "

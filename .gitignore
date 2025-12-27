@@ -106,3 +106,9 @@ node_modules/
 __pycache__/
 .venv/
 *.pyc
+
+node_modules/
+dist/
+build/
+.git/
+*.log
