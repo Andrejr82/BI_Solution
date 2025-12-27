@@ -54,6 +54,7 @@ export default function Chat() {
   const [lastUserMessage, setLastUserMessage] = createSignal<string>('');
   const [editingMessageId, setEditingMessageId] = createSignal<string | null>(null);
   const [editText, setEditText] = createSignal('');
+  const [currentStatus, setCurrentStatus] = createSignal<string>('');
   let messagesEndRef: HTMLDivElement | undefined;
 
   // Check for example query from Examples page & Init Session
@@ -253,12 +254,25 @@ export default function Chat() {
             return;
           }
 
-          if (data.type === 'text') {
+          if (data.type === 'tool_progress') {
+            const statusMap: Record<string, string> = {
+              'Pensando': 'Analisando sua pergunta...',
+              'consultar_dados_flexivel': 'Consultando o Data Lake...',
+              'consultar_dados_gerais': 'Buscando informações gerais...',
+              'gerar_grafico_universal': 'Gerando visualização...',
+              'Processando resposta': 'Finalizando análise...'
+            };
+            const statusMsg = statusMap[data.tool] || `Executando: ${data.tool}...`;
+            setCurrentStatus(statusMsg);
+          } else if (data.type === 'text') {
+            setCurrentStatus(''); // Limpa status ao começar a receber texto
             setMessages(prev => prev.map(msg => {
               if (msg.id === currentMessageId) {
                 const newText = msg.text + data.text;
                 fullResponseContent = newText;
-                return { ...msg, text: newText, type: 'text' };
+                // CORREÇÃO CRÍTICA: Não sobrescrever o 'type' da mensagem.
+                // Se a mensagem já é um 'chart' ou 'table', o tipo deve ser preservado.
+                return { ...msg, text: newText };
               }
               return msg;
             }));
@@ -318,6 +332,7 @@ export default function Chat() {
         setCurrentEventSource(null);
         setIsStreaming(false);
         setIsWaitingForResponse(false);
+        setCurrentStatus('');
         setMessages(prev => prev.map(msg =>
           msg.id === currentMessageId ? { ...msg, text: msg.text + "\n⚠️ Erro de conexão com o servidor.", type: 'error' } : msg
         ));
@@ -384,9 +399,9 @@ export default function Chat() {
 
 
   return (
-    <div class="absolute inset-0 flex flex-col w-full max-w-4xl mx-auto bg-background">
+    <div class="absolute inset-0 flex flex-col w-full max-w-7xl mx-auto bg-background">
       {/* Header with actions */}
-      <div class="flex items-center justify-between p-4 border-b bg-background/50 backdrop-blur">
+      <div class="flex items-center justify-between px-6 py-4 border-b bg-background/50 backdrop-blur">
         <h2 class="text-lg font-semibold">Chat BI</h2>
         <div class="flex items-center gap-2">
           <Show when={isStreaming()}>
@@ -412,12 +427,12 @@ export default function Chat() {
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6">
         <For each={messages()}>
           {(msg, index) => (
             <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                class={`max-w-[80%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
+                class={`max-w-[90%] rounded-lg p-4 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
                   ? 'bg-primary/10 border border-primary/20 text-foreground'
                   : 'bg-card border text-card-foreground'
                   }`}
@@ -438,7 +453,15 @@ export default function Chat() {
                       />
                     }
                   >
-                    <TypingIndicator />
+                    <div class="flex flex-col gap-2">
+                      <Show when={currentStatus()}>
+                        <div class="inline-flex items-center gap-2 px-3 py-1 text-xs font-medium rounded-full bg-primary/10 border border-primary/20 text-primary animate-pulse mb-2">
+                          <div class="w-2 h-2 rounded-full bg-primary animate-ping" />
+                          {currentStatus()}
+                        </div>
+                      </Show>
+                      <TypingIndicator />
+                    </div>
                   </Show>
                 </Show>
                 <Show when={msg.role === 'user'}>
@@ -521,17 +544,17 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div class="p-4 border-t bg-background/50 backdrop-blur">
-        <form onSubmit={sendMessage} class="flex gap-2">
+      <div class="px-8 py-4 border-t bg-background/50 backdrop-blur">
+        <form onSubmit={sendMessage} class="flex gap-3">
           <input
             type="text"
-            class="input flex-1"
+            class="input flex-1 text-base py-3"
             value={input()}
             onInput={(e) => setInput(e.currentTarget.value)}
             placeholder="Faça uma pergunta sobre os dados..."
             disabled={isStreaming()}
           />
-          <button type="submit" class="btn btn-primary" disabled={isStreaming() || !input()}>
+          <button type="submit" class="btn btn-primary px-6 py-3 text-base font-medium" disabled={isStreaming() || !input()}>
             Enviar
           </button>
         </form>
