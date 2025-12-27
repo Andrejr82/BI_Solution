@@ -79,6 +79,7 @@ export interface Ruptura {
   PRODUTO: string;
   NOME: string;
   UNE: string;
+  UNE_NOME?: string;
   ESTOQUE_UNE: number;
   ESTOQUE_CD: number;
   ESTOQUE_LV: number;
