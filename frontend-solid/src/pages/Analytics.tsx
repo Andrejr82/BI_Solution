@@ -75,19 +75,23 @@ export default function Analytics() {
     return response.data.grupos;
   });
 
-  // Efeito para resetar categoria quando o segmento muda
-  createEffect(() => {
-    if (segmento() !== undefined) {
+  // Efeito para resetar categoria quando o segmento muda (só quando já tinha um valor)
+  createEffect((prevSegmento) => {
+    const currentSegmento = segmento();
+    if (prevSegmento !== undefined && prevSegmento !== currentSegmento) {
       setCategoria('');
       setGrupo('');
     }
+    return currentSegmento;
   });
 
-  // Efeito para resetar grupo quando a categoria muda
-  createEffect(() => {
-    if (categoria() !== undefined) {
+  // Efeito para resetar grupo quando a categoria muda (só quando já tinha um valor)
+  createEffect((prevCategoria) => {
+    const currentCategoria = categoria();
+    if (prevCategoria !== undefined && prevCategoria !== currentCategoria) {
       setGrupo('');
     }
+    return currentCategoria;
   });
 
 
