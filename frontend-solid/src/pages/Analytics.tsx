@@ -1,6 +1,6 @@
 import { createSignal, onMount, Show, createResource, For, createEffect } from 'solid-js';
-import { BarChart3, TrendingUp, RefreshCw, Filter, X } from 'lucide-solid';
-import api, { analyticsApi } from '../lib/api'; // Import analyticsApi
+import { BarChart3, TrendingUp, RefreshCw, Filter, X, Download, Eye } from 'lucide-solid';
+import api, { analyticsApi, ABCDetailItem } from '../lib/api'; // Import analyticsApi and ABCDetailItem
 import { PlotlyChart } from '../components/PlotlyChart';
 import { ChartDownloadButton } from '../components/ChartDownloadButton';
 
@@ -32,6 +32,7 @@ interface SalesAnalysis {
 interface FilterOptions {
   categorias: string[];
   segmentos: string[];
+  grupos: string[];
 }
 
 export default function Analytics() {
@@ -42,27 +43,50 @@ export default function Analytics() {
   // Filtros
   const [categoria, setCategoria] = createSignal('');
   const [segmento, setSegmento] = createSignal('');
+  const [grupo, setGrupo] = createSignal('');
+
+  // Modal ABC Details
+  const [showABCModal, setShowABCModal] = createSignal(false);
+  const [selectedClasse, setSelectedClasse] = createSignal<'A' | 'B' | 'C' | null>(null);
+  const [abcDetails, setAbcDetails] = createSignal<ABCDetailItem[]>([]);
+  const [loadingABC, setLoadingABC] = createSignal(false);
 
   // Carregar opções de filtro (segmentos e todas as categorias)
   const [allFilterOptions] = createResource<FilterOptions>(async () => {
-    const response = await analyticsApi.getFilterOptions(); // Use analyticsApi
+    const response = await analyticsApi.getFilterOptions();
     return response.data;
   });
 
   // Carregar categorias filtradas por segmento
-  const [filteredCategoryOptions] = createResource(() => segmento(), async (segmento) => {
-    if (segmento === '') {
+  const [filteredCategoryOptions] = createResource(() => segmento(), async (seg) => {
+    if (seg === '') {
       return allFilterOptions()?.categorias || [];
     }
-    const response = await analyticsApi.getFilterOptions({ segmento: segmento });
+    const response = await analyticsApi.getFilterOptions(seg);
     return response.data.categorias;
+  });
+
+  // Carregar grupos filtrados por segmento e categoria
+  const [filteredGroupOptions] = createResource(() => ({ seg: segmento(), cat: categoria() }), async ({ seg, cat }) => {
+    if (seg === '' && cat === '') {
+      return allFilterOptions()?.grupos || [];
+    }
+    const response = await analyticsApi.getFilterOptions(seg || undefined, cat || undefined);
+    return response.data.grupos;
   });
 
   // Efeito para resetar categoria quando o segmento muda
   createEffect(() => {
-    // Apenas se o segmento realmente mudou e não é a inicialização
     if (segmento() !== undefined) {
       setCategoria('');
+      setGrupo('');
+    }
+  });
+
+  // Efeito para resetar grupo quando a categoria muda
+  createEffect(() => {
+    if (categoria() !== undefined) {
+      setGrupo('');
     }
   });
 
@@ -80,6 +104,7 @@ export default function Analytics() {
       const params = new URLSearchParams();
       if (categoria()) params.append('categoria', categoria());
       if (segmento()) params.append('segmento', segmento());
+      if (grupo()) params.append('grupo', grupo());
 
       const response = await api.get<SalesAnalysis>(`/analytics/sales-analysis?${params.toString()}`);
       setData(response.data);
@@ -92,6 +117,56 @@ export default function Analytics() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Carregar detalhes ABC ao clicar em uma classe
+  const handleABCClick = async (classe: 'A' | 'B' | 'C') => {
+    setSelectedClasse(classe);
+    setShowABCModal(true);
+    setLoadingABC(true);
+
+    try {
+      const response = await analyticsApi.getABCDetails(
+        classe,
+        segmento() || undefined,
+        categoria() || undefined,
+        grupo() || undefined
+      );
+      setAbcDetails(response.data);
+    } catch (err: any) {
+      console.error('Erro ao carregar detalhes ABC:', err);
+      setAbcDetails([]);
+    } finally {
+      setLoadingABC(false);
+    }
+  };
+
+  // Download CSV dos SKUs
+  const downloadABCCSV = () => {
+    const details = abcDetails();
+    if (details.length === 0) return;
+
+    const headers = ['PRODUTO', 'NOME', 'UNE', 'UNE_NOME', 'RECEITA', 'PERC_ACUMULADA', 'CLASSE'];
+    const rows = details.map(item => [
+      item.PRODUTO,
+      item.NOME,
+      item.UNE,
+      item.UNE_NOME || '',
+      item.receita.toFixed(2),
+      item.perc_acumulada.toFixed(2),
+      item.classe
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `abc_classe_${selectedClasse()}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
   };
 
   const generateCharts = (analysisData: SalesAnalysis) => {
@@ -327,12 +402,13 @@ export default function Analytics() {
         <div class="flex items-center gap-2 mb-3">
           <Filter size={20} />
           <h3 class="font-semibold">Filtros</h3>
-          <Show when={categoria() || segmento()}>
+          <Show when={categoria() || segmento() || grupo()}>
             <button
               class="ml-auto text-sm text-muted hover:text-foreground flex items-center gap-1"
               onClick={() => {
                 setCategoria('');
                 setSegmento('');
+                setGrupo('');
                 loadData();
               }}
             >
@@ -342,7 +418,7 @@ export default function Analytics() {
           </Show>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           {/* Segmento */}
           <select
             class="input"
@@ -373,6 +449,21 @@ export default function Analytics() {
             </Show>
           </select>
 
+          {/* Grupo (filtro dinâmico) */}
+          <select
+            class="input"
+            value={grupo()}
+            onChange={(e) => setGrupo(e.currentTarget.value)}
+            disabled={filteredGroupOptions.loading}
+          >
+            <option value="">Todos os Grupos</option>
+            <Show when={filteredGroupOptions()}>
+              <For each={filteredGroupOptions()}>
+                {(grp) => <option value={grp}>{grp}</option>}
+              </For>
+            </Show>
+          </select>
+
           <button
             class="btn btn-primary"
             onClick={loadData}
@@ -383,7 +474,7 @@ export default function Analytics() {
         </div>
 
         {/* Active Filters Display */}
-        <Show when={categoria() || segmento()}>
+        <Show when={categoria() || segmento() || grupo()}>
           <div class="flex gap-2 mt-3 flex-wrap">
             <span class="text-sm text-muted">Filtros ativos:</span>
             <Show when={segmento()}>
@@ -406,6 +497,20 @@ export default function Analytics() {
                 <button
                   onClick={() => {
                     setCategoria('');
+                    loadData();
+                  }}
+                  class="hover:bg-primary/30 rounded"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            </Show>
+            <Show when={grupo()}>
+              <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm flex items-center gap-1">
+                Grupo: {grupo()}
+                <button
+                  onClick={() => {
+                    setGrupo('');
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"
@@ -517,24 +622,42 @@ export default function Analytics() {
                 />
               </Show>
 
-              {/* Summary of ABC classes */}
+              {/* Summary of ABC classes - CLICKABLE */}
               <Show when={data()!.distribuicao_abc.receita_por_classe}>
                 <div class="grid grid-cols-3 gap-2 mt-4">
-                  <div class="p-2 rounded bg-green-500/10 border border-green-500/20 text-center">
+                  <button
+                    onClick={() => handleABCClick('A')}
+                    class="p-2 rounded bg-green-500/10 border border-green-500/20 text-center hover:bg-green-500/20 transition-colors cursor-pointer group"
+                  >
                     <p class="text-[10px] text-green-700 font-bold uppercase">Classe A</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.A} SKUs</p>
                     <p class="text-[10px] text-muted-foreground">80% da Receita</p>
-                  </div>
-                  <div class="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-center">
+                    <p class="text-[9px] text-green-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                      <Eye size={10} /> Clique para detalhes
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => handleABCClick('B')}
+                    class="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-center hover:bg-yellow-500/20 transition-colors cursor-pointer group"
+                  >
                     <p class="text-[10px] text-yellow-700 font-bold uppercase">Classe B</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.B} SKUs</p>
                     <p class="text-[10px] text-muted-foreground">15% da Receita</p>
-                  </div>
-                  <div class="p-2 rounded bg-red-500/10 border border-red-500/20 text-center">
+                    <p class="text-[9px] text-yellow-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                      <Eye size={10} /> Clique para detalhes
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => handleABCClick('C')}
+                    class="p-2 rounded bg-red-500/10 border border-red-500/20 text-center hover:bg-red-500/20 transition-colors cursor-pointer group"
+                  >
                     <p class="text-[10px] text-red-700 font-bold uppercase">Classe C</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.C} SKUs</p>
                     <p class="text-[10px] text-muted-foreground">5% da Receita</p>
-                  </div>
+                    <p class="text-[9px] text-red-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                      <Eye size={10} /> Clique para detalhes
+                    </p>
+                  </button>
                 </div>
               </Show>
             </div>
@@ -582,6 +705,94 @@ export default function Analytics() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal ABC Details */}
+      <Show when={showABCModal()}>
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowABCModal(false)}>
+          <div class="bg-background rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div class="flex justify-between items-center p-6 border-b">
+              <div>
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                  <span class={`inline-block w-3 h-3 rounded-full ${
+                    selectedClasse() === 'A' ? 'bg-green-500' :
+                    selectedClasse() === 'B' ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}></span>
+                  SKUs da Classe {selectedClasse()}
+                </h3>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {abcDetails().length} produtos encontrados
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  onClick={downloadABCCSV}
+                  class="btn btn-outline gap-2"
+                  disabled={abcDetails().length === 0}
+                >
+                  <Download size={16} />
+                  Baixar CSV
+                </button>
+                <button
+                  onClick={() => setShowABCModal(false)}
+                  class="btn btn-outline"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div class="overflow-y-auto max-h-[calc(90vh-140px)]">
+              <Show when={loadingABC()}>
+                <div class="flex items-center justify-center py-12">
+                  <RefreshCw class="animate-spin mr-2" size={24} />
+                  <span>Carregando detalhes...</span>
+                </div>
+              </Show>
+
+              <Show when={!loadingABC() && abcDetails().length === 0}>
+                <div class="flex items-center justify-center py-12 text-muted-foreground">
+                  Nenhum produto encontrado para esta classe.
+                </div>
+              </Show>
+
+              <Show when={!loadingABC() && abcDetails().length > 0}>
+                <table class="w-full">
+                  <thead class="sticky top-0 bg-secondary border-b">
+                    <tr>
+                      <th class="text-left p-3 text-xs font-semibold uppercase">Produto</th>
+                      <th class="text-left p-3 text-xs font-semibold uppercase">Nome</th>
+                      <th class="text-left p-3 text-xs font-semibold uppercase">UNE</th>
+                      <th class="text-left p-3 text-xs font-semibold uppercase">Loja</th>
+                      <th class="text-right p-3 text-xs font-semibold uppercase">Receita</th>
+                      <th class="text-right p-3 text-xs font-semibold uppercase">% Acumulada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={abcDetails()}>
+                      {(item) => (
+                        <tr class="border-b hover:bg-secondary/50 transition-colors">
+                          <td class="p-3 font-mono text-sm">{item.PRODUTO}</td>
+                          <td class="p-3 text-sm">{item.NOME}</td>
+                          <td class="p-3 font-mono text-sm">{item.UNE}</td>
+                          <td class="p-3 text-sm text-muted-foreground">{item.UNE_NOME || '-'}</td>
+                          <td class="p-3 text-sm text-right font-medium">
+                            R$ {item.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td class="p-3 text-sm text-right">
+                            {item.perc_acumulada.toFixed(2)}%
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </Show>
             </div>
           </div>
         </div>

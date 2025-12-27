@@ -134,11 +134,12 @@ async def get_top_queries(
 @router.get("/filter-options")
 async def get_filter_options(
     current_user: Annotated[User, Depends(get_current_active_user)],
-    segmento: Optional[str] = Query(None, description="Segmento para filtrar as categorias retornadas")
+    segmento: Optional[str] = Query(None, description="Segmento para filtrar as categorias retornadas"),
+    categoria: Optional[str] = Query(None, description="Categoria para filtrar os grupos retornados")
 ) -> Dict[str, List[str]]:
     """
-    Retorna valores únicos de categoria e segmento para os filtros.
-    Pode filtrar categorias por um segmento específico.
+    Retorna valores únicos de segmento, categoria e grupo para os filtros.
+    Pode filtrar categorias por segmento e grupos por categoria.
     """
     import polars as pl
     from app.core.data_scope_service import data_scope_service
@@ -148,20 +149,34 @@ async def get_filter_options(
 
         categorias = []
         segmentos = []
-        
-        # Filtrar o DataFrame pelo segmento se fornecido
-        if segmento and "NOMESEGMENTO" in df.columns:
-            df = df.filter(pl.col("NOMESEGMENTO").str.to_lowercase() == segmento.lower())
+        grupos = []
 
-        # Categorias únicas
-        if "NOMECATEGORIA" in df.columns:
-            cat_unique = df.select("NOMECATEGORIA").unique().sort("NOMECATEGORIA")
+        # Filtrar o DataFrame pelo segmento se fornecido
+        df_filtered = df
+        if segmento and "NOMESEGMENTO" in df.columns:
+            df_filtered = df_filtered.filter(pl.col("NOMESEGMENTO").str.to_lowercase() == segmento.lower())
+
+        # Filtrar pelo categoria se fornecido (para grupos)
+        if categoria and "NOMECATEGORIA" in df.columns:
+            df_filtered = df_filtered.filter(pl.col("NOMECATEGORIA").str.to_lowercase() == categoria.lower())
+
+        # Categorias únicas (filtradas por segmento se fornecido)
+        if "NOMECATEGORIA" in df_filtered.columns:
+            cat_unique = df_filtered.select("NOMECATEGORIA").unique().sort("NOMECATEGORIA")
             for row in cat_unique.iter_rows(named=True):
                 cat = str(row["NOMECATEGORIA"]).strip()
                 if cat and cat != "null" and cat != "None":
                     categorias.append(cat)
 
-        # Segmentos únicos (sempre da base original, não filtrada por categoria)
+        # Grupos únicos (filtrados por segmento e categoria se fornecidos)
+        if "NOMEGRUPO" in df_filtered.columns:
+            grp_unique = df_filtered.select("NOMEGRUPO").unique().sort("NOMEGRUPO")
+            for row in grp_unique.iter_rows(named=True):
+                grp = str(row["NOMEGRUPO"]).strip()
+                if grp and grp != "null" and grp != "None":
+                    grupos.append(grp)
+
+        # Segmentos únicos (sempre da base original)
         df_all_segments = data_scope_service.get_filtered_dataframe(current_user, max_rows=50000)
         if "NOMESEGMENTO" in df_all_segments.columns:
             seg_unique = df_all_segments.select("NOMESEGMENTO").unique().sort("NOMESEGMENTO")
@@ -172,7 +187,8 @@ async def get_filter_options(
 
         return {
             "categorias": categorias,
-            "segmentos": segmentos
+            "segmentos": segmentos,
+            "grupos": grupos
         }
 
     except Exception as e:
@@ -187,7 +203,8 @@ async def get_filter_options(
 async def get_sales_analysis(
     current_user: Annotated[User, Depends(get_current_active_user)],
     categoria: Optional[str] = Query(None),
-    segmento: Optional[str] = Query(None)
+    segmento: Optional[str] = Query(None),
+    grupo: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
     """
     Análise de vendas e estoque com gráficos.
@@ -210,6 +227,7 @@ async def get_sales_analysis(
         # Determinar nomes corretos das colunas (suporta tanto maiúsculas quanto minúsculas)
         categoria_col = "nomecategoria" if "nomecategoria" in df.columns else ("NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else ("CATEGORIA" if "CATEGORIA" in df.columns else None))
         segmento_col = "nomesegmento" if "nomesegmento" in df.columns else ("NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else ("SEGMENTO" if "SEGMENTO" in df.columns else None))
+        grupo_col = "nomegrupo" if "nomegrupo" in df.columns else ("NOMEGRUPO" if "NOMEGRUPO" in df.columns else None)
         produto_col = "codigo" if "codigo" in df.columns else "PRODUTO"
         nome_col = "nome_produto" if "nome_produto" in df.columns else "NOME"
         venda_col = "venda_30_d" if "venda_30_d" in df.columns else "VENDA_30DD"
@@ -220,6 +238,8 @@ async def get_sales_analysis(
             df = df.filter(pl.col(categoria_col).str.to_lowercase() == categoria.lower())
         if segmento and segmento_col:
             df = df.filter(pl.col(segmento_col).str.to_lowercase() == segmento.lower())
+        if grupo and grupo_col:
+            df = df.filter(pl.col(grupo_col).str.to_lowercase() == grupo.lower())
 
         # Função auxiliar para casting seguro
         def safe_cast_col(col_name):
@@ -323,5 +343,142 @@ async def get_sales_analysis(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error analyzing sales: {str(e)}"
+        )
+
+
+class ABCDetailItem(BaseModel):
+    PRODUTO: str
+    NOME: str
+    UNE: str
+    UNE_NOME: Optional[str]
+    receita: float
+    perc_acumulada: float
+    classe: str
+
+
+@router.get("/abc-details", response_model=List[ABCDetailItem])
+async def get_abc_details(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    classe: str = Query(..., description="Classe ABC (A, B ou C)"),
+    categoria: Optional[str] = Query(None),
+    segmento: Optional[str] = Query(None),
+    grupo: Optional[str] = Query(None)
+) -> List[ABCDetailItem]:
+    """
+    Retorna detalhes dos SKUs de uma classe ABC específica com informações de UNE.
+    Usado para visualizar/baixar os produtos de cada classe.
+    """
+    import polars as pl
+    from app.core.data_scope_service import data_scope_service
+
+    try:
+        # Validar classe
+        if classe not in ['A', 'B', 'C']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Classe deve ser A, B ou C"
+            )
+
+        # Obter DataFrame
+        df = data_scope_service.get_filtered_dataframe(current_user)
+
+        if df.is_empty():
+            return []
+
+        # Determinar colunas
+        categoria_col = "nomecategoria" if "nomecategoria" in df.columns else ("NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else None)
+        segmento_col = "nomesegmento" if "nomesegmento" in df.columns else ("NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else None)
+        grupo_col = "nomegrupo" if "nomegrupo" in df.columns else ("NOMEGRUPO" if "NOMEGRUPO" in df.columns else None)
+        produto_col = "codigo" if "codigo" in df.columns else "PRODUTO"
+        nome_col = "nome_produto" if "nome_produto" in df.columns else "NOME"
+        une_col = "une" if "une" in df.columns else "UNE"
+        une_nome_col = "une_nome" if "une_nome" in df.columns else ("UNE_NOME" if "UNE_NOME" in df.columns else None)
+
+        # Aplicar filtros
+        if categoria and categoria_col:
+            df = df.filter(pl.col(categoria_col).str.to_lowercase() == categoria.lower())
+        if segmento and segmento_col:
+            df = df.filter(pl.col(segmento_col).str.to_lowercase() == segmento.lower())
+        if grupo and grupo_col:
+            df = df.filter(pl.col(grupo_col).str.to_lowercase() == grupo.lower())
+
+        # Função auxiliar para casting seguro
+        def safe_cast_col(col_name):
+            if col_name not in df.columns:
+                return pl.lit(0).cast(pl.Float64)
+            col_type = df.schema[col_name]
+            if col_type in [pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.Int16, pl.Int8]:
+                return pl.col(col_name).fill_null(0).cast(pl.Float64)
+            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
+
+        # Calcular ABC usando MES_01 ou VENDA_30DD
+        val_col = "MES_01" if "MES_01" in df.columns else ("venda_30_d" if "venda_30_d" in df.columns else "VENDA_30DD")
+
+        if val_col not in df.columns:
+            return []
+
+        # Preparar dados ABC
+        df_abc_raw = df.with_columns([
+            safe_cast_col(val_col).alias("valor_clean")
+        ]).filter(pl.col("valor_clean") > 0)
+
+        if df_abc_raw.is_empty():
+            return []
+
+        # Selecionar colunas necessárias
+        select_cols = [
+            pl.col(produto_col).alias("PRODUTO"),
+            pl.col(nome_col).alias("NOME"),
+            pl.col(une_col).cast(pl.Utf8).alias("UNE"),
+            pl.col("valor_clean").alias("receita")
+        ]
+
+        if une_nome_col:
+            select_cols.append(pl.col(une_nome_col).alias("UNE_NOME"))
+
+        df_abc = df_abc_raw.select(select_cols).sort("receita", descending=True)
+
+        total_receita = df_abc.select(pl.col("receita").sum()).item()
+
+        if total_receita <= 0:
+            return []
+
+        # Calcular percentual acumulado
+        df_abc = df_abc.with_columns([
+            (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
+        ])
+
+        # Classificar ABC
+        df_abc = df_abc.with_columns([
+            pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
+            .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
+            .otherwise(pl.lit("C")).alias("classe")
+        ])
+
+        # Filtrar pela classe solicitada
+        df_result = df_abc.filter(pl.col("classe") == classe)
+
+        # Converter para lista de dicts
+        results = []
+        for row in df_result.iter_rows(named=True):
+            results.append(ABCDetailItem(
+                PRODUTO=str(row["PRODUTO"]),
+                NOME=str(row["NOME"]),
+                UNE=str(row["UNE"]),
+                UNE_NOME=str(row.get("UNE_NOME", "")),
+                receita=float(row["receita"]),
+                perc_acumulada=float(row["perc_acumulada"]),
+                classe=str(row["classe"])
+            ))
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting ABC details: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting ABC details: {str(e)}"
         )
 

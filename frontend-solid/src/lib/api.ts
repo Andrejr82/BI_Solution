@@ -129,11 +129,33 @@ api.interceptors.response.use((response) => {
 
 // --- API Methods ---
 
+export interface ABCDetailItem {
+  PRODUTO: string;
+  NOME: string;
+  UNE: string;
+  UNE_NOME?: string;
+  receita: number;
+  perc_acumulada: number;
+  classe: string;
+}
+
 export const analyticsApi = {
   getKpis: (days: number = 7) => api.get<KpiMetrics>(`/analytics/kpis?days=${days}`),
   getErrorTrend: (days: number = 30) => api.get<ErrorTrendItem[]>(`/analytics/error-trend?days=${days}`),
   getTopQueries: (days: number = 7, limit: number = 10) => api.get<TopQueryItem[]>(`/analytics/top-queries?days=${days}&limit=${limit}`),
-  getFilterOptions: () => api.get<{ categorias: string[], segmentos: string[] }>('/analytics/filter-options'),
+  getFilterOptions: (segmento?: string, categoria?: string) => {
+    const params = new URLSearchParams();
+    if (segmento) params.append('segmento', segmento);
+    if (categoria) params.append('categoria', categoria);
+    return api.get<{ categorias: string[], segmentos: string[], grupos: string[] }>(`/analytics/filter-options?${params.toString()}`);
+  },
+  getABCDetails: (classe: string, segmento?: string, categoria?: string, grupo?: string) => {
+    const params = new URLSearchParams({ classe });
+    if (segmento) params.append('segmento', segmento);
+    if (categoria) params.append('categoria', categoria);
+    if (grupo) params.append('grupo', grupo);
+    return api.get<ABCDetailItem[]>(`/analytics/abc-details?${params.toString()}`);
+  },
 };
 
 export const reportsApi = {
