@@ -25,6 +25,7 @@ def gerar_grafico_universal_v2(
     filtro_une: Optional[int] = None,
     filtro_segmento: Optional[str] = None,
     filtro_categoria: Optional[str] = None,
+    filtro_produto: Optional[int] = None,
     tipo_grafico: str = "auto",
     limite: int = 10
 ) -> Dict[str, Any]:
@@ -39,6 +40,7 @@ def gerar_grafico_universal_v2(
         filtro_une: Código da loja/UNE para filtrar (ex: 1685)
         filtro_segmento: Nome do segmento para filtrar (ex: "ARMARINHO")
         filtro_categoria: Nome da categoria para filtrar
+        filtro_produto: Código do produto (SKU) para análise individual (ex: 369946)
         tipo_grafico: Tipo de gráfico ("bar", "pie", "line", "auto")
         limite: Número máximo de itens no gráfico
 
@@ -49,8 +51,9 @@ def gerar_grafico_universal_v2(
         - gerar_grafico_universal_v2(descricao="vendas por segmento", filtro_une=1685)
         - gerar_grafico_universal_v2(descricao="top produtos", filtro_segmento="ARMARINHO", limite=20)
         - gerar_grafico_universal_v2(descricao="estoque por categoria", tipo_grafico="bar")
+        - gerar_grafico_universal_v2(descricao="vendas mensais", filtro_produto=369946)
     """
-    logger.info(f"[UNIVERSAL CHART] Gerando: {descricao} | UNE={filtro_une} | Segmento={filtro_segmento}")
+    logger.info(f"[UNIVERSAL CHART] Gerando: {descricao} | UNE={filtro_une} | Segmento={filtro_segmento} | Produto={filtro_produto}")
 
     try:
         # 1. Obter dados
@@ -63,8 +66,8 @@ def gerar_grafico_universal_v2(
                 "message": "Dados não disponíveis"
             }
 
-        # 2. Aplicar filtros
-        df_filtered = df.copy()
+        # 2. Aplicar filtros (sem cópia completa para economizar memória)
+        df_filtered = df
 
         if filtro_une is not None:
             if 'UNE' in df_filtered.columns:
@@ -80,6 +83,13 @@ def gerar_grafico_universal_v2(
             if 'NOMECATEGORIA' in df_filtered.columns:
                 df_filtered = df_filtered[df_filtered['NOMECATEGORIA'].str.contains(filtro_categoria, case=False, na=False)]
                 logger.info(f"Filtrado Categoria {filtro_categoria}: {len(df_filtered)} registros")
+
+        if filtro_produto is not None:
+            if 'PRODUTO' in df_filtered.columns:
+                # Converter para numérico e filtrar
+                df_filtered['PRODUTO'] = pd.to_numeric(df_filtered['PRODUTO'], errors='coerce')
+                df_filtered = df_filtered[df_filtered['PRODUTO'] == filtro_produto]
+                logger.info(f"Filtrado Produto {filtro_produto}: {len(df_filtered)} registros")
 
         if df_filtered.empty:
             return {
@@ -141,8 +151,9 @@ def gerar_grafico_universal_v2(
             }
 
         if metric_col:
-            # Converter para numérico
-            df_filtered[metric_col] = pd.to_numeric(df_filtered[metric_col], errors='coerce').fillna(0)
+            # Converter para numérico - FIX: Usar .loc para evitar SettingWithCopyWarning
+            df_filtered = df_filtered.copy()  # Criar cópia explícita para evitar warnings
+            df_filtered.loc[:, metric_col] = pd.to_numeric(df_filtered[metric_col], errors='coerce').fillna(0)
 
             if agg_func == "sum":
                 df_agg = df_filtered.groupby(group_col)[metric_col].sum().reset_index()
@@ -249,5 +260,6 @@ def gerar_grafico_universal_v2(
         }
 
 
-# Alias para compatibilidade
-gerar_grafico_universal = gerar_grafico_universal_v2
+# REMOVED 2025-12-27: Removido alias para evitar confusão
+# Use gerar_grafico_universal_v2 diretamente
+# OLD CODE: gerar_grafico_universal = gerar_grafico_universal_v2

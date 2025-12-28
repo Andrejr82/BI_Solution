@@ -267,6 +267,16 @@
   "c09f0d62a9b7a6487121f46bc5b6e46d": {
     "query": "gere um gráfico de ranking de vendas dos segmentos na une 2365",
     "normalized": "gere um gráfico de ranking de vendas dos segmentos na une 2365",
-    "timestamp": 1766827823.0905132
+    "timestamp": 1766924965.1613643
+  },
+  "2e3c9a63fffb52f97299883eeddcaa1e": {
+    "query": "gere um gráfico de vendas por segmento na une 1",
+    "normalized": "gere um gráfico de vendas por segmento na une 1",
+    "timestamp": 1766922408.75123
+  },
+  "0136f3e258716108312f7528dc328c09": {
+    "query": "realize uma analise do grupo oxford e me aponte as críticas a serem corrigidas com o que devo fazer",
+    "normalized": "realize uma analise do grupo oxford e me aponte as críticas a serem corrigidas com o que devo fazer",
+    "timestamp": 1766931527.972968
   }
 }
