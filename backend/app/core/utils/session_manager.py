@@ -12,13 +12,12 @@ class SessionManager:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_file_path(self, session_id: str) -> Path:
-        # Security: Validate session_id is a valid UUID or strictly alphanumeric to prevent path traversal
+        # Security: Validate session_id is a valid UUID to prevent path traversal
         import uuid
         try:
             uuid.UUID(session_id)
         except ValueError:
-            # Check for strictly alphanumeric if not UUID (legacy sessions might be simple strings?)
-            # But strictly disallow ".." or slashes
+            # Fallback for legacy IDs: strictly alphanumeric only (no slashes, dots, etc.)
             if not session_id.isalnum():
                  logger.error(f"Invalid session_id format (potential path traversal): {session_id}")
                  raise ValueError("Invalid session_id format")

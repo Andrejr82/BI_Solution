@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onMount, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { Truck, Search, Plus, Trash2, ShoppingCart, AlertTriangle, CheckCircle, Package, ArrowRight } from 'lucide-solid';
+import { Truck, Search, Plus, Trash2, ShoppingCart, AlertTriangle, CheckCircle, Package, ArrowRight, Filter } from 'lucide-solid';
 import api from '../lib/api';
 
 // Types
@@ -10,6 +10,7 @@ interface Product {
   produto_id: number;
   nome: string;
   segmento: string;
+  grupo: string;
   fabricante: string;
   estoque_loja: number;
   estoque_cd: number;
@@ -42,17 +43,19 @@ interface ValidationResult {
 
 export default function Transfers() {
   // Estado principal
-  const [mode, setMode] = createSignal<TransferMode>('1→1');
+  const [mode, setMode] = createSignal<TransferMode>('UNE - UNE');
   const [unes, setUnes] = createSignal<UNE[]>([]);
   const [products, setProducts] = createSignal<Product[]>([]);
   const [cart, setCart] = createStore<{ items: CartItem[] }>({ items: [] });
 
   // Filtros disponíveis
   const [availableSegmentos, setAvailableSegmentos] = createSignal<string[]>([]);
+  const [availableGrupos, setAvailableGrupos] = createSignal<string[]>([]);
   const [availableFabricantes, setAvailableFabricantes] = createSignal<string[]>([]);
 
   // Filtros de busca
   const [searchSegmento, setSearchSegmento] = createSignal('');
+  const [searchGrupo, setSearchGrupo] = createSignal('');
   const [searchFabricante, setSearchFabricante] = createSignal('');
   const [searchEstoqueMin, setSearchEstoqueMin] = createSignal<number | ''>('');
 
@@ -76,7 +79,7 @@ export default function Transfers() {
   const toggleProductSelection = (product: Product) => {
     const current = selectedProducts();
     const exists = current.find(p => p.produto_id === product.produto_id);
-    
+
     if (exists) {
       setSelectedProducts(current.filter(p => p.produto_id !== product.produto_id));
     } else {
@@ -84,18 +87,25 @@ export default function Transfers() {
     }
   };
 
-  // Carregar filtros disponíveis
-  const loadFilters = async (segmento?: string) => {
+  // Carregar filtros disponíveis com lógica dependente
+  const loadFilters = async () => {
     try {
-      const params = segmento ? { segmento } : {};
-      const response = await api.get<{ segmentos: string[]; fabricantes: string[] }>('/transfers/filters', { params });
-      
+      const params: any = {};
+      if (searchSegmento()) params.segmento = searchSegmento();
+      if (searchGrupo()) params.grupo = searchGrupo();
+
+      const response = await api.get<{ segmentos: string[]; grupos: string[]; fabricantes: string[] }>('/transfers/filters', { params });
+
       // Se não tem segmento filtrado (inicialização), carrega lista completa de segmentos
-      if (!segmento) {
-        setAvailableSegmentos(response.data.segmentos);
+      // Caso contrário, mantemos a lista original de segmentos para permitir troca
+      if (availableSegmentos().length === 0) {
+        setAvailableSegmentos(response.data.segmentos || []);
       }
-      // Sempre atualiza fabricantes baseado no filtro (ou falta dele)
-      setAvailableFabricantes(response.data.fabricantes);
+      
+      // Atualizar dependentes
+      setAvailableGrupos(response.data.grupos || []);
+      setAvailableFabricantes(response.data.fabricantes || []);
+      
     } catch (err: any) {
       console.error('Erro ao carregar filtros:', err);
     }
@@ -106,12 +116,12 @@ export default function Transfers() {
     try {
       const response = await api.get<UNE[]>('/transfers/unes');
       setUnes(response.data);
-      
+
       // Context7 Best Practice: Auto-select if only one option is available
       if (response.data.length === 1) {
         const singleUne = response.data[0].une;
         // Apply selection based on current mode
-        if (mode() === 'N→N') {
+        if (mode() === 'UNES - UNES') {
           // Only select if empty to avoid overwriting user choice during reloads (if any)
           if (selectedUnesOrigem().length === 0) {
             setSelectedUnesOrigem([singleUne]);
@@ -132,15 +142,15 @@ export default function Transfers() {
   createEffect(() => {
     const currentUnes = unes();
     if (currentUnes.length === 1) {
-        const singleUne = currentUnes[0].une;
-        if (mode() === 'UNES - UNES') {
-          if (selectedUnesOrigem().length === 0) setSelectedUnesOrigem([singleUne]);
-        } else {
-          // Modes UNE - UNE and UNE - UNES
-          if (!selectedUneOrigem()) {
-            setSelectedUneOrigem(singleUne);
-          }
+      const singleUne = currentUnes[0].une;
+      if (mode() === 'UNES - UNES') {
+        if (selectedUnesOrigem().length === 0) setSelectedUnesOrigem([singleUne]);
+      } else {
+        // Modes UNE - UNE and UNE - UNES
+        if (!selectedUneOrigem()) {
+          setSelectedUneOrigem(singleUne);
         }
+      }
     }
   });
 
@@ -151,6 +161,7 @@ export default function Transfers() {
     try {
       const response = await api.post<Product[]>('/transfers/products/search', {
         segmento: searchSegmento() || undefined,
+        grupo: searchGrupo() || undefined,
         fabricante: searchFabricante() || undefined,
         estoque_min: searchEstoqueMin() || undefined,
         limit: 50
@@ -167,7 +178,7 @@ export default function Transfers() {
   const addToCart = async () => {
     // Validar seleções baseado no modo
     const selectedOrigens = mode() === 'UNES - UNES' ? selectedUnesOrigem() : selectedUneOrigem() ? [selectedUneOrigem() as number] : [];
-    
+
     if (selectedProducts().length === 0 || selectedOrigens.length === 0 || selectedUnesDestino().length === 0 || !quantidade()) {
       setError(`Preencha todos os campos para adicionar ao carrinho (Modo ${mode()})`);
       return;
@@ -175,7 +186,7 @@ export default function Transfers() {
 
     const qtd = quantidade() as number;
     setValidating(true);
-    
+
     try {
       const allNewItems: CartItem[] = [];
       const firstOrigem = selectedOrigens[0];
@@ -183,23 +194,23 @@ export default function Transfers() {
 
       // Validate and create items for EACH selected product
       const promises = selectedProducts().map(async (product) => {
-          const validationResponse = await api.post<ValidationResult>('/transfers/validate', {
-            produto_id: product.produto_id,
-            une_origem: firstOrigem,
-            une_destino: firstDestino,
-            quantidade: qtd,
-            solicitante_id: 'temp'
-          });
+        const validationResponse = await api.post<ValidationResult>('/transfers/validate', {
+          produto_id: product.produto_id,
+          une_origem: firstOrigem,
+          une_destino: firstDestino,
+          quantidade: qtd,
+          solicitante_id: 'temp'
+        });
 
-          return selectedOrigens.map(origem => ({
-            produto_id: product.produto_id,
-            produto_nome: product.nome,
-            une_origem: origem,
-            une_destino: selectedUnesDestino(),
-            quantidade: qtd,
-            score: validationResponse.data.score_prioridade,
-            nivel_urgencia: validationResponse.data.nivel_urgencia
-          }));
+        return selectedOrigens.map(origem => ({
+          produto_id: product.produto_id,
+          produto_nome: product.nome,
+          une_origem: origem,
+          une_destino: selectedUnesDestino(),
+          quantidade: qtd,
+          score: validationResponse.data.score_prioridade,
+          nivel_urgencia: validationResponse.data.nivel_urgencia
+        }));
       });
 
       const results = await Promise.all(promises);
@@ -301,14 +312,22 @@ export default function Transfers() {
     searchProducts();
   });
 
-  // Atualizar filtros (fabricantes) quando segmento mudar
+  // Atualizar dependências de filtros em cascata
   createEffect(() => {
-    loadFilters(searchSegmento());
+    // Quando segmento muda, recarrega filtros passando o segmento
+    // Isso deve atualizar Grupos e Fabricantes
+    loadFilters();
   });
 
-  // Auto-buscar ao mudar filtros
+  // Auto-buscar ao mudar filtros e resetar dependentes inválidos
   createEffect(() => {
-    if (searchSegmento() || searchFabricante() || searchEstoqueMin()) {
+    if (searchSegmento()) {
+        if (searchGrupo() && !availableGrupos().includes(searchGrupo())) {
+            setSearchGrupo('');
+        }
+    }
+    
+    if (searchSegmento() || searchGrupo() || searchFabricante() || searchEstoqueMin()) {
       searchProducts();
     }
   });
@@ -324,16 +343,16 @@ export default function Transfers() {
   };
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6">
+    <div class="flex flex-col p-6 gap-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
+      <div class="flex-shrink-0">
         <h2 class="text-2xl font-bold">Sistema de Transferências</h2>
         <p class="text-muted">Gerencie transferências de produtos entre UNEs</p>
       </div>
 
       {/* Error/Success Messages */}
       <Show when={error()}>
-        <div class="card p-4 border-red-500 bg-red-500/10">
+        <div class="card p-4 border-red-500 bg-red-500/10 flex-shrink-0">
           <div class="flex items-center gap-2 text-red-500">
             <AlertTriangle size={20} />
             <span>{error()}</span>
@@ -342,7 +361,7 @@ export default function Transfers() {
       </Show>
 
       <Show when={success()}>
-        <div class="card p-4 border-green-500 bg-green-500/10">
+        <div class="card p-4 border-green-500 bg-green-500/10 flex-shrink-0">
           <div class="flex items-center gap-2 text-green-500">
             <CheckCircle size={20} />
             <span>{success()}</span>
@@ -351,7 +370,7 @@ export default function Transfers() {
       </Show>
 
       {/* Mode Selection & UNE Origin/Destination Filters */}
-      <div class="card p-4 border">
+      <div class="card p-4 border flex-shrink-0">
         <div class="space-y-4">
           {/* Mode Selection */}
           <div>
@@ -383,17 +402,17 @@ export default function Transfers() {
             <p class="text-xs text-muted mb-3">
               ℹ️ {
                 mode() === 'UNE - UNE' ? 'Selecione uma UNE de origem e uma de destino' :
-                mode() === 'UNE - UNES' ? 'Selecione uma UNE de origem e múltiplos destinos' :
-                'Selecione múltiplas UNEs de origem e destino'
+                  mode() === 'UNE - UNES' ? 'Selecione uma UNE de origem e múltiplos destinos' :
+                    'Selecione múltiplas UNEs de origem e destino'
               }
             </p>
-            
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Origin UNEs Selection */}
               <div>
                 <label class="text-xs text-muted block mb-2 font-semibold">
                   UNE(s) de Origem
-                  {mode() === 'N→N' && ` (${selectedUnesOrigem().length} selecionadas)`}
+                  {mode() === 'UNES - UNES' && ` (${selectedUnesOrigem().length} selecionadas)`}
                 </label>
                 <div class="max-h-40 overflow-y-auto border rounded p-3 space-y-2 bg-muted/5">
                   <Show when={unes().length > 0} fallback={
@@ -401,10 +420,10 @@ export default function Transfers() {
                   }>
                     <For each={unes()}>
                       {(une) => {
-                        const isSelectedInMode = () => mode() === 'N→N' 
+                        const isSelectedInMode = () => mode() === 'UNES - UNES'
                           ? selectedUnesOrigem().includes(une.une)
                           : selectedUneOrigem() === une.une;
-                        
+
                         const toggleSelection = () => {
                           if (mode() === 'UNES - UNES') {
                             const current = selectedUnesOrigem();
@@ -422,16 +441,15 @@ export default function Transfers() {
                             }
                           }
                         };
-                        
+
                         return (
-                          <div 
-                            class={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded transition ${
-                              isSelectedInMode() ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-muted/30'
-                            }`}
+                          <div
+                            class={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded transition ${isSelectedInMode() ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-muted/30'
+                              }`}
                             onClick={toggleSelection}
                           >
                             <div class="flex-shrink-0">
-                              {mode() === 'N→N' ? (
+                              {mode() === 'UNES - UNES' ? (
                                 <input
                                   type="checkbox"
                                   checked={isSelectedInMode()}
@@ -464,7 +482,7 @@ export default function Transfers() {
               <div>
                 <label class="text-xs text-muted block mb-2 font-semibold">
                   UNE(s) de Destino
-                  {(mode() === '1→N' || mode() === 'N→N') && ` (${selectedUnesDestino().length} selecionadas)`}
+                  {(mode() === 'UNE - UNES' || mode() === 'UNES - UNES') && ` (${selectedUnesDestino().length} selecionadas)`}
                 </label>
                 <div class="max-h-40 overflow-y-auto border rounded p-3 space-y-2 bg-muted/5">
                   <Show when={unes().length > 0} fallback={
@@ -472,17 +490,17 @@ export default function Transfers() {
                   }>
                     <For each={unes()}>
                       {(une) => {
-                        const isDisabledDestino = () => mode() === 'UNE - UNE' 
+                        const isDisabledDestino = () => mode() === 'UNE - UNE'
                           ? selectedUneOrigem() === une.une
                           : mode() === 'UNES - UNES'
-                          ? selectedUnesOrigem().includes(une.une)
-                          : selectedUneOrigem() === une.une;
+                            ? selectedUnesOrigem().includes(une.une)
+                            : selectedUneOrigem() === une.une;
 
                         const isSelectedDestino = () => selectedUnesDestino().includes(une.une);
-                        
+
                         const toggleDestSelection = () => {
                           if (isDisabledDestino()) return; // Impedir clique em origem
-                          
+
                           const current = selectedUnesDestino();
                           if (current.includes(une.une)) {
                             setSelectedUnesDestino(current.filter(u => u !== une.une));
@@ -496,14 +514,13 @@ export default function Transfers() {
                         };
 
                         return (
-                          <div 
-                            class={`flex items-center gap-2 text-xs p-1.5 rounded transition ${
-                              isDisabledDestino() 
-                                ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800' 
-                                : isSelectedDestino()
+                          <div
+                            class={`flex items-center gap-2 text-xs p-1.5 rounded transition ${isDisabledDestino()
+                              ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800'
+                              : isSelectedDestino()
                                 ? 'bg-green-100 dark:bg-green-900 cursor-pointer'
                                 : 'hover:bg-muted/30 cursor-pointer'
-                            }`}
+                              }`}
                             onClick={toggleDestSelection}
                           >
                             <div class="flex-shrink-0">
@@ -532,19 +549,20 @@ export default function Transfers() {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         {/* Left Column - Product Search */}
-        <div class="lg:col-span-2 flex flex-col gap-4">
+        <div class="lg:col-span-2 flex flex-col gap-4 min-h-0">
           {/* Search Filters */}
-          <div class="card p-4 border">
+          <div class="card p-4 border flex-shrink-0">
             <div class="flex items-center gap-2 mb-4">
               <Search size={20} />
               <h3 class="font-semibold">Buscar Produtos</h3>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {/* Segmento */}
               <select
-                class="input"
+                class="input text-xs"
                 value={searchSegmento()}
                 onChange={(e) => setSearchSegmento(e.currentTarget.value)}
               >
@@ -554,8 +572,21 @@ export default function Transfers() {
                 </For>
               </select>
 
+              {/* Grupo (Novo) */}
               <select
-                class="input"
+                class="input text-xs"
+                value={searchGrupo()}
+                onChange={(e) => setSearchGrupo(e.currentTarget.value)}
+              >
+                <option value="">Todos os Grupos</option>
+                <For each={availableGrupos()}>
+                  {(grupo) => <option value={grupo}>{grupo}</option>}
+                </For>
+              </select>
+
+              {/* Fabricante */}
+              <select
+                class="input text-xs"
                 value={searchFabricante()}
                 onChange={(e) => setSearchFabricante(e.currentTarget.value)}
               >
@@ -568,7 +599,7 @@ export default function Transfers() {
               <input
                 type="number"
                 placeholder="Estoque mín."
-                class="input"
+                class="input text-xs"
                 value={searchEstoqueMin()}
                 onInput={(e) => setSearchEstoqueMin(parseInt(e.currentTarget.value) || '')}
               />
@@ -585,12 +616,12 @@ export default function Transfers() {
           </div>
 
           {/* Products List */}
-          <div class="card border flex-1 flex flex-col">
-            <div class="p-4 border-b">
+          <div class="card border flex-1 flex flex-col min-h-0">
+            <div class="p-4 border-b flex-shrink-0">
               <h3 class="font-semibold">Produtos ({products().length})</h3>
             </div>
 
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-auto">
               <Show when={products().length > 0} fallback={
                 <div class="p-8 text-center text-muted">
                   <Package size={48} class="mx-auto mb-4 opacity-50" />
@@ -602,16 +633,15 @@ export default function Transfers() {
                     const isSelected = () => selectedProducts().some(p => p.produto_id === product.produto_id);
                     return (
                       <div
-                        class={`p-3 border-b hover:bg-muted/30 cursor-pointer transition-colors ${
-                          isSelected() ? 'bg-primary/10 border-primary' : ''
-                        }`}
+                        class={`p-3 border-b hover:bg-muted/30 cursor-pointer transition-colors ${isSelected() ? 'bg-primary/10 border-primary' : ''
+                          }`}
                         onClick={() => toggleProductSelection(product)}
                       >
                         <div class="flex items-start gap-3">
                           <div class="pt-1">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected()} 
+                            <input
+                              type="checkbox"
+                              checked={isSelected()}
                               readOnly
                               class="cursor-pointer pointer-events-none"
                             />
@@ -620,7 +650,7 @@ export default function Transfers() {
                             <div>
                               <div class="font-medium text-sm">{product.nome}</div>
                               <div class="text-xs text-muted mt-1">
-                                ID: {product.produto_id} • {product.segmento} • {product.fabricante}
+                                ID: {product.produto_id} • {product.segmento} › {product.grupo} • {product.fabricante}
                               </div>
                             </div>
                             <div class="text-right text-xs">
@@ -640,10 +670,10 @@ export default function Transfers() {
         </div>
 
         {/* Right Column - Transfer Config & Cart */}
-        <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-4 min-h-0">
           {/* Transfer Configuration */}
           <Show when={selectedProducts().length > 0}>
-            <div class="card p-4 border">
+            <div class="card p-4 border flex-shrink-0">
               <Show when={selectedProducts().length === 1} fallback={
                 <div class="mb-4">
                   <h3 class="font-semibold mb-3 text-sm">{selectedProducts().length} Produtos Selecionados</h3>
@@ -665,6 +695,7 @@ export default function Transfers() {
                   <div class="text-xs text-muted space-y-1">
                     <div>ID: {selectedProducts()[0].produto_id}</div>
                     <div>Segmento: {selectedProducts()[0].segmento}</div>
+                    <div>Grupo: {selectedProducts()[0].grupo}</div>
                     <div>Fabricante: {selectedProducts()[0].fabricante}</div>
                     <div class="mt-2 pt-2 border-t">
                       <div>Estoque Loja: <span class="text-foreground font-medium">{selectedProducts()[0].estoque_loja} un.</span></div>
@@ -690,8 +721,8 @@ export default function Transfers() {
                 <button
                   class="btn btn-primary w-full gap-2 text-sm"
                   onClick={addToCart}
-                  disabled={validating() || selectedProducts().length === 0 || 
-                    (mode() === 'N→N' ? selectedUnesOrigem().length === 0 : !selectedUneOrigem()) || 
+                  disabled={validating() || selectedProducts().length === 0 ||
+                    (mode() === 'UNES - UNES' ? selectedUnesOrigem().length === 0 : !selectedUneOrigem()) ||
                     selectedUnesDestino().length === 0 || !quantidade()}
                 >
                   <Plus size={16} />
@@ -702,8 +733,8 @@ export default function Transfers() {
           </Show>
 
           {/* Cart */}
-          <div class="card border flex-1 flex flex-col">
-            <div class="p-3 border-b flex justify-between items-center">
+          <div class="card border flex-1 flex flex-col min-h-0">
+            <div class="p-3 border-b flex justify-between items-center flex-shrink-0">
               <div class="flex items-center gap-2">
                 <ShoppingCart size={18} />
                 <h3 class="font-semibold text-sm">Carrinho ({cart.items.length})</h3>
@@ -718,7 +749,7 @@ export default function Transfers() {
               </Show>
             </div>
 
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-auto">
               <Show when={cart.items.length > 0} fallback={
                 <div class="p-6 text-center text-muted text-sm">
                   <ShoppingCart size={32} class="mx-auto mb-2 opacity-50" />
@@ -761,7 +792,7 @@ export default function Transfers() {
             </div>
 
             <Show when={cart.items.length > 0}>
-              <div class="p-3 border-t">
+              <div class="p-3 border-t flex-shrink-0">
                 <button
                   class="btn btn-primary w-full gap-2 text-sm"
                   onClick={generateRequest}

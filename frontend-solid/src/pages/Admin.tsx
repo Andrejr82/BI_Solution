@@ -110,9 +110,21 @@ export default function Admin() {
       refetchUsers();
       setTimeout(() => setMessage(null), 5000);
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.detail || 'Erro ao salvar usuário';
+      console.error('Erro ao salvar usuário:', err);
+      let errorMsg = 'Erro ao salvar usuário';
+      
+      if (err?.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          // Tratar erro de validação do Pydantic (array de objetos)
+          errorMsg = detail.map((e: any) => `${e.loc[e.loc.length - 1]}: ${e.msg}`).join(', ');
+        } else {
+          errorMsg = String(detail);
+        }
+      }
+      
       setMessage({ type: 'error', text: errorMsg });
-      setTimeout(() => setMessage(null), 5000);
+      setTimeout(() => setMessage(null), 8000); // Mais tempo para ler erros longos
     }
   };
 
@@ -152,7 +164,7 @@ export default function Admin() {
   };
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6">
+    <div class="flex flex-col p-6 gap-6">
       {/* Header */}
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -163,9 +175,8 @@ export default function Admin() {
 
       {/* Message Alert */}
       <Show when={message()}>
-        <div class={`p-3 rounded-lg flex items-center gap-2 text-sm ${
-          message()?.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-        }`}>
+        <div class={`p-3 rounded-lg flex items-center gap-2 text-sm ${message()?.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+          }`}>
           {message()?.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
           {message()?.text}
         </div>
@@ -175,9 +186,8 @@ export default function Admin() {
       <div class="flex gap-2 border-b">
         <button
           onClick={() => setActiveTab('sync')}
-          class={`px-4 py-2 font-medium transition-colors ${
-            activeTab() === 'sync' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-          }`}
+          class={`px-4 py-2 font-medium transition-colors ${activeTab() === 'sync' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
+            }`}
         >
           <div class="flex items-center gap-2">
             <RefreshCw size={16} />
@@ -186,9 +196,8 @@ export default function Admin() {
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          class={`px-4 py-2 font-medium transition-colors ${
-            activeTab() === 'users' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-          }`}
+          class={`px-4 py-2 font-medium transition-colors ${activeTab() === 'users' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
+            }`}
         >
           <div class="flex items-center gap-2">
             <Users size={16} />
@@ -203,9 +212,8 @@ export default function Admin() {
           <div class="max-w-2xl mx-auto space-y-4">
             <div
               onClick={!syncing() ? handleSync : undefined}
-              class={`p-6 border rounded-lg bg-card flex items-center gap-4 transition-all ${
-                syncing() ? 'opacity-70 cursor-wait' : 'hover:border-primary/50 cursor-pointer hover:bg-secondary/30'
-              }`}
+              class={`p-6 border rounded-lg bg-card flex items-center gap-4 transition-all ${syncing() ? 'opacity-70 cursor-wait' : 'hover:border-primary/50 cursor-pointer hover:bg-secondary/30'
+                }`}
             >
               <div class="p-3 bg-purple-500/10 text-purple-400 rounded-lg">
                 <RefreshCw size={24} class={syncing() ? 'animate-spin' : ''} />
@@ -263,31 +271,29 @@ export default function Admin() {
                           <td class="p-3">{user.username}</td>
                           <td class="p-3 text-sm text-muted">{user.email}</td>
                           <td class="p-3">
-                            <span class={`px-2 py-1 rounded text-xs font-medium ${
-                              user.role === 'admin' ? 'bg-purple-500/10 text-purple-400' :
-                              user.role === 'user' ? 'bg-blue-500/10 text-blue-400' :
-                              'bg-gray-500/10 text-gray-400'
-                            }`}>
+                            <span class={`px-2 py-1 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-purple-500/10 text-purple-400' :
+                                user.role === 'user' ? 'bg-blue-500/10 text-blue-400' :
+                                  'bg-gray-500/10 text-gray-400'
+                              }`}>
                               {user.role}
                             </span>
                           </td>
                           <td class="p-3 text-sm text-muted">
                             <Show when={user.role === 'admin'} fallback={
-                                user.allowed_segments && user.allowed_segments.length > 0 
+                              user.allowed_segments && user.allowed_segments.length > 0
                                 ? <span title={user.allowed_segments.join(', ')}>{user.allowed_segments.length} segmento(s)</span>
                                 : <span class="text-yellow-500 text-xs">Nenhum</span>
                             }>
-                                <span class="text-muted italic">Todos (Admin)</span>
+                              <span class="text-muted italic">Todos (Admin)</span>
                             </Show>
                           </td>
                           <td class="p-3 text-center">
                             <button
                               onClick={() => handleToggleActive(user)}
-                              class={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                user.is_active
+                              class={`px-2 py-1 rounded text-xs font-medium transition-colors ${user.is_active
                                   ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
                                   : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                              }`}
+                                }`}
                             >
                               {user.is_active ? 'Ativo' : 'Inativo'}
                             </button>
@@ -419,14 +425,14 @@ export default function Admin() {
                       )}
                     </For>
                     <Show when={!filterOptions()?.segmentos?.length}>
-                        <p class="text-xs text-muted">Nenhum segmento disponível encontrado.</p>
+                      <p class="text-xs text-muted">Nenhum segmento disponível encontrado.</p>
                     </Show>
                   </Show>
                 </div>
                 <p class="text-xs text-muted">
-                    {formData().role === 'admin' 
-                        ? 'Admin tem acesso total independente desta seleção.' 
-                        : 'Se nenhum selecionado, o usuário não verá dados.'}
+                  {formData().role === 'admin'
+                    ? 'Admin tem acesso total independente desta seleção.'
+                    : 'Se nenhum selecionado, o usuário não verá dados.'}
                 </p>
               </div>
 

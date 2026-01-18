@@ -1,6 +1,7 @@
-import { createSignal, For, Show, onMount, createEffect } from 'solid-js';
-import { Code, Send, Trash2, FileCode, Database, Zap, Clock, Info, BookOpen, Search, ChevronDown, ChevronRight } from 'lucide-solid';
+import { createSignal, For, Show, onMount, createEffect, onCleanup } from 'solid-js';
+import { Code, Send, Trash2, FileCode, Database, Zap, Clock, Info, BookOpen, Search, ChevronDown, ChevronRight, Loader2, StopCircle } from 'lucide-solid';
 import api from '../lib/api';
+import auth from '@/store/auth'; // Import auth store
 import { MessageActions } from '../components/MessageActions';
 import 'github-markdown-css/github-markdown.css';
 import './chat-markdown.css';
@@ -11,6 +12,7 @@ interface Message {
   content: string;
   timestamp: string;
   code_references?: CodeReference[];
+  isStreaming?: boolean;
 }
 
 interface CodeReference {
@@ -36,6 +38,11 @@ export default function CodeChat() {
   const [loading, setLoading] = createSignal(false);
   const [indexStats, setIndexStats] = createSignal<IndexStats | null>(null);
   const [examplesExpanded, setExamplesExpanded] = createSignal(true);
+  
+  // Streaming states
+  const [currentStatus, setCurrentStatus] = createSignal<string>('');
+  const [eventSource, setEventSource] = createSignal<EventSource | null>(null);
+
   let messagesEndRef: HTMLDivElement | undefined;
 
   // Examples de perguntas
@@ -91,6 +98,30 @@ export default function CodeChat() {
     }
   });
 
+  onCleanup(() => {
+    if (eventSource()) {
+      eventSource()?.close();
+    }
+  });
+
+  const stopGeneration = () => {
+    if (eventSource()) {
+      eventSource()?.close();
+      setEventSource(null);
+      setLoading(false);
+      setCurrentStatus('');
+      
+      // Add cancellation note
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last.role === 'assistant') {
+           return [...prev.slice(0, -1), { ...last, content: last.content + '\n\n_[Geração interrompida]_', isStreaming: false }];
+        }
+        return prev;
+      });
+    }
+  };
+
   const sendMessage = async (e?: Event) => {
     e?.preventDefault();
     if (!input().trim() || loading()) return;
@@ -103,38 +134,82 @@ export default function CodeChat() {
     };
 
     setMessages([...messages(), userMessage]);
+    const prompt = input();
     setInput('');
     setLoading(true);
+    setCurrentStatus('Iniciando...');
+
+    // Placeholder assistant message
+    const assistantId = (Date.now() + 1).toString();
+    setMessages(prev => [...prev, {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+      isStreaming: true
+    }]);
 
     try {
-      const response = await api.post('/code-chat/query', {
-        message: userMessage.content,
-        history: messages().slice(-5).map(m => ({
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp
-        }))
-      });
+      const token = auth.token();
+      if (!token) throw new Error("Not authenticated");
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.data.response,
-        timestamp: response.data.metadata.timestamp,
-        code_references: response.data.code_references
+      const es = new EventSource(`/api/v1/code-chat/stream?q=${encodeURIComponent(prompt)}&token=${encodeURIComponent(token)}`);
+      setEventSource(es);
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'progress') {
+             setCurrentStatus(data.message);
+          } else if (data.type === 'references') {
+             setMessages(prev => prev.map(msg => 
+               msg.id === assistantId ? { ...msg, code_references: data.references } : msg
+             ));
+          } else if (data.type === 'token') {
+             setMessages(prev => prev.map(msg => 
+               msg.id === assistantId ? { ...msg, content: msg.content + data.text } : msg
+             ));
+          } else if (data.type === 'done') {
+             setLoading(false);
+             setCurrentStatus('');
+             setMessages(prev => prev.map(msg => 
+               msg.id === assistantId ? { ...msg, isStreaming: false } : msg
+             ));
+             es.close();
+             setEventSource(null);
+          } else if (data.type === 'error') {
+             throw new Error(data.content);
+          }
+          
+        } catch (err) {
+           console.error("SSE Error:", err);
+           setMessages(prev => prev.map(msg => 
+               msg.id === assistantId ? { ...msg, content: msg.content + `\n\n❌ Erro: ${err}` } : msg
+           ));
+           es.close();
+           setLoading(false);
+        }
       };
 
-      setMessages([...messages(), userMessage, assistantMessage]);
+      es.onerror = (err) => {
+         console.error("SSE Connection Error:", err);
+         es.close();
+         setLoading(false);
+         setEventSource(null);
+         setMessages(prev => prev.map(msg => 
+            msg.id === assistantId ? { ...msg, isStreaming: false } : msg
+         ));
+      };
 
     } catch (error: any) {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `❌ **Erro**: ${error.response?.data?.detail || error.message}`,
+        content: `❌ **Erro**: ${error.message}`,
         timestamp: new Date().toISOString()
       };
-      setMessages([...messages(), userMessage, errorMessage]);
-    } finally {
+      setMessages(prev => [...prev, errorMessage]);
       setLoading(false);
     }
   };
@@ -194,7 +269,7 @@ export default function CodeChat() {
         {/* Main Chat Area */}
         <div class="flex flex-col min-h-0 bg-background/50">
           {/* Messages */}
-          <div class="flex-1 overflow-y-auto p-6 space-y-6">
+          <div class="flex-1 overflow-auto p-6 space-y-6">
             <For each={messages()}>
               {(message) => (
                 <div class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
@@ -238,7 +313,7 @@ export default function CodeChat() {
                       </div>
                     </Show>
 
-                    <Show when={message.role === 'assistant'}>
+                    <Show when={message.role === 'assistant' && !message.isStreaming}>
                       <div class="mt-3 pt-2 border-t border-border/10">
                         <MessageActions messageText={message.content} messageId={message.id} />
                       </div>
@@ -251,12 +326,11 @@ export default function CodeChat() {
             <Show when={loading()}>
               <div class="flex justify-start">
                 <div class="bg-card border rounded-2xl rounded-tl-none p-4 flex items-center gap-3">
-                  <div class="flex space-x-1">
-                    <div class="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                    <div class="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                    <div class="w-2 h-2 bg-primary/50 rounded-full animate-bounce"></div>
+                   {/* Thought Process Indicator */}
+                  <div class="flex items-center gap-2 text-xs text-muted font-medium animate-pulse">
+                     <Loader2 size={14} class="animate-spin text-primary" />
+                     {currentStatus() || 'Processando...'}
                   </div>
-                  <span class="text-xs text-muted font-medium">Analisando código...</span>
                 </div>
               </div>
             </Show>
@@ -286,21 +360,29 @@ export default function CodeChat() {
                 />
               </div>
 
-              <button
-                type="submit"
-                class="btn btn-primary shadow-md hover:shadow-lg transition-all"
-                disabled={loading() || !input().trim()}
-              >
-                <Show when={!loading()} fallback={<Clock size={20} class="animate-spin" />}>
-                  <Send size={20} />
-                </Show>
-              </button>
+              <Show when={loading()} fallback={
+                  <button
+                    type="submit"
+                    class="btn btn-primary shadow-md hover:shadow-lg transition-all"
+                    disabled={!input().trim()}
+                  >
+                    <Send size={20} />
+                  </button>
+              }>
+                 <button
+                    type="button"
+                    onClick={stopGeneration}
+                    class="btn btn-destructive shadow-md hover:shadow-lg transition-all"
+                  >
+                    <StopCircle size={20} />
+                  </button>
+              </Show>
             </form>
           </div>
         </div>
 
         {/* Right Sidebar - Examples & Info */}
-        <div class="border-l bg-card/30 p-6 overflow-y-auto hidden lg:block">
+        <div class="border-l bg-card/30 p-6 overflow-auto hidden lg:block">
           <div class="sticky top-0 space-y-8">
             {/* Examples */}
             <div class="space-y-4">

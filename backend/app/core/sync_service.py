@@ -61,10 +61,8 @@ class SyncService:
             logger.info("🔨 Concatenando DataFrames...")
             df = pd.concat(chunks, ignore_index=True)
             
-            # Definir caminho do arquivo (considerando Docker e Dev)
+            # Definir caminho do arquivo (local)
             base_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "parquet"
-            if os.path.exists("/app/data/parquet"): # Docker check
-                base_path = Path("/app/data/parquet")
             
             base_path.mkdir(parents=True, exist_ok=True)
             parquet_file = base_path / "admmat.parquet"

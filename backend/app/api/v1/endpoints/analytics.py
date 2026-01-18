@@ -7,6 +7,8 @@ from typing import Annotated, List, Dict, Any, Optional
 from datetime import datetime, timedelta, date
 import json
 import logging
+import duckdb
+import pyarrow as pa
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -14,21 +16,21 @@ from pydantic import BaseModel
 from app.api.dependencies import get_current_active_user
 from app.infrastructure.database.models import User
 from app.core.monitoring.metrics_dashboard import MetricsDashboard
-from app.config.settings import settings # For initializing MetricsDashboard
+from app.config.settings import settings 
+from app.core.data_scope_service import data_scope_service
+from app.core.duckdb_config import get_safe_connection
 
 logger = logging.getLogger(__name__)
 
 # Initialize MetricsDashboard globally
-# In a larger application, consider dependency injection or FastAPI lifespan events.
 metrics_dashboard: Optional[MetricsDashboard] = None
 
-# @Deprecate this global initialization in favor of FastAPI's lifespan events. This is for quick setup.
 def _initialize_metrics_dashboard():
     global metrics_dashboard
     if metrics_dashboard is None:
         metrics_dashboard = MetricsDashboard(
-            query_history=None, # Will use default from settings in MetricsDashboard
-            response_cache=None # Will use default from settings in MetricsDashboard
+            query_history=None, 
+            response_cache=None 
         )
         logger.info("MetricsDashboard initialized.")
 
@@ -60,10 +62,6 @@ async def get_kpis(
     current_user: Annotated[User, Depends(get_current_active_user)],
     days: int = Query(7, description="Number of days to look back for metrics"),
 ) -> MetricsSummary:
-    """
-    Retrieves key performance indicators (KPIs) for the agent system.
-    (T4.4.1: GET /analytics/kpis)
-    """
     if metrics_dashboard is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -85,10 +83,6 @@ async def get_error_trend(
     current_user: Annotated[User, Depends(get_current_active_user)],
     days: int = Query(30, description="Number of days to look back for error trend"),
 ) -> List[ErrorTrendItem]:
-    """
-    Provides a daily trend of errors for the agent system.
-    (T4.4.1: GET /analytics/error-trend)
-    """
     if metrics_dashboard is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -111,10 +105,6 @@ async def get_top_queries(
     days: int = Query(7, description="Number of days to look back for top queries"),
     limit: int = Query(10, description="Maximum number of top queries to return"),
 ) -> List[TopQueryItem]:
-    """
-    Identifies the most frequent queries made to the agent system.
-    (T4.4.1: GET /analytics/top-queries)
-    """
     if metrics_dashboard is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -137,53 +127,45 @@ async def get_filter_options(
     segmento: Optional[str] = Query(None, description="Segmento para filtrar as categorias retornadas"),
     categoria: Optional[str] = Query(None, description="Categoria para filtrar os grupos retornados")
 ) -> Dict[str, List[str]]:
-    """
-    Retorna valores únicos de segmento, categoria e grupo para os filtros.
-    Pode filtrar categorias por segmento e grupos por categoria.
-    """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        df = data_scope_service.get_filtered_dataframe(current_user, max_rows=50000)
+        # Create safe connection for streaming
+        conn = get_safe_connection()
+        
+        # Get lazy relation directly (True Streaming)
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
+        
+        # Check if empty (efficiently)
+        try:
+            # Quick check if relation has data without full scan if possible, 
+            # but for filter options we need scan anyway.
+            # DuckDB relation doesn't have is_empty property easily without query.
+            # We can skip check and let queries return empty.
+            cols = rel.columns
+        except Exception:
+            # Likely execution error or empty
+            return {"categorias": [], "segmentos": [], "grupos": []}
 
-        categorias = []
-        segmentos = []
-        grupos = []
+        # Helper to get distinct list
+        def get_distinct(rel_obj, col):
+            if col not in cols: return []
+            res = rel_obj.select(col).distinct().order(col).fetchall()
+            return [str(r[0]).strip() for r in res if r[0] and str(r[0]).strip() not in ['null', 'None']]
 
-        # Filtrar o DataFrame pelo segmento se fornecido
-        df_filtered = df
-        if segmento and "NOMESEGMENTO" in df.columns:
-            df_filtered = df_filtered.filter(pl.col("NOMESEGMENTO").str.to_lowercase() == segmento.lower())
+        # Apply Filters
+        if segmento and "NOMESEGMENTO" in cols:
+            rel = rel.filter(f"LOWER(NOMESEGMENTO) = '{segmento.lower()}'")
+        
+        if categoria and "NOMECATEGORIA" in cols:
+            rel = rel.filter(f"LOWER(NOMECATEGORIA) = '{categoria.lower()}'")
 
-        # Filtrar pelo categoria se fornecido (para grupos)
-        if categoria and "NOMECATEGORIA" in df.columns:
-            df_filtered = df_filtered.filter(pl.col("NOMECATEGORIA").str.to_lowercase() == categoria.lower())
+        categorias = get_distinct(rel, "NOMECATEGORIA")
+        grupos = get_distinct(rel, "NOMEGRUPO")
 
-        # Categorias únicas (filtradas por segmento se fornecido)
-        if "NOMECATEGORIA" in df_filtered.columns:
-            cat_unique = df_filtered.select("NOMECATEGORIA").unique().sort("NOMECATEGORIA")
-            for row in cat_unique.iter_rows(named=True):
-                cat = str(row["NOMECATEGORIA"]).strip()
-                if cat and cat != "null" and cat != "None":
-                    categorias.append(cat)
-
-        # Grupos únicos (filtrados por segmento e categoria se fornecidos)
-        if "NOMEGRUPO" in df_filtered.columns:
-            grp_unique = df_filtered.select("NOMEGRUPO").unique().sort("NOMEGRUPO")
-            for row in grp_unique.iter_rows(named=True):
-                grp = str(row["NOMEGRUPO"]).strip()
-                if grp and grp != "null" and grp != "None":
-                    grupos.append(grp)
-
-        # Segmentos únicos (sempre da base original)
-        df_all_segments = data_scope_service.get_filtered_dataframe(current_user, max_rows=50000)
-        if "NOMESEGMENTO" in df_all_segments.columns:
-            seg_unique = df_all_segments.select("NOMESEGMENTO").unique().sort("NOMESEGMENTO")
-            for row in seg_unique.iter_rows(named=True):
-                seg = str(row["NOMESEGMENTO"]).strip()
-                if seg and seg != "null" and seg != "None":
-                    segmentos.append(seg)
+        # Segments always from base (unfiltered by other selections to allow changing selection)
+        # Segments always from base (unfiltered by other selections to allow changing selection)
+        # Re-fetch base for segments using SAME connection
+        base_rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
+        segmentos = get_distinct(base_rel, "NOMESEGMENTO")
 
         return {
             "categorias": categorias,
@@ -193,6 +175,7 @@ async def get_filter_options(
 
     except Exception as e:
         logger.error(f"Error getting filter options: {e}", exc_info=True)
+        # Cannot access arrow_table.num_rows here anymore
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting filter options: {str(e)}"
@@ -206,140 +189,183 @@ async def get_sales_analysis(
     segmento: Optional[str] = Query(None),
     grupo: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
-    """
-    Análise de vendas e estoque com gráficos.
-    Retorna dados para gráficos de vendas por categoria, giro de estoque e distribuição ABC.
-    """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        # Obter o DataFrame completo (Lazy) para máxima performance sem limites arbitrários no início
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        # Create safe connection for streaming
+        conn = get_safe_connection()
+        
+        # Get lazy relation (True Streaming)
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
 
-        if df.is_empty():
-            return {
+        try:
+             cols = rel.columns
+        except Exception:
+             return {
                 "vendas_por_categoria": [],
                 "giro_estoque": [],
                 "distribuicao_abc": {"A": 0, "B": 0, "C": 0, "detalhes": []}
             }
 
-        # Determinar nomes corretos das colunas (suporta tanto maiúsculas quanto minúsculas)
-        categoria_col = "nomecategoria" if "nomecategoria" in df.columns else ("NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else ("CATEGORIA" if "CATEGORIA" in df.columns else None))
-        segmento_col = "nomesegmento" if "nomesegmento" in df.columns else ("NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else ("SEGMENTO" if "SEGMENTO" in df.columns else None))
-        grupo_col = "nomegrupo" if "nomegrupo" in df.columns else ("NOMEGRUPO" if "NOMEGRUPO" in df.columns else None)
-        produto_col = "codigo" if "codigo" in df.columns else "PRODUTO"
-        nome_col = "nome_produto" if "nome_produto" in df.columns else "NOME"
-        venda_col = "venda_30_d" if "venda_30_d" in df.columns else "VENDA_30DD"
-        estoque_col = "estoque_atual" if "estoque_atual" in df.columns else "ESTOQUE_UNE"
+        logger.info(f"Processing sales analysis (Streaming Mode)")
 
-        # Aplicar filtros se fornecidos
+        chart_title = "Vendas por Categoria" # Default fallback
+
+        # Usar nomes UPPERCASE do Parquet (padrão garantido)
+        categoria_col = "NOMECATEGORIA"
+        segmento_col = "NOMESEGMENTO"
+        grupo_col = "NOMEGRUPO"
+        produto_col = "PRODUTO"
+        nome_col = "NOME"
+        venda_col = "VENDA_30DD"
+        estoque_col = "ESTOQUE_UNE"
+
+        # Apply Filters
         if categoria and categoria_col:
-            df = df.filter(pl.col(categoria_col).str.to_lowercase() == categoria.lower())
+            rel = rel.filter(f"LOWER({categoria_col}) = '{categoria.lower()}'")
         if segmento and segmento_col:
-            df = df.filter(pl.col(segmento_col).str.to_lowercase() == segmento.lower())
+            rel = rel.filter(f"LOWER({segmento_col}) = '{segmento.lower()}'")
         if grupo and grupo_col:
-            df = df.filter(pl.col(grupo_col).str.to_lowercase() == grupo.lower())
+            rel = rel.filter(f"LOWER({grupo_col}) = '{grupo.lower()}'")
 
-        # Função auxiliar para casting seguro
-        def safe_cast_col(col_name):
-            if col_name not in df.columns: return pl.lit(0).cast(pl.Float64)
-            # Se já for numérico, não precisa converter de string
-            col_type = df.schema[col_name]
-            if col_type in [pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.Int16, pl.Int8]:
-                return pl.col(col_name).fill_null(0).cast(pl.Float64)
-            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
-
-        # 1. Vendas por Categoria (Top 10)
+        # 1. Sales by Category (Dynamic Drill-down)
         vendas_categoria = []
-        if categoria_col and venda_col in df.columns:
-            df_cat = df.group_by(categoria_col).agg([
-                safe_cast_col(venda_col).sum().alias("vendas")
-            ]).sort("vendas", descending=True).head(10)
+        chart_title = "Vendas por Categoria (Top 10)"
+        breakdown_col = categoria_col
 
-            for row in df_cat.iter_rows(named=True):
+        # Dynamic Drill-down Logic
+        if grupo and grupo_col and produto_col and nome_col:
+             # Drill down to Product Level
+             breakdown_col = nome_col
+             chart_title = "Top Produtos no Grupo (Top 10)"
+        elif categoria and categoria_col and grupo_col:
+             # Drill down to Group Level
+             breakdown_col = grupo_col
+             chart_title = "Vendas por Grupo (Top 10)"
+        
+        if breakdown_col and venda_col:
+            sql = f"""
+                SELECT {breakdown_col}, SUM(TRY_CAST({venda_col} AS DOUBLE)) as v
+                FROM cat_sales
+                GROUP BY {breakdown_col}
+                ORDER BY v DESC
+                LIMIT 10
+            """
+            rows = rel.query("cat_sales", sql).fetchall()
+            for r in rows:
                 vendas_categoria.append({
-                    "categoria": str(row[categoria_col])[:30],
-                    "vendas": int(row["vendas"])
+                    "categoria": str(r[0])[:30], # Label ("categoria") mantido para compatibilidade frontend
+                    "vendas": int(r[1] or 0)
                 })
 
-        # 2. Giro de Estoque (Top 15)
+        # 2. Stock Turn (Giro)
         giro_estoque = []
-        if venda_col in df.columns and estoque_col in df.columns and produto_col in df.columns and nome_col in df.columns:
-            df_giro = df.with_columns([
-                safe_cast_col(venda_col).alias("v_clean"),
-                safe_cast_col(estoque_col).alias("e_clean")
-            ]).filter(
-                (pl.col("v_clean") > 0) & (pl.col("e_clean") > 0)
-            ).group_by(produto_col, nome_col).agg([
-                pl.col("v_clean").sum().alias("vendas"),
-                pl.col("e_clean").mean().alias("estoque_medio")
-            ]).with_columns([
-                (pl.col("vendas") / pl.col("estoque_medio")).alias("giro")
-            ]).sort("giro", descending=True).head(15)
-
-            for row in df_giro.iter_rows(named=True):
+        if venda_col and estoque_col and produto_col and nome_col:
+            sql = f"""
+                SELECT {produto_col}, {nome_col},
+                       SUM(TRY_CAST({venda_col} AS DOUBLE)) as vendas,
+                       AVG(TRY_CAST({estoque_col} AS DOUBLE)) as est_medio
+                FROM giro
+                WHERE TRY_CAST({venda_col} AS DOUBLE) > 0 AND TRY_CAST({estoque_col} AS DOUBLE) > 0
+                GROUP BY {produto_col}, {nome_col}
+                ORDER BY (vendas / est_medio) DESC
+                LIMIT 15
+            """
+            rows = rel.query("giro", sql).fetchall()
+            for r in rows:
+                vendas = float(r[2] or 0)
+                est_medio = float(r[3] or 1) # avoid div by zero
+                giro = vendas / est_medio if est_medio > 0 else 0
                 giro_estoque.append({
-                    "produto": str(row[produto_col]),
-                    "nome": str(row[nome_col])[:40],
-                    "giro": round(float(row["giro"]), 2)
+                    "produto": str(r[0]),
+                    "nome": str(r[1])[:40],
+                    "giro": round(giro, 2)
                 })
 
-        # 3. Distribuição ABC (Princípio de Pareto - Dataset Completo)
+        # 3. ABC Distribution
         distribuicao_abc = {"A": 0, "B": 0, "C": 0, "detalhes": [], "receita_por_classe": {}}
+        val_col = "MES_01" if "MES_01" in cols else venda_col
 
-        # Usamos MES_01 para faturamento ou venda_col se MES_01 estiver zerado
-        # No varejo, Pareto pode ser por Valor ou Volume
-        val_col = "MES_01" if "MES_01" in df.columns else venda_col
-
-        if val_col in df.columns and produto_col in df.columns and nome_col in df.columns:
-            df_abc_raw = df.with_columns([
-                safe_cast_col(val_col).alias("valor_clean")
-            ]).filter(pl.col("valor_clean") > 0)
-
-            if not df_abc_raw.is_empty():
-                # Ordenar por valor decrescente
-                df_abc = df_abc_raw.select([
-                    pl.col(produto_col).alias("PRODUTO"),
-                    pl.col(nome_col).alias("NOME"),
-                    pl.col("valor_clean").alias("receita")
-                ]).sort("receita", descending=True)
-
-                total_receita = df_abc.select(pl.col("receita").sum()).item()
-
-                if total_receita > 0:
-                    # Calcular Acumulado
-                    df_abc = df_abc.with_columns([
-                        (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
-                    ])
-
-                    # Classificação ABC (80/15/5)
-                    df_abc = df_abc.with_columns([
-                        pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
-                        .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
-                        .otherwise(pl.lit("C")).alias("classe")
-                    ])
-
-                    # Resultados
-                    resumo = df_abc.group_by("classe").agg([
-                        pl.count().alias("qtd"),
-                        pl.col("receita").sum().alias("soma")
-                    ])
-
-                    for row in resumo.iter_rows(named=True):
-                        distribuicao_abc[row["classe"]] = row["qtd"]
-                        distribuicao_abc["receita_por_classe"][row["classe"]] = row["soma"]
-
-                    distribuicao_abc["detalhes"] = df_abc.head(20).to_dicts()
+        if val_col and produto_col and nome_col:
+            # Check empty
+            count = rel.filter(f"TRY_CAST({val_col} AS DOUBLE) > 0").count("*").fetchone()[0]
+            if count > 0:
+                # Calculate ABC in SQL
+                # Window functions are great here
+                abc_sql = f"""
+                    WITH product_sales AS (
+                        SELECT
+                            {produto_col} as PRODUTO,
+                            {nome_col} as NOME,
+                            TRY_CAST({val_col} AS DOUBLE) as receita
+                        FROM rel
+                        WHERE TRY_CAST({val_col} AS DOUBLE) > 0
+                    ),
+                    total AS (
+                        SELECT SUM(receita) as total_rev FROM product_sales
+                    ),
+                    cumul AS (
+                        SELECT 
+                            PRODUTO, NOME, receita,
+                            SUM(receita) OVER (ORDER BY receita DESC) as running_sum,
+                            (SUM(receita) OVER (ORDER BY receita DESC) / (SELECT total_rev FROM total)) * 100 as perc_acumulada
+                        FROM product_sales
+                    )
+                    SELECT 
+                        PRODUTO, NOME, receita, perc_acumulada,
+                        CASE 
+                            WHEN perc_acumulada <= 80 THEN 'A'
+                            WHEN perc_acumulada <= 95 THEN 'B'
+                            ELSE 'C'
+                        END as classe
+                    FROM cumul
+                    ORDER BY receita DESC
+                """
+                
+                # Execute full query
+                # Note: DuckDB CTEs in rel.query work, but 'FROM rel' inside CTE
+                # must refer to the alias registered by rel.query("abc", ...).
+                # Actually, inside CTE 'FROM rel' is tricky. 
+                # Better to use implicit context or alias.
+                # If we name alias 'rel_data', then FROM rel_data.
+                # Here we used alias 'abc'. So internal FROM should be FROM abc? No.
+                # 'abc' is result. 
+                # Correct pattern: 
+                # rel.query("my_view", "SELECT ... FROM my_view ...") 
+                # so the base table is accessible as 'my_view'.
+                
+                abc_sql = abc_sql.replace("FROM rel", "FROM abc") 
+                abc_rel = rel.query("abc", abc_sql)
+                
+                # Summary
+                summary_sql = "SELECT classe, COUNT(*), SUM(receita) FROM abc_rel GROUP BY classe"
+                summary_rows = abc_rel.query("summ", summary_sql).fetchall()
+                
+                for r in summary_rows:
+                    cls, qtd, soma = r
+                    distribuicao_abc[cls] = qtd
+                    distribuicao_abc["receita_por_classe"][cls] = soma
+                
+                # Details (Top 20)
+                details_rows = abc_rel.limit(20).fetchall()
+                # Cols: PRODUTO, NOME, receita, perc, classe
+                for r in details_rows:
+                    distribuicao_abc["detalhes"].append({
+                        "PRODUTO": str(r[0]),
+                        "NOME": str(r[1]),
+                        "receita": float(r[2]),
+                        "perc_acumulada": float(r[3]),
+                        "classe": str(r[4])
+                    })
 
         return {
             "vendas_por_categoria": vendas_categoria,
+            "chart_title": chart_title,
             "giro_estoque": giro_estoque,
             "distribuicao_abc": distribuicao_abc
         }
 
     except Exception as e:
         logger.error(f"Error in sales analysis: {e}", exc_info=True)
+        logger.error(f"Filters applied - categoria: {categoria}, segmento: {segmento}, grupo: {grupo}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error analyzing sales: {str(e)}"
@@ -364,111 +390,97 @@ async def get_abc_details(
     segmento: Optional[str] = Query(None),
     grupo: Optional[str] = Query(None)
 ) -> List[ABCDetailItem]:
-    """
-    Retorna detalhes dos SKUs de uma classe ABC específica com informações de UNE.
-    Usado para visualizar/baixar os produtos de cada classe.
-    """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        # Validar classe
         if classe not in ['A', 'B', 'C']:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Classe deve ser A, B ou C"
-            )
+            raise HTTPException(status_code=400, detail="Classe must be A, B, or C")
 
-        # Obter DataFrame
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        # Create safe connection for streaming
+        conn = get_safe_connection()
+        
+        # Get lazy relation (True Streaming)
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
+        
+        try:
+             cols = rel.columns
+        except Exception:
+             return []
 
-        if df.is_empty():
-            return []
+        logger.info(f"Processing ABC details for classe {classe} (Streaming Mode)")
 
-        # Determinar colunas
-        categoria_col = "nomecategoria" if "nomecategoria" in df.columns else ("NOMECATEGORIA" if "NOMECATEGORIA" in df.columns else None)
-        segmento_col = "nomesegmento" if "nomesegmento" in df.columns else ("NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else None)
-        grupo_col = "nomegrupo" if "nomegrupo" in df.columns else ("NOMEGRUPO" if "NOMEGRUPO" in df.columns else None)
-        produto_col = "codigo" if "codigo" in df.columns else "PRODUTO"
-        nome_col = "nome_produto" if "nome_produto" in df.columns else "NOME"
-        une_col = "une" if "une" in df.columns else "UNE"
-        une_nome_col = "une_nome" if "une_nome" in df.columns else ("UNE_NOME" if "UNE_NOME" in df.columns else None)
+        # Usar nomes UPPERCASE do Parquet (padrão garantido)
+        categoria_col = "NOMECATEGORIA"
+        segmento_col = "NOMESEGMENTO"
+        grupo_col = "NOMEGRUPO"
+        produto_col = "PRODUTO"
+        nome_col = "NOME"
+        une_col = "UNE"
+        une_nome_col = "UNE_NOME"
+        val_col = "MES_01" if "MES_01" in cols else "VENDA_30DD"
 
-        # Aplicar filtros
+        if not val_col: return []
+
+        # Filters
         if categoria and categoria_col:
-            df = df.filter(pl.col(categoria_col).str.to_lowercase() == categoria.lower())
+            rel = rel.filter(f"LOWER({categoria_col}) = '{categoria.lower()}'")
         if segmento and segmento_col:
-            df = df.filter(pl.col(segmento_col).str.to_lowercase() == segmento.lower())
+            rel = rel.filter(f"LOWER({segmento_col}) = '{segmento.lower()}'")
         if grupo and grupo_col:
-            df = df.filter(pl.col(grupo_col).str.to_lowercase() == grupo.lower())
+            rel = rel.filter(f"LOWER({grupo_col}) = '{grupo.lower()}'")
 
-        # Função auxiliar para casting seguro
-        def safe_cast_col(col_name):
-            if col_name not in df.columns:
-                return pl.lit(0).cast(pl.Float64)
-            col_type = df.schema[col_name]
-            if col_type in [pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.Int16, pl.Int8]:
-                return pl.col(col_name).fill_null(0).cast(pl.Float64)
-            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
+        # ABC Logic (Reused)
+        une_sel = f"{une_col} as UNE," if une_col else "'N/A' as UNE,"
+        une_nome_sel = f"{une_nome_col} as UNE_NOME," if une_nome_col else "NULL as UNE_NOME,"
 
-        # Calcular ABC usando MES_01 ou VENDA_30DD
-        val_col = "MES_01" if "MES_01" in df.columns else ("venda_30_d" if "venda_30_d" in df.columns else "VENDA_30DD")
-
-        if val_col not in df.columns:
-            return []
-
-        # Preparar dados ABC
-        df_abc_raw = df.with_columns([
-            safe_cast_col(val_col).alias("valor_clean")
-        ]).filter(pl.col("valor_clean") > 0)
-
-        if df_abc_raw.is_empty():
-            return []
-
-        # Selecionar colunas necessárias
-        select_cols = [
-            pl.col(produto_col).alias("PRODUTO"),
-            pl.col(nome_col).alias("NOME"),
-            pl.col(une_col).cast(pl.Utf8).alias("UNE"),
-            pl.col("valor_clean").alias("receita")
-        ]
-
-        if une_nome_col:
-            select_cols.append(pl.col(une_nome_col).alias("UNE_NOME"))
-
-        df_abc = df_abc_raw.select(select_cols).sort("receita", descending=True)
-
-        total_receita = df_abc.select(pl.col("receita").sum()).item()
-
-        if total_receita <= 0:
-            return []
-
-        # Calcular percentual acumulado
-        df_abc = df_abc.with_columns([
-            (pl.col("receita").cum_sum() / total_receita * 100).alias("perc_acumulada")
-        ])
-
-        # Classificar ABC
-        df_abc = df_abc.with_columns([
-            pl.when(pl.col("perc_acumulada") <= 80).then(pl.lit("A"))
-            .when(pl.col("perc_acumulada") <= 95).then(pl.lit("B"))
-            .otherwise(pl.lit("C")).alias("classe")
-        ])
-
-        # Filtrar pela classe solicitada
-        df_result = df_abc.filter(pl.col("classe") == classe)
-
-        # Converter para lista de dicts
+        abc_sql = f"""
+            WITH product_sales AS (
+                SELECT
+                    {produto_col} as PRODUTO,
+                    {nome_col} as NOME,
+                    {une_sel}
+                    {une_nome_sel}
+                    TRY_CAST({val_col} AS DOUBLE) as receita
+                FROM abc_det
+                WHERE TRY_CAST({val_col} AS DOUBLE) > 0
+            ),
+            total AS (
+                SELECT SUM(receita) as total_rev FROM product_sales
+            ),
+            cumul AS (
+                SELECT 
+                    *,
+                    (SUM(receita) OVER (ORDER BY receita DESC) / (SELECT total_rev FROM total)) * 100 as perc_acumulada
+                FROM product_sales
+            ),
+            classified AS (
+                SELECT 
+                    *,
+                    CASE 
+                        WHEN perc_acumulada <= 80 THEN 'A'
+                        WHEN perc_acumulada <= 95 THEN 'B'
+                        ELSE 'C'
+                    END as classe
+                FROM cumul
+            )
+            SELECT * FROM classified WHERE classe = '{classe}'
+        """
+        
+        rows = rel.query("abc_det", abc_sql).fetchall()
+        
         results = []
-        for row in df_result.iter_rows(named=True):
+        # Cols: PRODUTO, NOME, UNE, UNE_NOME, receita, perc, classe (implied by where)
+        # Note: Window functions might shift col order slightly in select *, explicit is better but verify
+        # DuckDB select * from CTE preserves order usually.
+        # Let's map by index assuming order: PRODUTO, NOME, UNE, UNE_NOME, receita, perc_acumulada, classe
+        
+        for r in rows:
             results.append(ABCDetailItem(
-                PRODUTO=str(row["PRODUTO"]),
-                NOME=str(row["NOME"]),
-                UNE=str(row["UNE"]),
-                UNE_NOME=str(row.get("UNE_NOME", "")),
-                receita=float(row["receita"]),
-                perc_acumulada=float(row["perc_acumulada"]),
-                classe=str(row["classe"])
+                PRODUTO=str(r[0]),
+                NOME=str(r[1]),
+                UNE=str(r[2]),
+                UNE_NOME=str(r[3]) if r[3] else None,
+                receita=float(r[4]),
+                perc_acumulada=float(r[5]),
+                classe=str(r[6])
             ))
 
         return results
@@ -477,6 +489,7 @@ async def get_abc_details(
         raise
     except Exception as e:
         logger.error(f"Error getting ABC details: {e}", exc_info=True)
+        logger.error(f"Filters - classe: {classe}, categoria: {categoria}, segmento: {segmento}, grupo: {grupo}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting ABC details: {str(e)}"

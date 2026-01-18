@@ -71,18 +71,18 @@ def main():
             # Verificar/Criar perfil no user_profiles
             print("\n--- VERIFICANDO PERFIL NA TABELA user_profiles ---")
 
-            profile_response = supabase.table("user_profiles").select("*").eq("id", admin_user_id).execute()
+            profile_response = admin_client.table("user_profiles").select("*").eq("id", admin_user_id).execute()
 
             if not profile_response.data or len(profile_response.data) == 0:
                 print("⚠️ Perfil não encontrado na tabela user_profiles")
                 print("   Criando perfil...")
 
                 # Criar perfil
-                insert_result = supabase.table("user_profiles").insert({
+                insert_result = admin_client.table("user_profiles").insert({
                     "id": admin_user_id,
                     "username": "admin",
                     "role": "admin",
-                    "allowed_segments": ["*"],
+                    # "allowed_segments": ["*"], # Removido pois coluna nao existe
                     "created_at": "now()",
                     "updated_at": "now()"
                 }).execute()
@@ -105,21 +105,21 @@ def main():
                     updates['role'] = 'admin'
                     needs_update = True
 
-                if profile.get('allowed_segments') != ['*']:
-                    print(f"\n⚠️ Allowed segments incorreto: {profile.get('allowed_segments')} (deveria ser ['*'])")
-                    updates['allowed_segments'] = ['*']
-                    needs_update = True
+                # if profile.get('allowed_segments') != ['*']:
+                #     print(f"\n⚠️ Allowed segments incorreto: {profile.get('allowed_segments')} (deveria ser ['*'])")
+                #     updates['allowed_segments'] = ['*']
+                #     needs_update = True
 
                 if needs_update:
                     print("\n🔧 CORRIGINDO PERFIL...")
                     updates['updated_at'] = 'now()'
 
-                    supabase.table("user_profiles").update(updates).eq("id", admin_user_id).execute()
+                    admin_client.table("user_profiles").update(updates).eq("id", admin_user_id).execute()
 
                     print("✅ Perfil corrigido com sucesso!")
 
                     # Verificar novamente
-                    updated_profile = supabase.table("user_profiles").select("*").eq("id", admin_user_id).execute()
+                    updated_profile = admin_client.table("user_profiles").select("*").eq("id", admin_user_id).execute()
                     if updated_profile.data:
                         up = updated_profile.data[0]
                         print(f"\n--- PERFIL APÓS CORREÇÃO ---")

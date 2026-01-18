@@ -1,7 +1,8 @@
-from .supervisor_agent import SupervisorAgent
-from .tool_agent import ToolAgent
+# Agentes essenciais mantidos após otimização
+from .caculinha_bi_agent import CaculinhaBIAgent
+from .base_agent import BaseAgent
 
 __all__ = [
-    "SupervisorAgent",
-    "ToolAgent",
+    "CaculinhaBIAgent",
+    "BaseAgent",
 ]

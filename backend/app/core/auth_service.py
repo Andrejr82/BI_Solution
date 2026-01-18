@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import json # Import json
 
-import polars as pl
+import duckdb
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -30,14 +30,34 @@ class AuthService:
         self.use_sql_server = settings.USE_SQL_SERVER
         self.use_supabase = settings.USE_SUPABASE_AUTH
 
-        # Try Docker path first, then development path
-        docker_path = Path("/app/data/parquet/users.parquet")
-        dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
-
-        if docker_path.exists():
-            self.parquet_path = docker_path
-        else:
-            self.parquet_path = dev_path
+        # Path Resolution for users.parquet
+        # Priority:
+        # 1. backend/data/parquet/users.parquet (deploy/docker structure often)
+        # 2. data/parquet/users.parquet (local root structure)
+        # 3. backend/app/data/parquet/users.parquet (legacy)
+        
+        base_dir = Path(__file__).parent.parent.parent.parent # Root or Backend depending on execution
+        
+        # We need to find the Project Root. 
+        # If __file__ is backend/app/core/auth_service.py
+        # parentx4 is C:\Agente_BI\BI_Solution (Project Root)
+        
+        possible_paths = [
+            base_dir / "backend" / "data" / "parquet" / "users.parquet",
+            base_dir / "data" / "parquet" / "users.parquet",
+            base_dir / "backend" / "app" / "data" / "parquet" / "users.parquet"
+        ]
+        
+        self.parquet_path = possible_paths[1] # Default to root/data (legacy behavior)
+        
+        for p in possible_paths:
+            if p.exists():
+                self.parquet_path = p
+                logger.info(f"AuthService: Using users.parquet at {p}")
+                break
+        
+        if not self.parquet_path.exists():
+            logger.warning(f"AuthService: users.parquet NOT FOUND in any expected location. Auth may fail.")
 
     async def authenticate_user(
         self,
@@ -83,7 +103,8 @@ class AuthService:
             security_logger.error(f"Parquet auth failed for '{username}': {e}")
 
         # Priority 3: SQL Server (last resort)
-        if self.use_sql_server and db is not None:
+        # 🚨 OPTIMIZATION: Only attempt SQL if explicitly enabled AND DB session provided AND configured
+        if self.use_sql_server and db is not None and settings.DATABASE_URL:
             try:
                 user_data = await self._auth_from_sql(username, password, db)
                 if user_data:
@@ -91,6 +112,8 @@ class AuthService:
                     return user_data
             except Exception as e:
                 security_logger.warning(f"SQL Server auth failed for '{username}': {e}")
+        elif self.use_sql_server and db is None:
+             security_logger.warning(f"Skipping SQL Server auth for '{username}': DB session not available (check db dependency)")
 
         security_logger.warning(f"Authentication failed for user '{username}' - Invalid credentials or inactive.")
         return None
@@ -235,17 +258,34 @@ class AuthService:
             else:
                 # Option 2: SQL Server disabled OR db session not available
                 # Get role from Supabase user_profiles table
+                
+                # Retrieve metadata first as it might contain allowed_segments regardless of profile
+                user_metadata = user.user_metadata or {}
+                if "allowed_segments" in user_metadata:
+                    try:
+                        allowed_segments = user_metadata["allowed_segments"]
+                        # Ensure it's a list
+                        if isinstance(allowed_segments, str):
+                            allowed_segments = json.loads(allowed_segments)
+                        if not isinstance(allowed_segments, list):
+                            allowed_segments = []
+                    except Exception as e:
+                        security_logger.warning(f"Failed to parse allowed_segments from metadata for '{username}': {e}")
+                        allowed_segments = []
+                
                 try:
                     profile_resp = supabase.table("user_profiles").select("role, username").eq("id", user_id).execute()
                     if profile_resp.data:
                         role = profile_resp.data[0].get("role", "user")
                         security_logger.info(f"User '{username}' role loaded from Supabase user_profiles: {role}")
                     else:
-                        security_logger.warning(f"No profile found for '{username}' in user_profiles table")
+                        security_logger.warning(f"No profile found for '{username}' in user_profiles table. Falling back to metadata.")
+                        # Fallback to user_metadata
+                        role = user_metadata.get("role", "user")
+                        
                 except Exception as profile_error:
                     security_logger.error(f"Could not fetch profile from Supabase for '{username}': {profile_error}")
                     # Fallback to user_metadata (LESS SECURE)
-                    user_metadata = user.user_metadata or {}
                     role = user_metadata.get("role", "user")
 
             # 🚨 CRITICAL FIX: Admin ALWAYS gets full access (Supabase path)
@@ -279,19 +319,22 @@ class AuthService:
             return None
 
         try:
-            # Read users from Parquet
-            df = pl.read_parquet(self.parquet_path)
-            # security_logger.info(f"Parquet loaded. Users found: {len(df)}") # Removed verbose logging
+            # Query DuckDB directly (more efficient than loading whole DF)
+            parquet_str = str(self.parquet_path).replace("\\", "/")
+            
+            # Use ephemeral connection
+            con = duckdb.connect()
+            # Prepare query - simple parameterized query
+            result = con.execute(f"SELECT * FROM read_parquet('{parquet_str}') WHERE username = ?", [username]).fetchall()
 
-            # Filter by username
-            user_data = df.filter(pl.col("username") == username)
-
-            if len(user_data) == 0:
+            if not result:
                 security_logger.warning(f"User '{username}' not found in Parquet.")
                 return None
 
-            # Get user row
-            user_row = user_data.row(0, named=True)
+            # Map columns to values
+            columns = [desc[0] for desc in con.description]
+            user_row = dict(zip(columns, result[0]))
+            
             security_logger.info(f"User '{username}' found in Parquet. Verifying password...")
 
             # Verify password

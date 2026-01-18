@@ -19,7 +19,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for creating a user"""
 
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
     role: str = Field(default="viewer", pattern="^(admin|user|viewer)$")
     allowed_segments: list[str] = Field(default_factory=list) # Novo Campo
 
@@ -32,7 +32,7 @@ class UserUpdate(BaseModel):
     role: str | None = Field(None, pattern="^(admin|user|viewer)$")
     is_active: bool | None = None
     allowed_segments: list[str] | None = Field(None) # Novo Campo
-    password: str | None = Field(None, min_length=8, max_length=100)
+    password: str | None = Field(None, min_length=6, max_length=100)
 
 
 class UserResponse(UserBase):

@@ -23,12 +23,10 @@ class ParquetDataSource:
         self._connected = False
         self._df_cache: Optional[pd.DataFrame] = None
 
-        # Caminho híbrido Docker/Dev
-        docker_path = Path("/app/data/parquet/admmat.parquet")
-        dev_path = MAIN_DATA_FILE
-
-        self.file_path = docker_path if docker_path.exists() else dev_path
+        # Path local para arquivo Parquet
+        self.file_path = MAIN_DATA_FILE
         logger.info(f"[FILE] Usando arquivo: {self.file_path}")
+
 
     def connect(self) -> bool:
         """Verifica se arquivo Parquet existe."""
@@ -51,13 +49,21 @@ class ParquetDataSource:
         [OK]: OTIMIZADO: Usa cache global ao invés de cache local.
         """
         try:
-            # Usar ParquetCache global (já retorna Polars DataFrame)
+            # Usar ParquetCache global (já retorna Polars DataFrame ou Pandas DataFrame dependendo da config)
             df_polars = cache.get_dataframe("admmat.parquet")
 
-            # Converter de Polars para Pandas (necessário para compatibilidade com ferramentas existentes)
-            df = df_polars.to_pandas()
-            logger.info(f"[OK] Dados obtidos do cache: {df.shape}")
+            # Converter para Pandas (necessário para compatibilidade com ferramentas existentes)
+            if hasattr(df_polars, 'to_pandas'):
+                df = df_polars.to_pandas()
+            elif hasattr(df_polars, 'df'): # DuckDB Relation
+                df = df_polars.df()
+            elif isinstance(df_polars, pd.DataFrame):
+                df = df_polars
+            else:
+                # Tentar converter qualquer outro formato ou falhar graciosamente
+                df = pd.DataFrame(df_polars)
 
+            logger.info(f"[OK] Dados obtidos do cache: {df.shape}")
             return df
 
         except FileNotFoundError as e:
@@ -68,8 +74,27 @@ class ParquetDataSource:
             raise
 
     def get_data(self, limit: int = None) -> pd.DataFrame:
-        """Obtém todos os dados ou limitados."""
+        """
+        Obtém todos os dados ou limitados.
+        SECURITY 2025: Aplica Row-Level Security (RLS) automaticamente.
+        """
         df = self._load_data()
+        
+        # SECURITY: Apply RLS - Filter by user segments
+        from app.core.context import get_current_user_segments
+        
+        allowed_segments = get_current_user_segments()
+        
+        if allowed_segments and "*" not in allowed_segments:
+            # User has restricted access - filter by segment
+            if 'NOMESEGMENTO' in df.columns:
+                logger.info(f"[RLS] Aplicando filtro de segmento: {allowed_segments}")
+                df = df[df['NOMESEGMENTO'].isin(allowed_segments)]
+            else:
+                logger.warning("[RLS] Coluna NOMESEGMENTO não encontrada - RLS não aplicado!")
+        else:
+            logger.info(f"[RLS] Usuário com acesso total (segments={allowed_segments})")
+        
         if limit and not df.empty:
             df = df.head(limit)
         return df
@@ -126,9 +151,23 @@ class ParquetDataSource:
             return pd.DataFrame()
 
     def get_columns(self) -> List[str]:
-        """Retorna lista de colunas."""
-        df = self._load_data()
-        return df.columns.tolist() if not df.empty else []
+        """Retorna lista de colunas de forma otimizada (sem carregar dados)."""
+        try:
+            from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
+            adapter = get_duckdb_adapter()
+            # Usar DESCRIBE SELECT * para pegar colunas sem materializar
+            path = str(self.file_path).replace("\\", "/")
+            schema_df = adapter.query(f"DESCRIBE SELECT * FROM read_parquet('{path}')")
+            return schema_df['column_name'].tolist()
+        except Exception as e:
+            logger.error(f"[ERROR] Falha ao obter colunas via DuckDB: {e}. Tentando fallback.")
+            try:
+                # Fallback: ler apenas schema com pandas
+                df_schema = pd.read_parquet(self.file_path, engine='pyarrow') # read_parquet lê schema primeiro
+                return df_schema.columns.tolist()
+            except Exception as e2:
+                logger.error(f"[ERROR] Falha total ao obter colunas: {e2}")
+                return []
 
     def get_shape(self) -> tuple:
         """Retorna dimensões dos dados."""
@@ -204,6 +243,10 @@ class DataSourceManager:
     def get_source_info(self) -> Dict[str, Any]:
         """Retorna informações da fonte."""
         return self._source.get_info()
+
+    def get_columns(self) -> List[str]:
+        """Retorna lista de colunas disponíveis."""
+        return self._source.get_columns()
 
 
 # Instância global singleton

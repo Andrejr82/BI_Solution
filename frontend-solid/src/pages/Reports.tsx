@@ -149,7 +149,7 @@ export default function Reports() {
   });
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6">
+    <div class="flex flex-col p-6 gap-6">
       {/* Header */}
       <div class="flex justify-between items-end">
         <div>
@@ -302,11 +302,10 @@ export default function Reports() {
                           {report.batch_id || report.transfer_id || 'N/A'}
                         </td>
                         <td class="p-3">
-                          <span class={`px-2 py-1 text-xs rounded ${
-                            report.batch_id
+                          <span class={`px-2 py-1 text-xs rounded ${report.batch_id
                               ? 'bg-blue-500/10 text-blue-400'
                               : 'bg-green-500/10 text-green-400'
-                          }`}>
+                            }`}>
                             {report.batch_id ? `Lote (${report.modo})` : 'Simples'}
                           </span>
                         </td>

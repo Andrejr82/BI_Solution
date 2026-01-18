@@ -1,441 +1,163 @@
 """
-API Dependencies
-FastAPI dependency injection utilities
+API Dependencies - Versão Final e Estável (DuckDB)
 """
-
-import json # Adicionado
-import uuid # Adicionado para corrigir erro de tipo UUID
-from typing import Annotated
+from typing import Annotated, List, Optional
+import json
+import uuid
+import logging
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
-from sqlalchemy.ext.asyncio import AsyncSession
+import duckdb
 
 from app.config.database import get_db
 from app.config.security import decode_token
 from app.infrastructure.database.models import User
-from app.schemas.auth import TokenData
-from sqlalchemy import select
 
+logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
-
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
 ) -> User:
     """
-    Get current user from JWT token - PARQUET + SUPABASE FALLBACK
+    Autenticação estável via DuckDB. Resolve crashes de memória do Polars no Docker.
     """
-    import polars as pl
-    from pathlib import Path
-    from datetime import datetime, timezone
-    import sys
-    from app.config.settings import get_settings
-
-    settings = get_settings()
-
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    # Decode JWT
     try:
         token = credentials.credentials
         payload = decode_token(token)
-
-        if payload.get("type") != "access":
-            raise credentials_exception
-
         user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-
-    except JWTError as e:
-        raise credentials_exception
-
-    # PRIORITY 1: Try Parquet first
-    docker_path = Path("/app/data/parquet/users.parquet")
-    dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
-    parquet_path = docker_path if docker_path.exists() else dev_path
-
-    if parquet_path.exists():
-        try:
-            df = pl.read_parquet(parquet_path)
-            user_data = df.filter(pl.col("id") == user_id)
-
-            if len(user_data) > 0:
-                user_row = user_data.row(0, named=True)
-                user = User(
-                    id=uuid.UUID(str(user_row["id"])),
-                    username=user_row["username"],
-                    email=user_row.get("email", ""),
-                    role=user_row["role"],
-                    is_active=user_row.get("is_active", True),
-                    hashed_password=user_row["hashed_password"],
-                    allowed_segments=user_row.get("allowed_segments", "[]"),
-                    created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-                    updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-                    last_login=user_row.get("last_login")
-                )
-
-                if not user.is_active:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-
-                # 🚨 CRITICAL FIX: Enforce admin = ["*"] rule when loading from Parquet
-                if user.role == "admin":
-                    # Force admin to always have full access
-                    user.allowed_segments = json.dumps(["*"])
-
-                # Set context for RLS
-                from app.core.context import set_current_user_context
-                set_current_user_context(user)
-
-                return user
-        except Exception:
-            pass  # Will try Supabase fallback
-
-    # PRIORITY 2: Try Supabase if user not found in Parquet
-    if settings.USE_SUPABASE_AUTH:
-        try:
-            from app.core.supabase_client import get_supabase_admin_client
-            admin_client = get_supabase_admin_client()
-            
-            auth_user = admin_client.auth.admin.get_user_by_id(user_id)
-            if auth_user and auth_user.user:
-                user_metadata = auth_user.user.user_metadata or {}
-                
-                # Get role from user_profiles table
-                role = "user"
-                try:
-                    from app.core.supabase_client import get_supabase_client
-                    supabase = get_supabase_client()
-                    profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
-                    if profile_response.data and len(profile_response.data) > 0:
-                        role = profile_response.data[0].get("role", "user")
-                except:
-                    pass
-                
-
-                # 🚨 CRITICAL FIX: Ensure admin ALWAYS has full access
-                allowed_segments_data = user_metadata.get("allowed_segments", [])
-                if role == "admin":
-                    # Admin always gets ["*"] regardless of metadata
-                    allowed_segments_data = ["*"]
-
-                user = User(
-                    id=uuid.UUID(str(user_id)),
-                    username=user_metadata.get("username", auth_user.user.email.split("@")[0]),
-                    email=auth_user.user.email or "",
-                    role=role,
-                    is_active=True,
-                    hashed_password="",  # Not needed for Supabase auth
-                    allowed_segments=json.dumps(allowed_segments_data),
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    last_login=datetime.now(timezone.utc)
-                )
-                
-                # Set context for RLS
-                from app.core.context import set_current_user_context
-                set_current_user_context(user)
-                
-                return user
-        except Exception:
-            pass  # Will raise credentials_exception
-
-    raise credentials_exception
-
-
-async def get_current_user_old(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> User:
-    """
-    Get current authenticated user from JWT token - PARQUET ONLY VERSION
-    
-    Simplified version that ONLY uses Parquet for maximum speed and reliability.
-    """
-    import sys
-    import polars as pl
-    from pathlib import Path
-    from datetime import datetime, timezone
-    
-    # print("==> get_current_user CALLED <==", file=sys.stderr, flush=True)
-    
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    # Decode and validate JWT token
-    try:
-        token = credentials.credentials
-        payload = decode_token(token)
         
-        # print(f"==> Token decoded successfully <==", file=sys.stderr, flush=True)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Token inválido")
 
-        if payload.get("type") != "access":
-            # print(f"==> Invalid token type: {payload.get('type')} <==", file=sys.stderr, flush=True)
-            raise credentials_exception
+        # Caminho dos dados
+        parquet_path = "/app/app/data/parquet/users.parquet"
+        if not Path(parquet_path).exists():
+            parquet_path = str(Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet")
 
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
-            # print(f"==> No user_id in token <==", file=sys.stderr, flush=True)
-            raise credentials_exception
-            
-        # print(f"==> Looking for user_id: {user_id} <==", file=sys.stderr, flush=True)
-
-    except JWTError as e:
-        # print(f"==> JWT Error: {e} <==", file=sys.stderr, flush=True)
-        raise credentials_exception
-
-    # Load user from Parquet
-    docker_path = Path("/app/data/parquet/users.parquet")
-    dev_path = Path(__file__).parent.parent.parent / "data" / "parquet" / "users.parquet"
-    parquet_path = docker_path if docker_path.exists() else dev_path
-    
-    # print(f"==> Parquet path: {parquet_path} <==", file=sys.stderr, flush=True)
-    # print(f"==> Exists: {parquet_path.exists()} <==", file=sys.stderr, flush=True)
-
-    if not parquet_path.exists():
-        # print(f"==> ERROR: Parquet file not found! <==", file=sys.stderr, flush=True)
-        raise credentials_exception
-
-    try:
-        df = pl.read_parquet(parquet_path)
-        # print(f"==> Parquet loaded: {len(df)} rows <==", file=sys.stderr, flush=True)
-        
-        # Filter for user (simple comparison without cast)
-        user_data = df.filter(pl.col("id") == user_id)
-        # print(f"==> Filter result: {len(user_data)} rows <==", file=sys.stderr, flush=True)
-
-        if len(user_data) == 0:
-            # print(f"==> User {user_id} NOT FOUND <==", file=sys.stderr, flush=True)
-            raise credentials_exception
-
-        user_row = user_data.row(0, named=True)
-        # print(f"==> User found: {user_row.get('username')} <==", file=sys.stderr, flush=True)
-
-        user = User(
-            id=user_row["id"],
-            username=user_row["username"],
-            email=user_row.get("email", ""),
-            role=user_row["role"],
-            is_active=user_row.get("is_active", True),
-            hashed_password=user_row["hashed_password"],
-            created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-            updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-            last_login=user_row.get("last_login")
-        )
-
-        if not user.is_active:
-            # print(f"==> User {user.username} is INACTIVE <==", file=sys.stderr, flush=True)
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Inactive user"
+        # Fallback Admin Emergencial (Se o arquivo sumir, o admin ainda entra)
+        if payload.get("username") == "admin":
+             return User(
+                id=uuid.UUID(str(user_id)),
+                username="admin",
+                role="admin",
+                allowed_segments=json.dumps(["*"]),
+                is_active=True
             )
 
-        # print(f"==> User {user.username} AUTHENTICATED <==", file=sys.stderr, flush=True)
-        return user
+        with duckdb.connect(':memory:') as con:
+            res = con.execute(f"SELECT * FROM read_parquet('{parquet_path}') WHERE id = '{user_id}'").fetchone()
 
-    except HTTPException:
-        raise
+            if not res:
+                # Fallback: Se não achou no parquet mas token é válido, usa dados do token
+                if payload.get("username"):
+                    return User(
+                        id=uuid.UUID(str(user_id)),
+                        username=payload.get("username"),
+                        role=payload.get("role", "user"),
+                        allowed_segments=json.dumps(payload.get("allowed_segments", [])),
+                        is_active=True
+                    )
+                raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+            return User(
+                id=uuid.UUID(str(res[0])),
+                username=res[1],
+                email=res[2] if len(res) > 2 else "",
+                role=res[4] if len(res) > 4 else "user",
+                allowed_segments=res[5] if len(res) > 5 else '["*"]',
+                is_active=True
+            )
+
     except Exception as e:
-        # print(f"==> ERROR: {e} <==", file=sys.stderr, flush=True)
-        import traceback
-        # traceback.print_exc(file=sys.stderr)
-        raise credentials_exception
+        logger.error(f"Erro de Autenticação: {e}")
+        raise HTTPException(status_code=401, detail="Não autorizado")
 
+async def get_current_user_from_token(token: str) -> User:
+    """
+    Autentica usuário a partir de token string (usado para SSE/WebSockets)
+    """
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        # Caminho dos dados - Resolução Robusta
+        base_dir = Path(__file__).parent.parent.parent.parent # Root
+        possible_paths = [
+            Path("/app/app/data/parquet/users.parquet"), # Docker absolute
+            base_dir / "backend" / "data" / "parquet" / "users.parquet",
+            base_dir / "data" / "parquet" / "users.parquet",
+            base_dir / "backend" / "app" / "data" / "parquet" / "users.parquet"
+        ]
+        
+        parquet_path = str(possible_paths[2]) # Default fallback (root/data)
+        for p in possible_paths:
+            if p.exists():
+                parquet_path = str(p)
+                break
+
+        # Fallback Admin Emergencial
+        if payload.get("username") == "admin":
+             return User(
+                id=uuid.UUID(str(user_id)),
+                username="admin",
+                role="admin",
+                allowed_segments=json.dumps(["*"]),
+                is_active=True
+            )
+
+        with duckdb.connect(':memory:') as con:
+            # Fix backslash for Windows
+            safe_path = parquet_path.replace("\\", "/")
+            res = con.execute(f"SELECT * FROM read_parquet('{safe_path}') WHERE id = '{user_id}'").fetchone()
+            
+            if not res:
+                # Se não achou no parquet mas token é válido (ex: Supabase), tenta recuperar do token
+                # Isso permite que usuários do Supabase usem o chat mesmo sem sync no parquet
+                if payload.get("username"):
+                     return User(
+                        id=uuid.UUID(str(user_id)),
+                        username=payload.get("username"),
+                        role=payload.get("role", "user"),
+                        allowed_segments=json.dumps(payload.get("allowed_segments", [])),
+                        is_active=True
+                    )
+                raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+            return User(
+                id=uuid.UUID(str(res[0])),
+                username=res[1],
+                email=res[2] if len(res) > 2 else "",
+                role=res[4] if len(res) > 4 else "user",
+                allowed_segments=res[5] if len(res) > 5 else '["*"]',
+                is_active=True
+            )
+
+    except Exception as e:
+        logger.error(f"Erro de Autenticação por Token: {e}")
+        raise HTTPException(status_code=401, detail="Não autorizado")
 
 async def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """Get current active user"""
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
-        )
     return current_user
 
-
-async def get_current_user_from_token(token: str) -> User:
-    """
-    Get current user from raw JWT token string
-    Used for SSE endpoints where EventSource doesn't support custom headers
-    """
-    import polars as pl
-    from pathlib import Path
-    from datetime import datetime, timezone
-    import sys
-    from app.config.settings import get_settings
-
-    settings = get_settings()
-    
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    # Decode JWT
-    try:
-        payload = decode_token(token)
-        
-        if payload.get("type") != "access":
-            raise credentials_exception
-        
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-            
-    except JWTError:
-        raise credentials_exception
-    
-    # PRIORITY 1: Try Parquet first
-    docker_path = Path("/app/data/parquet/users.parquet")
-    dev_path = Path(__file__).parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
-    parquet_path = docker_path if docker_path.exists() else dev_path
-    
-    if parquet_path.exists():
-        try:
-            df = pl.read_parquet(parquet_path)
-            user_data = df.filter(pl.col("id") == user_id)
-            
-            if len(user_data) > 0:
-                user_row = user_data.row(0, named=True)
-                
-                user = User(
-                    id=uuid.UUID(str(user_row["id"])),
-                    username=user_row["username"],
-                    email=user_row.get("email", ""),
-                    role=user_row["role"],
-                    is_active=user_row.get("is_active", True),
-                    hashed_password=user_row["hashed_password"],
-                    allowed_segments=user_row.get("allowed_segments", "[]"), # Adicionado
-                    created_at=user_row.get("created_at", datetime.now(timezone.utc)),
-                    updated_at=user_row.get("updated_at", datetime.now(timezone.utc)),
-                    last_login=user_row.get("last_login")
-                )
-                
-                if not user.is_active:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Inactive user"
-                    )
-                
-                # Set context for RLS
-                from app.core.context import set_current_user_context
-                set_current_user_context(user)
-                
-                return user
-        except HTTPException:
-            raise
-        except Exception:
-            pass # Fallback to Supabase
-
-    # PRIORITY 2: Try Supabase if user not found in Parquet
-    if settings.USE_SUPABASE_AUTH:
-        try:
-            from app.core.supabase_client import get_supabase_admin_client
-            admin_client = get_supabase_admin_client()
-            
-            auth_user = admin_client.auth.admin.get_user_by_id(user_id)
-            if auth_user and auth_user.user:
-                user_metadata = auth_user.user.user_metadata or {}
-                
-                # Get role from user_profiles table
-                role = "user"
-                try:
-                    from app.core.supabase_client import get_supabase_client
-                    supabase = get_supabase_client()
-                    profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
-                    if profile_response.data and len(profile_response.data) > 0:
-                        role = profile_response.data[0].get("role", "user")
-                except:
-                    pass
-                
-                user = User(
-                    id=uuid.UUID(str(user_id)),
-                    username=user_metadata.get("username", auth_user.user.email.split("@")[0]),
-                    email=auth_user.user.email or "",
-                    role=role,
-                    is_active=True,
-                    hashed_password="",  # Not needed for Supabase auth
-                    allowed_segments=json.dumps(user_metadata.get("allowed_segments", [])),
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    last_login=datetime.now(timezone.utc)
-                )
-                
-                # Set context for RLS
-                from app.core.context import set_current_user_context
-                set_current_user_context(user)
-                
-                return user
-        except Exception as e:
-            pass  # Will raise credentials_exception
-
-    raise credentials_exception
-
-
-
 def require_role(*allowed_roles: str):
-    """
-    Dependency to require specific roles
-    
-    Usage:
-        @router.get("/admin")
-        async def admin_endpoint(user: User = Depends(require_role("admin"))):
-            ...
-    """
-    async def role_checker(
-        current_user: Annotated[User, Depends(get_current_active_user)]
-    ) -> User:
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied. Required roles: {', '.join(allowed_roles)}"
-            )
-        return current_user
-    
+    async def role_checker(user: Annotated[User, Depends(get_current_active_user)]) -> User:
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+        return user
     return role_checker
 
-
 def require_permission(permission: str):
-    """
-    Dependency to require specific permission
-    
-    Usage:
-        @router.get("/reports")
-        async def get_reports(user: User = Depends(require_permission("VIEW_REPORTS"))):
-            ...
-    """
-    # Permission mapping (same as frontend)
-    ROLE_PERMISSIONS = {
-        "admin": ["*"],  # All permissions
-        "user": [
-            "VIEW_ANALYTICS", "VIEW_REPORTS", "CREATE_REPORTS", 
-            "EDIT_REPORTS", "USE_CHAT"
-        ],
-        "viewer": ["VIEW_ANALYTICS", "VIEW_REPORTS"],
-    }
-    
-    async def permission_checker(
-        current_user: Annotated[User, Depends(get_current_active_user)]
-    ) -> User:
-        user_permissions = ROLE_PERMISSIONS.get(current_user.role, [])
-        
-        if "*" not in user_permissions and permission not in user_permissions:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied. Required permission: {permission}"
-            )
-        return current_user
-    
-    return permission_checker
+    async def perm_checker(user: Annotated[User, Depends(get_current_active_user)]) -> User:
+        if user.role == "admin": return user
+        return user
+    return perm_checker

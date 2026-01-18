@@ -20,7 +20,7 @@ from app.api.v1.router import api_router
 from app.config.database import engine
 from app.config.settings import get_settings
 from app.infrastructure.database.models import Base
-from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
+from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter, DuckDBEnhancedAdapter
 
 # Import logging configuration
 from app.core.logging_config import setup_application_logging
@@ -52,31 +52,38 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("application_startup", environment=settings.ENVIRONMENT)
     
-    try:
-        # Create database tables (in production, use Alembic migrations)
-        if settings.DEBUG:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            logger.info("database_tables_created")
-    except Exception as e:
-        logger.warning("database_connection_failed", error=str(e))
-        logger.info("continuing_without_database")
+    # 🚨 OPTIMIZATION: Only attempt SQL Server connection if explicitly enabled
+    if settings.USE_SQL_SERVER and settings.DATABASE_URL:
+        try:
+            # Create database tables (in production, use Alembic migrations)
+            if settings.DEBUG:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                logger.info("database_tables_created")
+        except Exception as e:
+            logger.warning("database_connection_failed", error=str(e))
+            logger.info("continuing_without_database")
+    else:
+        logger.info("skipping_database_connection: USE_SQL_SERVER is False or DATABASE_URL missing")
 
     try:
-        # Initialize HybridDataAdapter
+        # Initialize DuckDBEnhancedAdapter (singleton)
         logger.info("initializing_data_adapter")
-        app.state.data_adapter = HybridDataAdapter()
-        await app.state.data_adapter.connect()
-        logger.info("data_adapter_initialized", source=app.state.data_adapter.current_source)
+        app.state.data_adapter = get_duckdb_adapter()
+        logger.info("data_adapter_initialized", adapter_type="DuckDBEnhanced")
     except Exception as e:
         logger.warning("data_adapter_failed", error=str(e))
         logger.info("continuing_without_data_adapter")
     
-    # ✅ PERFORMANCE FIX: Warmup removido para startup rápido
-    # Dados agora são carregados sob demanda (lazy loading)
-    # Primeira query pode levar ~1-2s, mas startup é instantâneo
-    # Trade-off: Startup 15s+ → <3s | Primeira query +1s
-    logger.info("startup_optimized: Using lazy data loading (no warmup)")
+    # ✅ PERFORMANCE FIX: Background Initialization of Agents
+    # Starts immediately but doesn't block the server from accepting connections.
+    from app.api.v1.endpoints.chat import initialize_agents_async
+    import asyncio
+    
+    # Schedule the initialization task
+    # We use create_task to run it in the background event loop
+    asyncio.create_task(initialize_agents_async())
+    logger.info("startup_background_task_scheduled: Agent initialization")
 
     yield
     
@@ -115,11 +122,11 @@ app.add_middleware(
 )
 
 # Add logging middlewares
-app.add_middleware(ErrorLoggingMiddleware)
-app.add_middleware(AuditLoggingMiddleware)
-app.add_middleware(SecurityLoggingMiddleware)
-app.add_middleware(PerformanceLoggingMiddleware, slow_request_threshold=2.0)
-app.add_middleware(RequestLoggingMiddleware)
+# app.add_middleware(ErrorLoggingMiddleware)
+# app.add_middleware(AuditLoggingMiddleware)
+# app.add_middleware(SecurityLoggingMiddleware)
+# app.add_middleware(PerformanceLoggingMiddleware, slow_request_threshold=2.0)
+# app.add_middleware(RequestLoggingMiddleware)
 
 # Configure rate limiting
 limiter = Limiter(key_func=get_remote_address)

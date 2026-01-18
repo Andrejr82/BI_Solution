@@ -2,11 +2,12 @@
 import { Component } from 'solid-js';
 
 interface LogoProps {
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
 const sizeMap = {
+  xs: 'h-6',      // 24px - para sidebar fechada
   sm: 'h-8',      // 32px - para sidebar compacta
   md: 'h-10',     // 40px - padrão sidebar
   lg: 'h-12',     // 48px - login

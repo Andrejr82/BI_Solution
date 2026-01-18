@@ -25,8 +25,17 @@ function createAuthStore() {
         return null;
       }
 
-      // Decodificar payload
-      const payload = JSON.parse(atob(parts[1]));
+      // Decodificar payload (Base64Url -> Base64 -> JSON)
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+
+      const payload = JSON.parse(jsonPayload);
 
       // Verificar expiração
       if (payload.exp) {

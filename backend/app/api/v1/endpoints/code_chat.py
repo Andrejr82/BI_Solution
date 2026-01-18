@@ -76,6 +76,76 @@ class IndexStats(BaseModel):
 # Endpoints
 # ============================================================================
 
+from fastapi.responses import StreamingResponse
+import json
+
+@router.get("/stream")
+async def stream_code_chat(
+    q: str,
+    token: str,
+    current_user: Annotated[User, Depends(require_role("admin"))] # In real SSE, auth is via token param usually, but here we can rely on dependency if client sends header? 
+    # SSE clients (EventSource) don't send headers easily. We usually pass token in query param.
+    # But for this existing project structure, let's look at chat.py: it uses `token` param and `get_current_user_from_token`.
+):
+    """
+    Streaming endpoint for code chat.
+    """
+    from app.api.dependencies import get_current_user_from_token
+    
+    # Manual auth check for SSE
+    try:
+        user = await get_current_user_from_token(token)
+        if user.role != "admin": # Enforce admin role for code chat
+             raise HTTPException(status_code=403, detail="Not authorized")
+    except Exception as e:
+        logger.error(f"SSE Auth failed: {e}")
+        # Return strict error event
+        async def error_gen():
+            yield f"data: {json.dumps({'type': 'error', 'content': 'Authentication failed'})}\n\n"
+        return StreamingResponse(error_gen(), media_type="text/event-stream")
+
+    rag_service = get_code_rag_service()
+    
+    async def event_generator():
+        try:
+            # Fake history for now or pass via query param JSON (complex)
+            # For this iteration, we start fresh or implement history param later
+            history = [] 
+            
+            # Initial progress event
+            yield f"data: {json.dumps({'type': 'progress', 'step': 'searching', 'message': 'Searching codebase...'})}\n\n"
+            
+            # Stream from service
+            # Note: stream_query is a generator, we need to iterate it
+            # If stream_query is sync (yielding), we wrap it. If async, await.
+            # LlamaIndex stream is usually sync generator.
+            
+            iterator = rag_service.stream_query(message=q, history=history)
+            
+            for chunk in iterator:
+                # If references found, notify UI
+                if chunk['type'] == 'references':
+                    yield f"data: {json.dumps({'type': 'progress', 'step': 'analyzing', 'message': 'Analyzing code...'})}\n\n"
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    yield f"data: {json.dumps({'type': 'progress', 'step': 'streaming', 'message': 'Generating response...'})}\n\n"
+                else:
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
 @router.get("/stats", response_model=IndexStats)
 async def get_index_stats(
     current_user: Annotated[User, Depends(require_role("admin"))]

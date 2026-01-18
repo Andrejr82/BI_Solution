@@ -1,12 +1,25 @@
+"""
+Check specific users in SQL Server and Parquet
+
+MIGRATED TO DUCKDB (2025-12-31)
+- Parquet queries via DuckDB SQL (faster)
+- SQL Server queries unchanged (pyodbc)
+"""
 
 import pyodbc
-import polars as pl
+import sys
 from pathlib import Path
+
+# Add backend to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
 
 # Configurações
 CONN_STR = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=agentbi;UID=AgenteVirtual;PWD=Cacula@2020;TrustServerCertificate=yes;"
 PARQUET_PATH = Path("backend/data/parquet/users.parquet")
 USERS_TO_CHECK = ["lucas.garcia", "hugo.mendes", "fausto.neto"]
+
 
 def check_sql():
     print("--- Verificando SQL Server ---")
@@ -17,29 +30,40 @@ def check_sql():
             cursor.execute("SELECT username, role, is_active FROM users WHERE username = ?", (user,))
             row = cursor.fetchone()
             if row:
-                print(f"✅ Usuário '{user}' encontrado! (Role: {row[1]}, Ativo: {row[2]})")
+                print(f"[OK] Usuário '{user}' encontrado! (Role: {row[1]}, Ativo: {row[2]})")
             else:
-                print(f"❌ Usuário '{user}' NÃO encontrado.")
+                print(f"[NOT FOUND] Usuário '{user}' NÃO encontrado.")
         conn.close()
     except Exception as e:
-        print(f"Erro no SQL Server: {e}")
+        print(f"[ERROR] Erro no SQL Server: {e}")
+
 
 def check_parquet():
     print("\n--- Verificando Parquet ---")
     if not PARQUET_PATH.exists():
-        print(f"Arquivo {PARQUET_PATH} não encontrado.")
+        print(f"[ERROR] Arquivo {PARQUET_PATH} não encontrado.")
         return
+
     try:
-        df = pl.read_parquet(PARQUET_PATH)
+        adapter = get_duckdb_adapter()
+        parquet_str = str(PARQUET_PATH.resolve()).replace("\\", "/")
+
         for user in USERS_TO_CHECK:
-            user_data = df.filter(pl.col("username") == user)
-            if len(user_data) > 0:
-                row = user_data.row(0, named=True)
-                print(f"✅ Usuário '{user}' encontrado! (Role: {row['role']}, Ativo: {row['is_active']})")
+            # Query DuckDB for specific user
+            result = adapter.connection.execute(f"""
+                SELECT username, role, is_active
+                FROM read_parquet('{parquet_str}')
+                WHERE username = ?
+            """, [user]).fetchall()
+
+            if result and len(result) > 0:
+                row = result[0]
+                print(f"[OK] Usuário '{user}' encontrado! (Role: {row[1]}, Ativo: {row[2]})")
             else:
-                print(f"❌ Usuário '{user}' NÃO encontrado.")
+                print(f"[NOT FOUND] Usuário '{user}' NÃO encontrado.")
     except Exception as e:
-        print(f"Erro no Parquet: {e}")
+        print(f"[ERROR] Erro no Parquet: {e}")
+
 
 if __name__ == "__main__":
     check_sql()

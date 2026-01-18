@@ -1,0 +1,51 @@
+
+=== TESTE DA RESPOSTA RAW DO LLM ===
+
+[1/2] Coletando dados...
+OK - Vendas: 3739971.970999933
+
+[2/2] Chamando LLM (google)...
+
+============================================================
+RESPOSTA RAW DO LLM:
+============================================================
+```json
+[
+  {
+    "insight": "O produto 'TNT 40GRS 100%O LG 1.40 034 PRETO' (PRODUTO: 369946) estß com rupturas significativas, apresentando um estoque negativo de -5.94 e -56.10 em diferentes registros, apesar de ter tido vendas de R$ 1699.40 e R$ 1030.85 nos ·ltimos 30 dias. Isso indica uma perda de vendas e insatisfaþÒo do cliente.",
+    "severidade": "high",
+    "oportunidade": "ReposiþÒo imediata do estoque para evitar perdas contÝnuas e atender Ó demanda."
+  },
+  {
+    "insight": "O produto 'SACOLA VERDE 40X50 0.03U - P/USO CACULA' (PRODUTO: 639321) e 'SACOLA VERDE 50X60 0.04U - P/USO CACULA' (PRODUTO: 653152) representam um estoque parado considerßvel, com centenas de milhares de unidades em estoque e zero vendas nos ·ltimos 30 dias. O custo unitßrio de entrada para o primeiro Ú de R$ 0.0726 e para o segundo Ú de R$ 0.1365, o que pode gerar um alto custo de oportunidade e imobilizaþÒo de capital.",
+    "severidade": "medium",
+    "oportunidade": "Analisar estratÚgias de liquidaþÒo ou promoþÒo para esses itens, ou reavaliar a necessidade de manter um estoque tÒo elevado."
+  },
+  {
+    "insight": "O produto 'PAPEL CHAMEX A4 75GRS 500FLS' (PRODUTO: 59294) Ú um dos campe§es de venda, com R$ 4915.00 e R$ 3667.00 em vendas nos ·ltimos 30 dias, e possui um estoque razoßvel (2532 e 2321 unidades). No entanto, o preþo lÝquido de R$ 29.90 pode ser um ponto de atenþÒo para a competitividade em comparaþÒo com outros itens de papelaria.",
+    "severidade": "low",
+    "oportunidade": "Monitorar a concorrÛncia e considerar promoþ§es pontuais para manter a lideranþa nas vendas deste item."
+  },
+  {
+    "insight": "O produto 'PAPEL 40KG 96X66 120G/M BRANCO' (PRODUTO: 639705) aparece com m·ltiplas entradas de vendas (R$ 4343.00, R$ 4334.00, R$ 4250.00) e estoques variados (1321, 2902, 1988 unidades), com um preþo lÝquido muito baixo de R$ 1.99. Isso sugere um alto volume de vendas e uma margem de lucro potencialmente pequena por unidade, mas com grande impacto no faturamento total.",
+    "severidade": "low",
+    "oportunidade": "Avaliar a eficiÛncia da cadeia de suprimentos para este produto de alto giro e baixo valor unitßrio, garantindo que o volume de vendas compense a margem reduzida."
+  }
+]
+```
+============================================================
+
+Tentando parsear JSON...
+
+[OK] JSON parseado com sucesso!
+Tipo: <class 'list'>
+Numero de insights: 4
+
+Primeiro insight:
+{
+  "insight": "O produto 'TNT 40GRS 100%O LG 1.40 034 PRETO' (PRODUTO: 369946) estß com rupturas significativas, apresentando um estoque negativo de -5.94 e -56.10 em diferentes registros, apesar de ter tido vendas de R$ 1699.40 e R$ 1030.85 nos ·ltimos 30 dias. Isso indica uma perda de vendas e insatisfaþÒo do cliente.",
+  "severidade": "high",
+  "oportunidade": "ReposiþÒo imediata do estoque para evitar perdas contÝnuas e atender Ó demanda."
+}
+
+Resultado: SUCESSO

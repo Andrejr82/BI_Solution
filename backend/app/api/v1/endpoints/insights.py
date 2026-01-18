@@ -1,212 +1,199 @@
 """
-AI Insights Endpoints
-Proactive AI-powered business insights
+AI Insights Endpoints - Ultra-Fast Mode with Daily Cache
+Retorna insights com cache de 24h para economizar tokens LLM
 """
-
 from typing import Any, List
 from datetime import datetime, timedelta
 import logging
 import json
-import re
-import polars as pl
-
-from fastapi import APIRouter, Depends, HTTPException, status
+import hashlib
+from pathlib import Path
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user
 from app.infrastructure.database.models import User
-from app.core.llm_gemini_adapter_v2 import GeminiLLMAdapterV2 as GeminiLLMAdapter
-from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
-from app.core.data_scope_service import data_scope_service
-from app.config.settings import settings
 
 router = APIRouter(prefix="/insights", tags=["AI Insights"])
 logger = logging.getLogger(__name__)
 
+# Cache configuration
+CACHE_DIR = Path("data/cache/insights")
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_TTL_HOURS = 24  # Cache insights for 24 hours
 
-# Pydantic Models
 class InsightResponse(BaseModel):
-    """AI-generated insight"""
     id: str
     title: str
     description: str
-    category: str  # trend, anomaly, opportunity, risk
-    severity: str  # low, medium, high
+    category: str
+    severity: str
     recommendation: str | None
-    data_points: List[Any] | None
     created_at: str
 
-
 class InsightsListResponse(BaseModel):
-    """List of insights"""
     insights: List[InsightResponse]
     total: int
     generated_at: str
+    cached: bool = False
+    cache_age_hours: float = 0.0
 
+
+def _get_cache_key(filters: dict) -> str:
+    """Generate cache key based on filters"""
+    filter_str = json.dumps(filters or {}, sort_keys=True)
+    return hashlib.md5(filter_str.encode()).hexdigest()
+
+
+def _get_cached_insights(cache_key: str) -> dict | None:
+    """Load cached insights if fresh (< 24h)"""
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+
+    if not cache_file.exists():
+        return None
+
+    try:
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cached_data = json.load(f)
+
+        # Check if cache is still fresh
+        cached_at = datetime.fromisoformat(cached_data.get('generated_at', '2020-01-01'))
+        age = datetime.utcnow() - cached_at
+
+        if age.total_seconds() / 3600 < CACHE_TTL_HOURS:
+            logger.info(f"✅ Cache HIT for key {cache_key} (age: {age.total_seconds()/3600:.1f}h)")
+            return {
+                'insights': cached_data.get('insights', []),
+                'cached': True,
+                'cache_age_hours': age.total_seconds() / 3600
+            }
+        else:
+            logger.info(f"⏰ Cache EXPIRED for key {cache_key} (age: {age.total_seconds()/3600:.1f}h)")
+            return None
+
+    except Exception as e:
+        logger.warning(f"Error reading cache: {e}")
+        return None
+
+
+def _save_insights_to_cache(cache_key: str, insights: List[dict]):
+    """Save insights to cache"""
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+
+    try:
+        cache_data = {
+            'insights': insights,
+            'generated_at': datetime.utcnow().isoformat(),
+            'cache_key': cache_key
+        }
+
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"💾 Insights cached to {cache_file}")
+
+    except Exception as e:
+        logger.error(f"Error saving cache: {e}")
 
 @router.get("/proactive", response_model=InsightsListResponse)
-async def get_proactive_insights(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
+async def get_proactive_insights(current_user: User = Depends(get_current_user)) -> Any:
     """
-    Gera insights de varejo modernos e proativos usando IA.
-    Analisa tendências, riscos de ruptura e oportunidades de mix.
+    🧠 MODO ANALÍTICO REAL com Cache de 24h: Retorna insights usando Gemini/Groq
+    Cache economiza tokens LLM - nova geração apenas 1x por dia por perfil
     """
-    logger.info(f"🧠 Gerando insights modernos para: {current_user.username} (Role: {current_user.role})")
     try:
-        llm_adapter = GeminiLLMAdapter()
-        
-        # Obtém o dataframe já filtrado por escopo (Segmentos do Usuário ou Global para Admin)
-        df_raw = data_scope_service.get_filtered_dataframe(current_user)
-        
-        if df_raw.is_empty():
-            return InsightsListResponse(insights=[], total=0, generated_at=datetime.utcnow().isoformat())
+        from app.config.settings import settings
+        import uuid
 
-        # Coleta de métricas avançadas usando Polars para alta performance
-        # Garantir tipos numéricos para cálculos, tratando strings vazias
-        def safe_cast_col(col_name):
-            return pl.col(col_name).cast(pl.Utf8).str.strip_chars().replace("", None).cast(pl.Float64).fill_null(0)
+        # Filtros baseados no perfil do usuario
+        filters = {}
+        if current_user.segments_list:
+            filters["segments"] = current_user.segments_list
 
-        df_numeric = df_raw.with_columns([
-            safe_cast_col("VENDA_30DD"),
-            safe_cast_col("MES_01"),
-            safe_cast_col("MES_02"),
-            safe_cast_col("ESTOQUE_UNE"),
-            safe_cast_col("ESTOQUE_CD")
-        ])
+        # Generate cache key
+        cache_key = _get_cache_key(filters)
 
-        insights_context = []
+        # Try cache first
+        cached = _get_cached_insights(cache_key)
+        if cached:
+            insights = []
+            for i, item in enumerate(cached['insights']):
+                insights.append(InsightResponse(
+                    id=f"ins-{uuid.uuid4().hex[:8]}",
+                    title=item.get("title", "Insight"),
+                    description=item.get("description", ""),
+                    category=item.get("category", "info"),
+                    severity=item.get("severity", "low"),
+                    recommendation=item.get("recommendation"),
+                    created_at=datetime.utcnow().isoformat()
+                ))
 
-        # 1. Resumo Executivo (Macro)
-        exec_summary = df_numeric.select([
-            pl.col("VENDA_30DD").sum().alias("vendas_totais"),
-            pl.col("MES_01").sum().alias("receita_atual"),
-            pl.col("MES_02").sum().alias("receita_anterior"),
-            pl.col("ESTOQUE_UNE").sum().alias("estoque_lojas"),
-            pl.col("ESTOQUE_CD").sum().alias("estoque_cd"),
-            pl.col("PRODUTO").n_unique().alias("skus_ativos")
-        ]).to_dicts()[0]
-        
-        # Calcular crescimento MoM
-        if exec_summary["receita_anterior"] > 0:
-            growth = ((exec_summary["receita_atual"] - exec_summary["receita_anterior"]) / exec_summary["receita_anterior"]) * 100
-            exec_summary["crescimento_mom"] = round(growth, 2)
-        else:
-            exec_summary["crescimento_mom"] = 0
-        
-        insights_context.append({"type": "executive_summary", "data": exec_summary})
-
-        # 2. Top Categorias/Segmentos por Performance
-        group_col = "NOMESEGMENTO" if current_user.role == "admin" else "NOMECATEGORIA"
-        if group_col in df_numeric.columns:
-            top_performers = df_numeric.group_by(group_col).agg([
-                pl.col("MES_01").sum().alias("receita"),
-                pl.col("VENDA_30DD").sum().alias("unidades"),
-                (pl.col("ESTOQUE_UNE").sum() / (pl.col("VENDA_30DD").sum().clip(0.01) / 30)).alias("cobertura_dias")
-            ]).sort("receita", descending=True).head(5).to_dicts()
-            
-            insights_context.append({"type": "top_categories", "data": top_performers})
-
-        # 3. Alertas de Ruptura e Estoque Crítico
-        venda_media = df_numeric.select(pl.col("VENDA_30DD").mean()).item() or 0
-        df_critical = df_numeric.filter(
-            (pl.col("VENDA_30DD") > venda_media) & 
-            (pl.col("ESTOQUE_UNE") < (pl.col("VENDA_30DD") / 30 * 5))
-        ).sort("VENDA_30DD", descending=True).head(5).select([
-            "NOME", "VENDA_30DD", "ESTOQUE_UNE", "ESTOQUE_CD", "NOMESEGMENTO"
-        ]).to_dicts()
-        
-        if df_critical:
-            insights_context.append({"type": "critical_stock_alerts", "data": df_critical})
-
-        # Preparar o Prompt para o Especialista em Varejo
-        context_description = "todos os segmentos da rede" if current_user.role == "admin" else f"seu segmento específico ({', '.join(current_user.segments_list)})";
-        
-        prompt = f"""
-        Você é um Diretor de BI da Caculinha (Varejo de Armarinhos/Tecidos).
-        Analise os dados abaixo para o usuário {current_user.username}, que tem visão sobre {context_description}.
-        
-        DADOS ESTRUTURADOS:
-        {json.dumps(insights_context, indent=2, ensure_ascii=False)}
-        
-        SUA TAREFA:
-        Gere 4 insights estratégicos e modernos seguindo estas diretrizes:
-        1. TENDÊNCIA: Analise o crescimento MoM e o que ele indica.
-        2. EFICIÊNCIA: Comente sobre a 'cobertura_dias'. Ideal é entre 15-30 dias. Menos é risco, mais é capital parado.
-        3. PARETO: Identifique se há concentração excessiva em poucos SKUs ou categorias.
-        4. AÇÃO: Cada insight DEVE ter uma recomendação prática (Ex: 'Transferir X do CD', 'Realizar queima de estoque', 'Aumentar pedido de compra').
-
-        REGRAS DE FORMATO:
-        - Retorne APENAS um objeto JSON.
-        - Linguagem: Português PT-BR profissional mas direta.
-        - Categorias: 'trend', 'anomaly', 'opportunity', 'risk'.
-        - Severidade: 'low', 'medium', 'high'.
-
-        ESTRUTURA DO JSON:
-        {{
-            "insights": [
-                {{
-                    "id": "unique-id",
-                    "title": "Título Impactante",
-                    "description": "Explicação baseada em números reais",
-                    "category": "risk",
-                    "severity": "high",
-                    "recommendation": "Ação sugerida",
-                    "data_points": [] 
-                }}
-            ]
-        }}
-        """
-
-        # Chamada ao Gemini
-        response = await llm_adapter.generate_response(prompt)
-        
-        # Limpeza e parse do JSON
-        json_match = re.search(r'(\{.*\})', response, re.DOTALL)
-        if json_match:
-            try:
-                insights_response = json.loads(json_match.group(1))
-            except:
-                logger.error("Erro ao parsear JSON do Gemini")
-                raise Exception("AI Response parsing failed")
-        else:
-            raise Exception("No JSON found in AI response")
-
-        # Formatação final
-        formatted_insights = [
-            InsightResponse(
-                id=i.get('id', f"ins-{idx}"),
-                title=i.get('title', 'Insight Estratégico'),
-                description=i.get('description', ''),
-                category=i.get('category', 'opportunity'),
-                severity=i.get('severity', 'medium'),
-                recommendation=i.get('recommendation'),
-                data_points=i.get('data_points', []),
-                created_at=datetime.utcnow().isoformat()
+            logger.info(f"✅ Returning cached insights (age: {cached['cache_age_hours']:.1f}h)")
+            return InsightsListResponse(
+                insights=insights,
+                total=len(insights),
+                generated_at=datetime.utcnow().isoformat(),
+                cached=True,
+                cache_age_hours=cached['cache_age_hours']
             )
-            for idx, i in enumerate(insights_response.get('insights', []))
-        ]
 
+        # Cache miss - generate new insights
+        logger.info(f"🔄 Cache MISS - Generating new insights via LLM (will consume tokens)")
+
+        raw_insights = []
+
+        # ------------------------------------------------------------------
+        # MODO OFFLINE (Mock / LangGraph Local)
+        # ------------------------------------------------------------------
+        if settings.LLM_PROVIDER == "mock":
+            logger.info("⚡ [INSIGHTS] Gerando insights via Heurística (Offline Mode)")
+            raw_insights = await _generate_offline_insights()
+
+        # ------------------------------------------------------------------
+        # MODO LLM (Gemini / Groq) e Fallback
+        # ------------------------------------------------------------------
+        else:
+            from app.services.llm_insights import LLMInsightsService
+
+            logger.info(f"🔍 Filtrando insights para segmentos: {filters.get('segments', 'all')}")
+            raw_insights = await LLMInsightsService.generate_proactive_insights(filters=filters)
+
+        # Save to cache
+        _save_insights_to_cache(cache_key, raw_insights)
+
+        # Mapeia para modelo Pydantic
+        insights = []
+        for i, item in enumerate(raw_insights):
+            insights.append(InsightResponse(
+                id=f"ins-{uuid.uuid4().hex[:8]}",
+                title=item.get("title", "Insight"),
+                description=item.get("description", ""),
+                category=item.get("category", "info"),
+                severity=item.get("severity", "low"),
+                recommendation=item.get("recommendation"),
+                created_at=datetime.utcnow().isoformat()
+            ))
+
+        logger.info(f"✅ Insights gerados para '{current_user.username}': {len(insights)} itens (FRESH - tokens consumidos)")
         return InsightsListResponse(
-            insights=formatted_insights,
-            total=len(formatted_insights),
-            generated_at=datetime.utcnow().isoformat()
+            insights=insights,
+            total=len(insights),
+            generated_at=datetime.utcnow().isoformat(),
+            cached=False,
+            cache_age_hours=0.0
         )
 
     except Exception as e:
-        logger.error(f"❌ Erro em Proactive Insights: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao gerar insights: {e}", exc_info=True)
+        # Fallback mínimo
         return InsightsListResponse(
             insights=[
                 InsightResponse(
-                    id="err-1",
-                    title="Análise em processamento",
-                    description="Estamos consolidando os dados do seu segmento para gerar novos insights.",
-                    category="trend",
+                    id="fallback-1",
+                    title="Modo Segurança",
+                    description="Não foi possível gerar insights detalhados no momento.",
+                    category="issue",
                     severity="low",
-                    recommendation="Tente atualizar em alguns instantes.",
-                    data_points=[],
+                    recommendation="Verifique os logs do sistema.",
                     created_at=datetime.utcnow().isoformat()
                 )
             ],
@@ -215,86 +202,97 @@ async def get_proactive_insights(
         )
 
 
+async def _generate_offline_insights() -> List[dict]:
+    """
+    Gera insights determinísticos usando DuckDB diretamente.
+    Substitui o LLM no modo offline.
+    """
+    from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
+    import pandas as pd
+    
+    insights = []
+    
+    try:
+        adapter = get_duckdb_adapter()
+        # 1. Insight de Vendas/Valor
+        # Análise 1: Top Produtos por Valor (Mais seguro que Grupo)
+        df_top = adapter.load_data(
+            columns=["NOME", "LIQUIDO_38"],
+            order_by="LIQUIDO_38 DESC",
+            limit=1
+        )
+        
+        if not df_top.empty:
+            item = df_top.iloc[0]
+            val = item.get('LIQUIDO_38', 0)
+            insights.append({
+                "title": "Produto de Maior Impacto",
+                "description": f"O produto '{item['NOME']}' tem valor unitário de R$ {float(val):,.2f}.",
+                "category": "finance",
+                "severity": "medium",
+                "recommendation": "Verificar disponibilidade em todas as lojas."
+            })
+
+        # Análise 2: Quantidade de Produtos (Count)
+        # Mais seguro que soma de estoque se o tipo for incerto
+        df_count = adapter.execute_aggregation(
+             agg_col="PRODUTO",
+             agg_func="count",
+             group_by=[], 
+             limit=1
+        )
+        if not df_count.empty:
+            qtde = df_count.iloc[0].get('valor', df_count.iloc[0, 0])
+            insights.append({
+                "title": "Total de Produtos",
+                "description": f"A base conta com {int(qtde)} produtos cadastrados.",
+                "category": "inventory",
+                "severity": "info",
+                "recommendation": None
+            })
+
+        # Análise 3: Produtos de Alto Valor
+        df_par = adapter.load_data(
+            columns=["PRODUTO", "NOME", "LIQUIDO_38"],
+            order_by="LIQUIDO_38 DESC",
+            limit=1
+        )
+        if not df_par.empty:
+            item = df_par.iloc[0]
+            insights.append({
+                "title": "Item Mais Valioso",
+                "description": f"'{item['NOME']}' (R$ {item['LIQUIDO_38']}).",
+                "category": "product",
+                "severity": "low",
+                "recommendation": "Destaque este item na vitrine."
+            })
+            
+    except Exception as e:
+        logger.error(f"Erro na geração de insights offline: {e}")
+        insights.append({
+            "title": "Erro na Análise Local",
+            "description": f"Falha ao calcular métricas: {str(e)}",
+            "category": "system",
+            "severity": "high",
+            "recommendation": None
+        })
+    
+    # Se nada gerou (Ex: tabela vazia)
+    if not insights:
+        insights.append({
+            "title": "Sem Dados Suficientes",
+            "description": "A base de dados parece vazia ou inacessível no momento.",
+            "category": "data",
+            "severity": "low",
+            "recommendation": "Verifique a carga do arquivo parquet."
+        })
+        
+    return insights
 
 @router.get("/anomalies")
-async def detect_anomalies(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    Detect anomalies in sales and stock data using AI.
-
-    Returns unusual patterns that require attention.
-    """
-    data_adapter = HybridDataAdapter()
-    segments = data_scope_service.get_user_segments(current_user)
-
-    # Detect sudden drops in sales
-    anomaly_query = """
-    SELECT
-        NOMPRODUTO,
-        CODPRODUTO,
-        QtdVenda,
-        VrVenda,
-        QtdEstoque,
-        SEGMENTO
-    FROM AdmMatao
-    WHERE SEGMENTO IN ({})
-        AND (
-            QtdEstoque = 0 AND QtdVenda > 100
-            OR QtdVenda = 0 AND QtdEstoque > 1000
-        )
-    ORDER BY QtdVenda DESC
-    """.format(','.join(f"'{s}'" for s in segments))
-
-    try:
-        anomalies_df = await data_adapter.execute_query(anomaly_query)
-
-        return {
-            "anomalies": anomalies_df.to_dict('records') if not anomalies_df.empty else [],
-            "count": len(anomalies_df),
-            "detected_at": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Anomaly detection failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error detecting anomalies: {str(e)}"
-        )
-
+async def detect_anomalies():
+    return {"status": "ok", "message": "Anomaly detection em desenvolvimento"}
 
 @router.post("/ask")
-async def ask_insight_question(
-    question: str,
-    current_user: User = Depends(get_current_user)
-) -> Any:
-    """
-    Ask a specific question about business insights.
-
-    Example: "What products should I restock urgently?"
-    """
-    llm_adapter = GeminiLLMAdapter()
-
-    prompt = f"""
-Você é um assistente de BI. Responda a seguinte pergunta de negócio:
-
-**Pergunta:** {question}
-
-Forneça uma resposta clara, objetiva e com recomendações acionáveis.
-Se precisar de dados específicos, mencione quais consultas seriam úteis.
-"""
-
-    try:
-        response = await llm_adapter.generate_response(prompt)
-
-        return {
-            "question": question,
-            "answer": response,
-            "answered_at": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Question answering failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error answering question: {str(e)}"
-        )
+async def ask_insight_question(question: str):
+    return {"answer": "IA ativa em modo econômico. Use o Chat BI para perguntas detalhadas."}

@@ -1,24 +1,19 @@
 """
 Data Adapter Dependency
-Provides the HybridDataAdapter instance to API endpoints.
+Provides the DuckDBEnhancedAdapter instance to API endpoints.
 """
 
 from typing import Annotated
 from fastapi import Depends, Request
 
-from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
+from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter, DuckDBEnhancedAdapter
 
-def get_data_adapter(request: Request) -> HybridDataAdapter:
+def get_data_adapter(request: Request) -> DuckDBEnhancedAdapter:
     """
-    Dependency to get the HybridDataAdapter instance from app state.
-    The adapter is initialized in main.py lifespan.
+    Dependency to get the DuckDBEnhancedAdapter instance.
+    Uses singleton pattern from get_duckdb_adapter().
     """
-    if not hasattr(request.app.state, "data_adapter"):
-        # Fallback if not initialized (e.g. during tests)
-        # But ideally should be initialized in lifespan
-        request.app.state.data_adapter = HybridDataAdapter()
-        
-    return request.app.state.data_adapter
+    return get_duckdb_adapter()
 
 # Type alias for easier usage in endpoints
-DataAdapter = Annotated[HybridDataAdapter, Depends(get_data_adapter)]
+DataAdapter = Annotated[DuckDBEnhancedAdapter, Depends(get_data_adapter)]

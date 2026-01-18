@@ -14,6 +14,7 @@ Princípios:
 
 Autor: Claude Code
 Data: 2025-10-26
+Atualização: 2026-01-17 - Migrado para usar column_mapping.py dinamicamente
 """
 
 import logging
@@ -25,36 +26,64 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÃO: Colunas essenciais por tipo de análise
 # ============================================================================
 
-ESSENTIAL_COLUMNS = {
-    # Colunas que SEMPRE devem ser incluídas (identificadores)
-    "core": [
-        "codigo_produto", "CODIGO_PRODUTO", "produto_codigo",
-        "nome_produto", "NOME_PRODUTO", "produto_nome", "PRODUTO",
-        "une_codigo", "UNE_CODIGO", "une", "UNE",
-        "segmento", "SEGMENTO", "segmento_nome", "SEGMENTO_NOME"
-    ],
+def _get_essential_columns_map() -> Dict[str, List[str]]:
+    """
+    Carrega colunas essenciais dinamicamente do column_mapping.py.
+    Garante sincronização com o schema expandido (97 colunas).
+    """
+    from app.infrastructure.data.config.column_mapping import COLUMN_INFO
+    
+    # Construir mapa dinâmico baseado no COLUMN_INFO
+    return {
+        # Colunas que SEMPRE devem ser incluídas (identificadores)
+        "core": [
+            "PRODUTO", "NOME", "UNE", "UNE_NOME", 
+            "NOMESEGMENTO", "NOMECATEGORIA", "NOMEGRUPO", "NOMEFABRICANTE"
+        ],
 
-    # Colunas de estoque (se query menciona "estoque")
-    "estoque": [
-        "estoque_une", "ESTOQUE_UNE", "estoque_atual", "ESTOQUE_ATUAL"
-    ],
+        # Colunas de estoque (se query menciona "estoque")
+        "estoque": [
+            "ESTOQUE_UNE", "ESTOQUE_LV", "ESTOQUE_CD", 
+            "ESTOQUE_GONDOLA_LV", "ESTOQUE_ILHA_LV",
+            "EXPOSICAO_MINIMA_UNE", "EXPOSICAO_MAXIMA_UNE"
+        ],
 
-    # Colunas de vendas (se query menciona "venda", "vendeu", etc)
-    "vendas": [
-        f"mes_{i:02d}" for i in range(1, 13)
-    ] + ["vendas_total", "VENDAS_TOTAL"],
+        # Colunas de vendas (se query menciona "venda", "vendeu", etc)
+        "vendas": [
+            "VENDA_30DD", "MES_01", "MES_02", "MES_03", "MES_04", "MES_05", "MES_06",
+            "MES_07", "MES_08", "MES_09", "MES_10", "MES_11", "MES_12", "MES_PARCIAL",
+            "SEMANA_ATUAL", "SEMANA_ANTERIOR_2", "SEMANA_ANTERIOR_3", 
+            "SEMANA_ANTERIOR_4", "SEMANA_ANTERIOR_5"
+        ],
 
-    # Colunas de preço (se query menciona "preço", "valor")
-    "preco": [
-        "preco_venda", "PRECO_VENDA", "preco_custo", "PRECO_CUSTO",
-        "margem", "MARGEM"
-    ],
+        # Colunas de preço (se query menciona "preço", "valor")
+        "preco": [
+            "LIQUIDO_38", "ULTIMA_ENTRADA_CUSTO_CD", 
+            "QTDE_EMB_MASTER", "QTDE_EMB_MULTIPLO"
+        ],
 
-    # Colunas de localização (se query menciona UNE/loja específica)
-    "localizacao": [
-        "une_nome", "UNE_NOME", "cidade", "CIDADE", "estado", "ESTADO"
-    ]
-}
+        # Colunas de localização (se query menciona UNE/loja específica)
+        "localizacao": [
+            "UNE", "UNE_NOME"
+        ],
+        
+        # Colunas de logística (se query menciona picklist, romaneio, etc)
+        "logistica": [
+            "SOLICITACAO_PENDENTE", "SOLICITACAO_PENDENTE_QTDE", "SOLICITACAO_PENDENTE_DATA",
+            "PICKLIST", "PICKLIST_SITUACAO", "ROMANEIO_SOLICITACAO", "ROMANEIO_ENVIO",
+            "NOTA", "SERIE", "NOTA_EMISSAO"
+        ]
+    }
+
+# Lazy loading do mapa de colunas
+ESSENTIAL_COLUMNS = None
+
+def get_essential_columns() -> Dict[str, List[str]]:
+    """Retorna mapa de colunas essenciais (com cache)"""
+    global ESSENTIAL_COLUMNS
+    if ESSENTIAL_COLUMNS is None:
+        ESSENTIAL_COLUMNS = _get_essential_columns_map()
+    return ESSENTIAL_COLUMNS
 
 # Colunas que podem ser REMOVIDAS para economizar memória (raramente usadas)
 RARELY_USED_COLUMNS = [
@@ -128,10 +157,12 @@ def get_optimized_columns(
 
     # Coletar colunas essenciais baseadas na intenção
     selected_columns = set()
+    
+    essential_map = get_essential_columns()
 
     for category in intent_categories:
-        if category in ESSENTIAL_COLUMNS:
-            selected_columns.update(ESSENTIAL_COLUMNS[category])
+        if category in essential_map:
+            selected_columns.update(essential_map[category])
 
     # Filtrar apenas colunas que existem no dataset (case-insensitive)
     available_lower = {col.lower(): col for col in available_columns}

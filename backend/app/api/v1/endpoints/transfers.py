@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import duckdb
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
@@ -14,6 +15,8 @@ from app.core.tools.une_tools import (
     sugerir_transferencias_automaticas,
 )
 from app.core.utils.error_handler import APIError
+from app.core.duckdb_config import get_safe_connection
+from app.core.data_scope_service import data_scope_service
 
 router = APIRouter(prefix="/transfers", tags=["Transfers"])
 
@@ -37,6 +40,7 @@ class TransferReportQuery(BaseModel):
 
 class ProductSearchRequest(BaseModel):
     segmento: Optional[str] = None
+    grupo: Optional[str] = None
     fabricante: Optional[str] = None
     estoque_min: Optional[int] = None
     limit: int = Field(default=50, le=500)
@@ -58,7 +62,6 @@ async def validate_transfer(
     Integrates with `validar_transferencia_produto` tool.
     Includes priority score (0-100) and urgency level.
     """
-    import polars as pl
     from app.core.data_scope_service import data_scope_service
 
     try:
@@ -75,21 +78,28 @@ async def validate_transfer(
         nivel_urgencia = "NORMAL"
 
         try:
-            df = data_scope_service.get_filtered_dataframe(current_user)
+            # Gets Lazy Relation
+            conn = get_safe_connection()
+            rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
+            
+            # Filter Relation
+            # Filter: PRODUTO = ? AND UNE = ?
+            # Casting IDs to correct types if needed.
+            res = rel.filter("PRODUTO = $1 AND UNE = $2", 
+                             str(payload.produto_id) if isinstance(payload.produto_id, str) else int(payload.produto_id), 
+                             str(payload.une_destino) if isinstance(payload.une_destino, str) else int(payload.une_destino)
+                             ).limit(1).fetchall()
+            
+            # Get columns from relation
+            columns = rel.columns
+            
+            if res:
+                row = dict(zip(columns, res[0]))
 
-            # Buscar dados do produto na UNE destino
-            df_produto = df.filter(
-                (pl.col("PRODUTO") == payload.produto_id) &
-                (pl.col("UNE") == payload.une_destino)
-            )
-
-            if len(df_produto) > 0:
-                row = df_produto.row(0, named=True)
-
-                estoque_loja = float(row.get("ESTOQUE_UNE", 0) or 0)
-                estoque_cd = float(row.get("ESTOQUE_CD", 0) or 0)
-                linha_verde = float(row.get("ESTOQUE_LV", 0) or 0)
-                venda_30dd = float(row.get("VENDA_30DD", 0) or 0)
+                estoque_loja = float(row.get("ESTOQUE_UNE") or 0)
+                estoque_cd = float(row.get("ESTOQUE_CD") or 0)
+                linha_verde = float(row.get("ESTOQUE_LV") or 0)
+                venda_30dd = float(row.get("VENDA_30DD") or 0)
 
                 # Calcular score (0-100)
                 # Fatores: ruptura, vendas, relação estoque/linha verde
@@ -122,6 +132,7 @@ async def validate_transfer(
                     nivel_urgencia = "MÉDIA"
                 else:
                     nivel_urgencia = "BAIXA"
+            # Connection managed by DuckDB (GC)
 
         except Exception as e:
             print(f"Erro ao calcular score: {e}")
@@ -227,45 +238,66 @@ async def get_transfers_report(
 async def get_transfer_filters(
     current_user: Annotated[User, Depends(get_current_active_user)],
     segmento: Optional[str] = Query(None),
+    grupo: Optional[str] = Query(None),
 ) -> Dict[str, Any]:
     """
     Endpoint to get available filter options for transfers.
-    Returns unique values for segmento and fabricante.
-    If 'segmento' is provided, filters 'fabricantes' accordingly.
+    Returns unique values for segmento, grupo and fabricante.
+    Implements cascading logic: Segment -> Group -> Manufacturer.
     """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        conn = get_safe_connection()
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
 
         # Determinar nomes corretos das colunas
-        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else None
-        fabricante_col = "NOMEFABRICANTE" if "NOMEFABRICANTE" in df.columns else None
+        try:
+             cols = rel.columns
+        except:
+             return {"segmentos": [], "grupos": [], "fabricantes": []}
 
-        # Obter valores únicos de segmentos (independentemente do filtro)
-        segmentos = []
-        if segmento_col:
-            segmentos = df.select(pl.col(segmento_col)).unique().drop_nulls().sort(segmento_col).to_series().to_list()
-            segmentos = [str(s) for s in segmentos if s and str(s).strip()]
+        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in cols else None
+        grupo_col = "NOMEGRUPO" if "NOMEGRUPO" in cols else None
+        fabricante_col = "NOMEFABRICANTE" if "NOMEFABRICANTE" in cols else None
 
-        # Filtrar DF se segmento for fornecido
+        # Helper to get distinct list
+        def get_distinct(relation, col_name, filter_conditions=None):
+            if not col_name: return []
+            curr = relation
+            if filter_conditions:
+                for col, val in filter_conditions.items():
+                    if val and col in cols:
+                         # FIX: Use f-string interpolation for filter instead of binding
+                         # Check for SQL injection here if input wasn't internal/validated, 
+                         # but for internal known columns and query params it's generally safe in this context or sanitize.
+                         # Since these are values from DB, simple quote escaping is usually enough.
+                         safe_val = str(val).replace("'", "''")
+                         curr = curr.filter(f"{col} = '{safe_val}'")
+            
+            res = curr.select(col_name).distinct().order(col_name).fetchall()
+            return [str(r[0]) for r in res if r[0] and str(r[0]).strip()]
+
+        # 1. Segmentos (Always full list or filtered by user scope only)
+        segmentos = get_distinct(rel, segmento_col)
+
+        # 2. Grupos (Filtered by Segmento)
+        grupos_filters = {}
         if segmento and segmento_col:
-            # Usar contains para flexibilidade ou == para exato. Backend original usava contains.
-            # Vamos usar exato se possível para filtros de combo, ou contains se o frontend mandar parcial.
-            # O frontend manda o valor do option, então deve ser exato.
-            # Mas como o searchProducts usa contains, vou usar == para ser preciso na lista dependente.
-            df = df.filter(pl.col(segmento_col) == segmento)
+            grupos_filters[segmento_col] = segmento
+        grupos = get_distinct(rel, grupo_col, grupos_filters)
 
-        # Obter fabricantes (filtrados ou não)
-        fabricantes = []
-        if fabricante_col:
-            fabricantes = df.select(pl.col(fabricante_col)).unique().drop_nulls().sort(fabricante_col).to_series().to_list()
-            fabricantes = [str(f) for f in fabricantes if f and str(f).strip()]
-
+        # 3. Fabricantes (Filtered by Segmento AND Grupo)
+        fab_filters = {}
+        if segmento and segmento_col:
+            fab_filters[segmento_col] = segmento
+        if grupo and grupo_col:
+            fab_filters[grupo_col] = grupo
+            
+        fabricantes = get_distinct(rel, fabricante_col, fab_filters)
+            
         return {
-            "segmentos": segmentos[:100],  # Limitar a 100 para performance
-            "fabricantes": fabricantes[:100]
+            "segmentos": segmentos, 
+            "grupos": grupos,
+            "fabricantes": fabricantes
         }
 
     except Exception as e:
@@ -284,56 +316,87 @@ async def search_products(
     Endpoint to search products with filters for transfer management.
     Returns products matching criteria with stock information.
     """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        conn = get_safe_connection()
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
+        
+        try:
+             cols = rel.columns
+        except:
+             return []
 
         # Determinar nomes corretos das colunas
-        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in df.columns else None
-        fabricante_col = "NOMEFABRICANTE" if "NOMEFABRICANTE" in df.columns else None
+        segmento_col = "NOMESEGMENTO" if "NOMESEGMENTO" in cols else None
+        grupo_col = "NOMEGRUPO" if "NOMEGRUPO" in cols else None
+        fabricante_col = "NOMEFABRICANTE" if "NOMEFABRICANTE" in cols else None
 
-        # Aplicar filtros
+        # Construir filtros Chaining
+        # FIX: Explicit f-string interpolation for LIKE/ILIKE patterns 
+        # to avoid "incompatible function arguments" error in current DuckDB python binding
         if request.segmento and segmento_col:
-            df = df.filter(pl.col(segmento_col).str.contains(request.segmento, literal=False))
+             # Sanitize input to prevent injection
+             safe_seg = request.segmento.replace("'", "''")
+             rel = rel.filter(f"{segmento_col} ILIKE '%{safe_seg}%'")
+
+        if request.grupo and grupo_col:
+             safe_grp = request.grupo.replace("'", "''")
+             rel = rel.filter(f"{grupo_col} ILIKE '%{safe_grp}%'")
 
         if request.fabricante and fabricante_col:
-            df = df.filter(pl.col(fabricante_col).str.contains(request.fabricante, literal=False))
+             safe_fab = request.fabricante.replace("'", "''")
+             rel = rel.filter(f"{fabricante_col} ILIKE '%{safe_fab}%'")
 
         if request.estoque_min is not None:
-            df = df.filter(pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0) >= request.estoque_min)
+             rel = rel.filter(f"COALESCE(TRY_CAST(ESTOQUE_UNE AS DOUBLE), 0) >= {request.estoque_min}")
 
         # Preparar colunas para agrupamento
-        group_cols = ["PRODUTO", "NOME"]
-        if segmento_col:
-            group_cols.append(segmento_col)
-        if fabricante_col:
-            group_cols.append(fabricante_col)
+        grp_fields = ["PRODUTO", "NOME"]
+        if segmento_col: grp_fields.append(segmento_col)
+        if grupo_col: grp_fields.append(grupo_col)
+        if fabricante_col: grp_fields.append(fabricante_col)
+        
+        # Select expressions
+        seg_sel = f"{segmento_col} as segmento" if segmento_col else "'N/A' as segmento"
+        grp_sel = f"{grupo_col} as grupo" if grupo_col else "'N/A' as grupo"
+        fab_sel = f"{fabricante_col} as fabricante" if fabricante_col else "'N/A' as fabricante"
+        
+        grp_sql = ", ".join(grp_fields)
 
-        # Agrupar por produto e agregar informações
-        df_grouped = df.group_by(group_cols).agg([
-            pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0).sum().alias("estoque_total_loja"),
-            pl.col("ESTOQUE_CD").cast(pl.Float64, strict=False).fill_null(0).sum().alias("estoque_total_cd"),
-            pl.col("VENDA_30DD").cast(pl.Float64, strict=False).fill_null(0).sum().alias("vendas_30dd"),
-            pl.col("UNE").n_unique().alias("unes_com_estoque")
-        ])
+        query = f"""
+            SELECT 
+                PRODUTO as produto_id,
+                NOME as nome,
+                {seg_sel},
+                {grp_sel},
+                {fab_sel},
+                COALESCE(SUM(TRY_CAST(ESTOQUE_UNE AS DOUBLE)), 0) as estoque_total_loja,
+                COALESCE(SUM(TRY_CAST(ESTOQUE_CD AS DOUBLE)), 0) as estoque_total_cd,
+                COALESCE(SUM(TRY_CAST(VENDA_30DD AS DOUBLE)), 0) as vendas_30dd,
+                COUNT(DISTINCT UNE) as unes_com_estoque
+            FROM search_prods
+            GROUP BY {grp_sql}
+            LIMIT {request.limit}
+        """
 
-        df_result = df_grouped.head(request.limit)
-
+        res_rel = rel.query("search_prods", query)
+        res = res_rel.fetchall()
+        cols_res = res_rel.columns
+        
         products = []
-        for row in df_result.iter_rows(named=True):
-            products.append({
-                "produto_id": int(row["PRODUTO"]),
-                "nome": str(row["NOME"])[:60],
-                "segmento": str(row.get(segmento_col, "N/A")) if segmento_col else "N/A",
-                "fabricante": str(row.get(fabricante_col, "N/A"))[:30] if fabricante_col else "N/A",
-                "estoque_loja": int(row["estoque_total_loja"]),
-                "estoque_cd": int(row["estoque_total_cd"]),
-                "vendas_30dd": int(row["vendas_30dd"]),
-                "unes": int(row["unes_com_estoque"])
-            })
-
+        for r in res:
+             row = dict(zip(cols_res, r))
+             products.append({
+                 "produto_id": int(row["produto_id"]),
+                 "nome": str(row["nome"])[:60],
+                 "segmento": str(row["segmento"]),
+                 "grupo": str(row["grupo"]),
+                 "fabricante": str(row["fabricante"])[:30],
+                 "estoque_loja": int(row["estoque_total_loja"]),
+                 "estoque_cd": int(row["estoque_total_cd"]),
+                 "vendas_30dd": int(row["vendas_30dd"]),
+                 "unes": int(row["unes_com_estoque"])
+             })
+        
         return products
 
     except Exception as e:
@@ -392,26 +455,35 @@ async def get_available_unes(
     """
     Endpoint to get list of available UNEs for transfer selection.
     """
-    import polars as pl
-    from app.core.data_scope_service import data_scope_service
-
     try:
-        df = data_scope_service.get_filtered_dataframe(current_user)
+        conn = get_safe_connection()
+        rel = data_scope_service.get_filtered_dataframe(current_user, conn=conn)
 
         # Obter UNEs únicas com contagem de produtos
-        unes_data = df.group_by("UNE").agg([
-            pl.col("PRODUTO").n_unique().alias("total_produtos"),
-            pl.col("ESTOQUE_UNE").cast(pl.Float64, strict=False).fill_null(0).sum().alias("estoque_total")
-        ]).sort("UNE")
+        # Use SQL on relation
+        query = """
+            SELECT 
+                UNE as une,
+                COUNT(DISTINCT PRODUTO) as total_produtos,
+                COALESCE(SUM(TRY_CAST(ESTOQUE_UNE AS DOUBLE)), 0) as estoque_total
+            FROM unes_list
+            GROUP BY UNE
+            ORDER BY UNE
+        """
+        
+        res_rel = rel.query("unes_list", query)
+        res = res_rel.fetchall()
+        cols_res = res_rel.columns
 
         unes = []
-        for row in unes_data.iter_rows(named=True):
+        for r in res:
+            row = dict(zip(cols_res, r))
             unes.append({
-                "une": int(row["UNE"]),
+                "une": int(row["une"]),
                 "total_produtos": int(row["total_produtos"]),
                 "estoque_total": int(row["estoque_total"])
             })
-
+        
         return unes
 
     except Exception as e:

@@ -1,0 +1,51 @@
+
+=== TESTE DA RESPOSTA RAW DO LLM ===
+
+[1/2] Coletando dados...
+OK - Vendas: 3739971.9709999347
+
+[2/2] Chamando LLM (google)...
+
+============================================================
+RESPOSTA RAW DO LLM:
+============================================================
+```json
+[
+  {
+    "insight": "A loja estß enfrentando rupturas crÝticas em produtos do segmento de TECIDOS, com destaque para o 'TNT 40GRS 100%O LG 1.40 034 PRETO' e 'TNT 40GRS 100%O LG 1.40 044 AMARELO OURO'. Esses itens apresentam vendas significativas nos ·ltimos 30 dias, mas com estoque negativo, indicando perda de vendas e insatisfaþÒo do cliente.",
+    "severity": "high",
+    "opportunity": "ReposiþÒo imediata dos itens em ruptura para evitar perdas de vendas contÝnuas e recuperar a confianþa do cliente."
+  },
+  {
+    "insight": "O segmento de PAPELARIA demonstra forte desempenho em vendas, com o 'PAPEL CHAMEX A4 75GRS 500FLS' e 'PAPEL 40KG 96X66 120G/M BRANCO' liderando os destaques. No entanto, Ú importante monitorar o estoque desses itens para garantir que nÒo ocorram rupturas futuras, dada a sua popularidade.",
+    "severity": "medium",
+    "opportunity": "Analisar a possibilidade de aumentar o estoque desses produtos de alta demanda para maximizar as vendas e evitar a perda de oportunidades."
+  },
+  {
+    "insight": "Hß uma quantidade expressiva de estoque parado no segmento de USO CONSUMO, com destaque para 'SACOLA VERDE 40X50 0.03U - P/USO CACULA' e 'SACOLA VERDE 50X60 0.04U - P/USO CACULA'. Esses produtos nÒo apresentam vendas nos ·ltimos 30 dias, mas possuem um volume considerßvel em estoque, gerando custos de armazenagem e imobilizando capital.",
+    "severity": "medium",
+    "opportunity": "Desenvolver estratÚgias de liquidaþÒo ou promoþÒo para esses itens de baixo giro, a fim de liberar capital e espaþo no estoque."
+  },
+  {
+    "insight": "A loja possui um valor total de estoque financeiro considerßvel (R$ 64.214.463,71). ╔ crucial otimizar a gestÒo de estoque para reduzir o capital imobilizado em produtos de baixo giro e garantir a disponibilidade de itens de alta demanda, como os de PAPELARIA, para maximizar a rentabilidade.",
+    "severity": "low",
+    "opportunity": "Implementar um sistema de gestÒo de estoque mais eficiente, com foco em anßlise de giro, previsÒo de demanda e polÝticas de reposiþÒo adequadas para cada categoria de produto."
+  }
+]
+```
+============================================================
+
+Tentando parsear JSON...
+
+[OK] JSON parseado com sucesso!
+Tipo: <class 'list'>
+Numero de insights: 4
+
+Primeiro insight:
+{
+  "insight": "A loja estß enfrentando rupturas crÝticas em produtos do segmento de TECIDOS, com destaque para o 'TNT 40GRS 100%O LG 1.40 034 PRETO' e 'TNT 40GRS 100%O LG 1.40 044 AMARELO OURO'. Esses itens apresentam vendas significativas nos ·ltimos 30 dias, mas com estoque negativo, indicando perda de vendas e insatisfaþÒo do cliente.",
+  "severity": "high",
+  "opportunity": "ReposiþÒo imediata dos itens em ruptura para evitar perdas de vendas contÝnuas e recuperar a confianþa do cliente."
+}
+
+Resultado: SUCESSO

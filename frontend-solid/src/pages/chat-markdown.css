@@ -4,7 +4,10 @@
     font-family: inherit !important;
     font-size: inherit !important;
     box-sizing: border-box;
-    min-width: 200px;
+    font-size: inherit !important;
+    box-sizing: border-box;
+    /* min-width: 200px; REMOVED to prevent black bar on empty text */
+    width: fit-content;
 }
 
 /* Links inside chat */
@@ -110,3 +113,8 @@
    
    Let's keep it simple first. The 'cursor' moving IS the effect.
 */
+
+/* ✅ CORREÇÃO: Safe area para mobile keyboard (iOS) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}

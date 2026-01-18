@@ -1,0 +1,42 @@
+LangChain dependencies missing. CaculinhaBIAgent will run in degraded mode.
+Traceback (most recent call last):
+  File "C:\Agente_BI\BI_Solution\backend\debug_agent_loop.py", line 15, in debug_recursion
+    from app.core.agents.caculinha_bi_agent import CaculinhaBIAgent
+  File "C:\Agente_BI\BI_Solution\backend\app\core\agents\__init__.py", line 2, in <module>
+    from .caculinha_bi_agent import CaculinhaBIAgent
+  File "C:\Agente_BI\BI_Solution\backend\app\core\agents\caculinha_bi_agent.py", line 48, in <module>
+    from app.core.tools.semantic_search_tool import buscar_produtos_inteligente
+  File "C:\Agente_BI\BI_Solution\backend\app\core\tools\semantic_search_tool.py", line 17, in <module>
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\langchain_google_genai\__init__.py", line 47, in <module>
+    from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\langchain_google_genai\chat_models.py", line 57, in <module>
+    from langchain_core.language_models import (
+  File "<frozen importlib._bootstrap>", line 1231, in _handle_fromlist
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\langchain_core\language_models\__init__.py", line 110, in __getattr__
+    result = import_attr(attr_name, module_name, __spec__.parent)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\langchain_core\_import_utils.py", line 35, in import_attr
+    module = import_module(f".{module_name}", package=package)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python311\Lib\importlib\__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\langchain_core\language_models\base.py", line 41, in <module>
+    from transformers import GPT2TokenizerFast  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\transformers\__init__.py", line 27, in <module>
+    from . import dependency_versions_check
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\transformers\dependency_versions_check.py", line 16, in <module>
+    from .utils.versions import require_version, require_version_core
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\transformers\utils\__init__.py", line 24, in <module>
+    from .auto_docstring import (
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\transformers\utils\auto_docstring.py", line 30, in <module>
+    from .generic import ModelOutput
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\transformers\utils\generic.py", line 51, in <module>
+    import torch
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\torch\__init__.py", line 281, in <module>
+    _load_dll_libraries()
+  File "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\torch\__init__.py", line 264, in _load_dll_libraries
+    raise err
+OSError: [WinError 1114] Uma rotina de inicializaþÒo da biblioteca de vÝnculo dinÔmico (DLL) falhou. Error loading "C:\Users\AndrÚ\AppData\Roaming\Python\Python311\site-packages\torch\lib\c10.dll" or one of its dependencies.

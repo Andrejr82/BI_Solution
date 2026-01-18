@@ -13,6 +13,36 @@ from app.core.visualization.advanced_charts import AdvancedChartGenerator
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# TOOL CONSOLIDATION STATUS (2025-12-27)
+# ============================================================================
+#
+# ✅ ACTIVE TOOLS (Recommended - imported in caculinha_bi_agent.py):
+#    1. gerar_grafico_universal_v2 (universal_chart_generator.py) - PRIMARY
+#    2. gerar_ranking_produtos_mais_vendidos
+#    3. gerar_dashboard_executivo
+#    4. listar_graficos_disponiveis
+#    5. gerar_visualizacao_customizada
+#
+# ⚠️  DEPRECATED TOOLS (Not imported - use gerar_grafico_universal_v2 instead):
+#    - gerar_grafico_vendas_por_categoria → Use universal_v2 with filtro_categoria
+#    - gerar_grafico_estoque_por_produto → Use universal_v2 with descricao="estoque"
+#    - gerar_comparacao_precos_categorias → Use universal_v2 with descricao="preços"
+#    - gerar_analise_distribuicao_estoque → Use universal_v2 + histogram type
+#    - gerar_grafico_pizza_categorias → Use universal_v2 with tipo_grafico="pie"
+#    - gerar_dashboard_analise_completa → Use gerar_dashboard_executivo
+#    - gerar_grafico_vendas_por_produto → Use universal_v2 with descricao="vendas"
+#    - gerar_grafico_automatico → Use gerar_grafico_universal_v2 (no recursion)
+#    - gerar_grafico_vendas_mensais_produto → Use universal_v2 with time filter
+#    - gerar_grafico_vendas_por_grupo → Use universal_v2 with filtro_segmento
+#    - gerar_dashboard_dinamico → Use gerar_dashboard_executivo
+#
+# MIGRATION GUIDE:
+# Old: gerar_grafico_vendas_por_categoria(limite=10)
+# New: gerar_grafico_universal_v2(descricao="vendas por categoria", limite=10)
+#
+# ============================================================================
+
 
 def _get_theme_template() -> str:
     """Retorna o template de tema padrão."""
@@ -65,6 +95,7 @@ def _export_chart_to_json(fig: go.Figure) -> str:
     return fig.to_json()
 
 
+# ⚠️ DEPRECATED: Use gerar_grafico_universal_v2(descricao="vendas por categoria") instead
 @tool
 def gerar_grafico_vendas_por_categoria(
     limite: int = 10, ordenar_por: str = "descendente"
@@ -627,6 +658,7 @@ def gerar_grafico_vendas_por_produto(
 
 
 @tool
+# ⚠️ DEPRECATED: Use gerar_grafico_universal_v2() instead - NO RECURSION, better performance
 def gerar_grafico_automatico(descricao: str) -> Dict[str, Any]:
     """
     Gera qualquer tipo de gráfico baseado na descrição do usuário.
@@ -780,8 +812,9 @@ def gerar_grafico_automatico(descricao: str) -> Dict[str, Any]:
         return gerar_dashboard_analise_completa.invoke({})
 
 
-# Alias para compatibilidade
-gerar_grafico_universal = gerar_grafico_automatico
+# REMOVED 2025-12-27: Alias causava recursão e confusão com gerar_grafico_universal_v2
+# OLD CODE: gerar_grafico_universal = gerar_grafico_automatico
+# MIGRATION: Use gerar_grafico_universal_v2 from universal_chart_generator.py instead
 
 
 @tool
@@ -1179,101 +1212,70 @@ def gerar_ranking_produtos_mais_vendidos(top_n: int = 10) -> Dict[str, Any]:
 @tool
 def listar_graficos_disponiveis() -> Dict[str, Any]:
     """
-    Lista todos os tipos de gráficos e dashboards disponíveis no sistema.
+    Lista os gráficos e dashboards RECOMENDADOS disponíveis no sistema (2025).
     Use esta ferramenta quando o usuário perguntar "quais gráficos você pode gerar?",
     "que tipos de visualizações existem?", ou similares.
 
     Returns:
-        Dicionário com lista completa de gráficos disponíveis e suas descrições
+        Dicionário com lista de gráficos recomendados e suas descrições
     """
-    logger.info("Listando gráficos disponíveis")
+    logger.info("Listando gráficos recomendados (active tools only)")
 
     graficos_info = {
-        "total_tipos": 12,
-        "categorias": {
-            "Análise de Vendas": [
+        "total_tipos": 4,
+        "ferramentas_recomendadas": {
+            "Ferramenta Universal (Principal)": [
                 {
-                    "nome": "gerar_grafico_vendas_por_grupo",
-                    "descricao": "Vendas mensais de um grupo/categoria específica (ex: esmaltes, cremes)",
-                    "exemplo": "gerar_grafico_vendas_por_grupo(nome_grupo='esmaltes')"
-                },
-                {
-                    "nome": "gerar_grafico_vendas_mensais_produto",
-                    "descricao": "Evolução de vendas mensais de um produto específico",
-                    "exemplo": "gerar_grafico_vendas_mensais_produto(codigo_produto=9)"
-                },
+                    "nome": "gerar_grafico_universal_v2",
+                    "descricao": "FERRAMENTA PRINCIPAL - Gera qualquer tipo de gráfico com filtros dinâmicos (UNE, segmento, categoria)",
+                    "capacidades": [
+                        "Auto-detecção de dimensão e métrica",
+                        "Suporta: bar, pie, line, scatter, histogram",
+                        "Filtros: filtro_une, filtro_segmento, filtro_categoria",
+                        "Performance otimizada (sem recursão)"
+                    ],
+                    "exemplos": [
+                        "gerar_grafico_universal_v2(descricao='vendas por categoria', limite=10)",
+                        "gerar_grafico_universal_v2(descricao='estoque por produto', filtro_une=1685)",
+                        "gerar_grafico_universal_v2(descricao='preços por segmento', tipo_grafico='bar')"
+                    ]
+                }
+            ],
+            "Rankings e Análises": [
                 {
                     "nome": "gerar_ranking_produtos_mais_vendidos",
-                    "descricao": "Ranking dos produtos mais vendidos do ano",
+                    "descricao": "Ranking dos produtos mais vendidos com métricas detalhadas",
                     "exemplo": "gerar_ranking_produtos_mais_vendidos(top_n=10)"
                 }
             ],
-            "Análise de Categorias": [
-                {
-                    "nome": "gerar_grafico_vendas_por_categoria",
-                    "descricao": "Gráfico donut com total de produtos por grupo",
-                    "exemplo": "gerar_grafico_vendas_por_categoria(limite=10)"
-                },
-                {
-                    "nome": "gerar_grafico_pizza_categorias",
-                    "descricao": "Pizza com proporção percentual de produtos por grupo",
-                    "exemplo": "gerar_grafico_pizza_categorias()"
-                },
-                {
-                    "nome": "gerar_comparacao_precos_categorias",
-                    "descricao": "Comparação de preços médios entre grupos",
-                    "exemplo": "gerar_comparacao_precos_categorias()"
-                }
-            ],
-            "Análise de Estoque": [
-                {
-                    "nome": "gerar_grafico_estoque_por_produto",
-                    "descricao": "Barras verticais com estoque disponível por produto",
-                    "exemplo": "gerar_grafico_estoque_por_produto(limite=15)"
-                },
-                {
-                    "nome": "gerar_analise_distribuicao_estoque",
-                    "descricao": "Histograma + Box Plot de distribuição de estoque",
-                    "exemplo": "gerar_analise_distribuicao_estoque()"
-                }
-            ],
-            "Dashboards Completos": [
-                {
-                    "nome": "gerar_dashboard_analise_completa",
-                    "descricao": "Dashboard 2x2 com visão geral do negócio (produtos, estoque, preços)",
-                    "exemplo": "gerar_dashboard_analise_completa()"
-                },
-                {
-                    "nome": "gerar_dashboard_dinamico",
-                    "descricao": "Dashboard customizado com até 4 gráficos escolhidos",
-                    "exemplo": "gerar_dashboard_dinamico(graficos=['gerar_grafico_pizza_categorias', 'gerar_ranking_produtos_mais_vendidos'])"
-                },
+            "Dashboards Executivos": [
                 {
                     "nome": "gerar_dashboard_executivo",
-                    "descricao": "Dashboard executivo otimizado para tomada de decisão",
+                    "descricao": "Dashboard executivo multi-métrica otimizado para tomada de decisão",
                     "exemplo": "gerar_dashboard_executivo()"
                 }
             ],
-            "Gráficos Inteligentes": [
+            "Visualizações Customizadas": [
                 {
-                    "nome": "gerar_grafico_automatico",
-                    "descricao": "Detecção automática do tipo de gráfico baseado na descrição",
-                    "exemplo": "gerar_grafico_automatico(descricao='vendas por categoria')"
+                    "nome": "gerar_visualizacao_customizada",
+                    "descricao": "Cria visualizações personalizadas com dados fornecidos pelo usuário",
+                    "exemplo": "gerar_visualizacao_customizada(titulo='Meu Gráfico', tipo_grafico='bar', dados=...)"
                 }
             ]
         },
-        "dicas": [
-            "Para análise de vendas de categorias, use gerar_grafico_vendas_por_grupo",
-            "Para visão geral rápida, use gerar_dashboard_analise_completa",
-            "Para dashboards personalizados, use gerar_dashboard_dinamico",
-            "O gerar_grafico_automatico tenta detectar automaticamente o que você precisa"
-        ]
+        "recomendacao_uso": {
+            "casos_gerais": "Use gerar_grafico_universal_v2 para 90% dos casos",
+            "rankings": "Use gerar_ranking_produtos_mais_vendidos para top N produtos",
+            "visao_geral": "Use gerar_dashboard_executivo para visão executiva completa",
+            "casos_especiais": "Use gerar_visualizacao_customizada para dados customizados"
+        },
+        "migracao": "Ferramentas legadas foram consolidadas. Use gerar_grafico_universal_v2 para casos anteriormente cobertos por 10+ tools específicas."
     }
 
     return {
         "status": "success",
         "graficos_disponiveis": graficos_info,
-        "message": f"Total de {graficos_info['total_tipos']} tipos de gráficos disponíveis"
+        "message": f"Total de {graficos_info['total_tipos']} ferramentas recomendadas (consolidadas em 2025)"
     }
 
 

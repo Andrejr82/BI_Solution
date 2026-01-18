@@ -3,12 +3,16 @@ import { rupturasApi, Ruptura, RupturasSummary } from '@/lib/api';
 import { AlertTriangle, RefreshCw, PackageX, ShoppingCart, Archive, Download, Filter, X, TrendingUp, Package, BarChart3, PieChart } from 'lucide-solid';
 import { PlotlyChart } from '@/components/PlotlyChart';
 import { ChartDownloadButton } from '@/components/ChartDownloadButton';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { EmptyStateSuccess } from '@/components/EmptyState';
 
 export default function Rupturas() {
   const [data, setData] = createSignal<Ruptura[]>([]);
   const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string | null>(null);
+  const [error, setError] = createSignal('');
   const [summary, setSummary] = createSignal<RupturasSummary>({ total: 0, criticos: 0, valor_estimado: 0 });
+
+  const fmtNum = (n: number) => n?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00';
 
   // Chart specs
   const [criticidadeChart, setCriticidadeChart] = createSignal<any>({});
@@ -69,7 +73,9 @@ export default function Rupturas() {
       generateCharts(rupturaRes.data);
     } catch (err: any) {
       console.error("Error loading rupturas:", err);
-      setError("Falha ao carregar rupturas críticas.");
+      setError(err.response?.data?.detail || "Falha ao carregar rupturas críticas.");
+      setData([]);
+      setSummary({ total: 0, criticos: 0, valor_estimado: 0 });
     } finally {
       setLoading(false);
     }
@@ -438,7 +444,8 @@ export default function Rupturas() {
   };
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6 max-w-7xl mx-auto">
+    <ErrorBoundary>
+      <div class="flex flex-col p-6 gap-6 max-w-7xl mx-auto">
       {/* Header */}
       <div class="flex justify-between items-start">
         <div>
@@ -452,7 +459,7 @@ export default function Rupturas() {
           <button onClick={() => {
             console.log("Toggling filters:", !showFilters());
             setShowFilters(!showFilters());
-          }} class="btn btn-outline gap-2">
+          }} class="btn btn-outline gap-2" aria-label={showFilters() ? 'Ocultar filtros' : 'Mostrar filtros'} aria-expanded={showFilters()}>
             <Filter size={16} />
             Filtros
           </button>
@@ -462,15 +469,16 @@ export default function Rupturas() {
             style="background-color: #2D7A3E; color: white;"
             disabled={data().length === 0}
             title="Gerar arquivo para pedido de compra agrupado por categoria"
+            aria-label="Gerar pedido de compra agrupado por categoria"
           >
             <ShoppingCart size={16} />
             Gerar Pedido de Compra
           </button>
-          <button onClick={exportCSV} class="btn btn-outline gap-2" disabled={data().length === 0}>
+          <button onClick={exportCSV} class="btn btn-outline gap-2" disabled={data().length === 0} aria-label="Exportar dados em CSV">
             <Download size={16} />
             CSV
           </button>
-          <button onClick={loadData} class="btn btn-outline gap-2" disabled={loading()}>
+          <button onClick={loadData} class="btn btn-outline gap-2" disabled={loading()} aria-label={loading() ? 'Atualizando rupturas críticas' : 'Atualizar rupturas críticas'} aria-busy={loading()}>
             <RefreshCw size={16} class={loading() ? 'animate-spin' : ''} />
             Atualizar
           </button>
@@ -479,21 +487,25 @@ export default function Rupturas() {
 
       {/* Filtros */}
       <Show when={showFilters()}>
-        <div class="p-4 bg-card border rounded-lg">
+        <div class="p-4 bg-card border rounded-lg" role="region" aria-label="Filtros de rupturas">
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold">Filtros</h3>
-            <button onClick={() => setShowFilters(false)} class="text-muted-foreground hover:text-foreground">
+            <button onClick={() => setShowFilters(false)} class="text-muted-foreground hover:text-foreground" aria-label="Fechar filtros">
               <X size={18} />
             </button>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label class="block text-sm font-medium mb-2">Segmento</label>
+              <label for="segmento-filter" class="block text-sm font-medium mb-2">Segmento</label>
+              {/* ✅ CORREÇÃO MOBILE: min-h-[44px] para touch-friendly */}
               <select
-                class="w-full px-3 py-2 bg-background border rounded-lg disabled:opacity-50"
+                id="segmento-filter"
+                class="w-full px-3 py-2 bg-background border rounded-lg disabled:opacity-50 min-h-[44px]"
                 value={selectedSegmento()}
                 onChange={(e) => setSelectedSegmento(e.target.value)}
                 disabled={filtersLoading()}
+                aria-label="Filtrar por segmento"
+                aria-busy={filtersLoading()}
               >
                 <Show when={!filtersLoading()} fallback={<option>Carregando filtros...</option>}>
                   <option value="">Todos</option>
@@ -504,12 +516,15 @@ export default function Rupturas() {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">UNE</label>
+              <label for="une-filter" class="block text-sm font-medium mb-2">UNE</label>
               <select
-                class="w-full px-3 py-2 bg-background border rounded-lg disabled:opacity-50"
+                id="une-filter"
+                class="w-full px-3 py-2 bg-background border rounded-lg disabled:opacity-50 min-h-[44px]"
                 value={selectedUne()}
                 onChange={(e) => setSelectedUne(e.target.value)}
                 disabled={filtersLoading()}
+                aria-label="Filtrar por UNE (loja)"
+                aria-busy={filtersLoading()}
               >
                 <Show when={!filtersLoading()} fallback={<option>Carregando filtros...</option>}>
                   <option value="">Todas</option>
@@ -520,10 +535,10 @@ export default function Rupturas() {
               </select>
             </div>
             <div class="flex items-end gap-2">
-              <button onClick={loadData} class="btn btn-primary flex-1">
+              <button onClick={loadData} class="btn btn-primary flex-1" aria-label="Aplicar filtros selecionados" aria-busy={loading()}>
                 Aplicar Filtros
               </button>
-              <button onClick={clearFilters} class="btn btn-outline">
+              <button onClick={clearFilters} class="btn btn-outline" aria-label="Limpar todos os filtros">
                 <X size={16} />
               </button>
             </div>
@@ -532,8 +547,8 @@ export default function Rupturas() {
       </Show>
 
       {/* Resumo de Métricas */}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="p-4 bg-card border rounded-lg">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" role="region" aria-label="Resumo de métricas de rupturas">
+        <div class="p-4 bg-card border rounded-lg" role="article" aria-label="Total de rupturas críticas">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-red-500/10 rounded-lg">
               <PackageX size={24} class="text-red-500" />
@@ -544,7 +559,7 @@ export default function Rupturas() {
             </div>
           </div>
         </div>
-        <div class="p-4 bg-card border rounded-lg">
+        <div class="p-4 bg-card border rounded-lg" role="article" aria-label="Produtos com criticidade alta">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-orange-500/10 rounded-lg">
               <AlertTriangle size={24} class="text-orange-500" />
@@ -555,7 +570,7 @@ export default function Rupturas() {
             </div>
           </div>
         </div>
-        <div class="p-4 bg-card border rounded-lg">
+        <div class="p-4 bg-card border rounded-lg" role="article" aria-label="Taxa de criticidade">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-blue-500/10 rounded-lg">
               <TrendingUp size={24} class="text-blue-500" />
@@ -584,7 +599,7 @@ export default function Rupturas() {
           {/* Primeira linha - 2 colunas */}
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gráfico de Pizza - Criticidade */}
-            <div class="card p-6 border">
+            <div class="card p-6 border" role="region" aria-label="Gráfico de top grupos em ruptura">
               <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold flex items-center gap-2">
                   <PieChart size={20} class="text-red-500" />
@@ -607,7 +622,7 @@ export default function Rupturas() {
             </div>
 
             {/* Gráfico de Barras - Top 10 */}
-            <div class="card p-6 border">
+            <div class="card p-6 border" role="region" aria-label="Gráfico de top 10 produtos em ruptura">
               <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold flex items-center gap-2">
                   <BarChart3 size={20} class="text-orange-500" />
@@ -631,7 +646,7 @@ export default function Rupturas() {
           </div>
 
           {/* Segunda linha - 1 coluna */}
-          <div class="card p-6 border">
+          <div class="card p-6 border" role="region" aria-label="Gráfico de necessidade por segmento">
             <div class="flex justify-between items-center mb-4">
               <h3 class="font-semibold flex items-center gap-2">
                 <TrendingUp size={20} class="text-green-500" />
@@ -662,12 +677,16 @@ export default function Rupturas() {
           <div
             class="bg-card border rounded-lg p-6 max-w-2xl w-full"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-modal-title"
           >
             <div class="flex justify-between items-start mb-4">
-              <h3 class="text-xl font-bold">Detalhes da Ruptura</h3>
+              <h3 id="product-modal-title" class="text-xl font-bold">Detalhes da Ruptura</h3>
               <button
                 onClick={() => setSelectedProduct(null)}
                 class="text-muted hover:text-foreground"
+                aria-label="Fechar detalhes do produto"
               >
                 <X size={20} />
               </button>
@@ -695,20 +714,20 @@ export default function Rupturas() {
               <div class="grid grid-cols-3 gap-4">
                 <div class="p-3 bg-green-500/10 border border-green-500/30 rounded">
                   <p class="text-xs text-muted">Vendas (30d)</p>
-                  <p class="text-xl font-bold text-green-500">{Math.round(selectedProduct()!.VENDA_30DD)}</p>
+                  <p class="text-xl font-bold text-green-500">{fmtNum(selectedProduct()!.VENDA_30DD)}</p>
                 </div>
                 <div class="p-3 bg-red-500/10 border border-red-500/30 rounded">
                   <p class="text-xs text-muted">Estoque Loja</p>
-                  <p class="text-xl font-bold text-red-500">{Math.round(selectedProduct()!.ESTOQUE_UNE)}</p>
+                  <p class="text-xl font-bold text-red-500">{fmtNum(selectedProduct()!.ESTOQUE_UNE)}</p>
                 </div>
                 <div class="p-3 bg-blue-500/10 border border-blue-500/30 rounded">
                   <p class="text-xs text-muted">Linha Verde</p>
-                  <p class="text-xl font-bold text-blue-500">{Math.round(selectedProduct()!.ESTOQUE_LV)}</p>
+                  <p class="text-xl font-bold text-blue-500">{fmtNum(selectedProduct()!.ESTOQUE_LV)}</p>
                 </div>
               </div>
               <div class="p-4 bg-orange-500/10 border border-orange-500/30 rounded">
                 <p class="text-sm text-muted mb-2">Necessidade de Reposição</p>
-                <p class="text-3xl font-bold text-orange-500">{Math.round(selectedProduct()!.NECESSIDADE)} unidades</p>
+                <p class="text-3xl font-bold text-orange-500">{fmtNum(selectedProduct()!.NECESSIDADE)} unidades</p>
                 <div class="mt-3">
                   <div class="flex justify-between text-sm mb-1">
                     <span>Criticidade</span>
@@ -731,6 +750,7 @@ export default function Rupturas() {
               <button
                 onClick={() => setSelectedProduct(null)}
                 class="btn btn-primary"
+                aria-label="Fechar modal de detalhes"
               >
                 Fechar
               </button>
@@ -741,21 +761,29 @@ export default function Rupturas() {
 
       {/* Modal Drill-Down - Produtos do Grupo Selecionado */}
       <Show when={selectedGroup()}>
-        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[9998] p-4" onClick={(e) => e.target === e.currentTarget && setSelectedGroup(null)}>
-          <div class="bg-background rounded-xl shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* ✅ CORREÇÃO MOBILE: p-0 no mobile para fullscreen */}
+        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[9998] p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setSelectedGroup(null)}>
+          {/* ✅ CORREÇÃO MOBILE: fullscreen no mobile (h-full rounded-none), normal no desktop */}
+          <div
+            class="bg-background rounded-none md:rounded-xl shadow-xl max-w-4xl w-full h-full md:h-auto md:max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="group-modal-title"
+            aria-describedby="group-modal-description"
+          >
             {/* Header */}
             <div class="p-4 border-b bg-gradient-to-r from-red-500/10 to-orange-500/10">
               <div class="flex justify-between items-center">
                 <div>
-                  <h3 class="text-xl font-bold flex items-center gap-2">
+                  <h3 id="group-modal-title" class="text-xl font-bold flex items-center gap-2">
                     <Package size={24} class="text-red-500" />
                     Produtos em Ruptura: {selectedGroup()}
                   </h3>
-                  <p class="text-sm text-muted mt-1">
+                  <p id="group-modal-description" class="text-sm text-muted mt-1">
                     {getProductsByGroup().length} produtos | {getProductsByGroup().filter(p => p.CRITICIDADE_PCT >= 75).length} críticos
                   </p>
                 </div>
-                <button onClick={() => setSelectedGroup(null)} class="p-2 hover:bg-muted rounded-full">
+                <button onClick={() => setSelectedGroup(null)} class="p-2 hover:bg-muted rounded-full" aria-label="Fechar modal de produtos do grupo">
                   <X size={20} />
                 </button>
               </div>
@@ -763,7 +791,10 @@ export default function Rupturas() {
 
             {/* Tabela de Produtos */}
             <div class="overflow-auto max-h-[60vh] p-4">
-              <table class="w-full text-sm">
+              {/* ✅ CORREÇÃO MOBILE: Desktop - Table, Mobile - Cards */}
+
+              {/* Desktop Table (hidden on mobile) */}
+              <table class="w-full text-sm hidden md:table" role="table" aria-label={`Produtos em ruptura do grupo ${selectedGroup()}`}>
                 <thead class="sticky top-0 bg-background">
                   <tr class="border-b">
                     <th class="text-left p-2 font-semibold">Código</th>
@@ -796,14 +827,61 @@ export default function Rupturas() {
                             {produto.CRITICIDADE_PCT.toFixed(0)}%
                           </span>
                         </td>
-                        <td class="p-2 text-right font-semibold text-red-500">{Math.round(produto.NECESSIDADE)} un</td>
-                        <td class="p-2 text-right">{produto.VENDA_30DD}</td>
-                        <td class="p-2 text-right text-muted">{produto.ESTOQUE_UNE} / {produto.ESTOQUE_LV}</td>
+                        <td class="p-2 text-right font-semibold text-red-500">{fmtNum(produto.NECESSIDADE)} un</td>
+                        <td class="p-2 text-right">{fmtNum(produto.VENDA_30DD)}</td>
+                        <td class="p-2 text-right text-muted">{fmtNum(produto.ESTOQUE_UNE)} / {fmtNum(produto.ESTOQUE_LV)}</td>
                       </tr>
                     )}
                   </For>
                 </tbody>
               </table>
+
+              {/* Mobile Cards (shown only on mobile) */}
+              <div class="md:hidden space-y-3">
+                <For each={getProductsByGroup()}>
+                  {(produto) => (
+                    <div class="bg-card border rounded-lg p-3 space-y-2">
+                      <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                          <p class="font-medium text-sm leading-tight">{produto.NOME}</p>
+                          <p class="text-xs font-mono text-muted-foreground mt-1">SKU: {produto.PRODUTO}</p>
+                        </div>
+                        <span class={`px-2 py-1 rounded text-xs font-bold shrink-0 ml-2 ${produto.CRITICIDADE_PCT >= 75 ? 'bg-red-500/20 text-red-500' :
+                          produto.CRITICIDADE_PCT >= 50 ? 'bg-orange-500/20 text-orange-500' :
+                            produto.CRITICIDADE_PCT >= 25 ? 'bg-yellow-500/20 text-yellow-500' :
+                              'bg-blue-500/20 text-blue-500'
+                          }`}>
+                          {produto.CRITICIDADE_PCT.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
+                        <div>
+                          <span class="text-muted-foreground">UNE:</span>
+                          <span class="ml-1 font-mono">{produto.UNE}</span>
+                        </div>
+                        <div class="truncate">
+                          <span class="text-muted-foreground">Loja:</span>
+                          <span class="ml-1 text-xs">{produto.UNE_NOME}</span>
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span class="text-muted-foreground">Necessidade:</span>
+                          <span class="ml-1 font-semibold text-red-500">{fmtNum(produto.NECESSIDADE)} un</span>
+                        </div>
+                        <div>
+                          <span class="text-muted-foreground">Venda 30d:</span>
+                          <span class="ml-1">{fmtNum(produto.VENDA_30DD)}</span>
+                        </div>
+                      </div>
+                      <div class="text-xs pt-2 border-t">
+                        <span class="text-muted-foreground">Estoque UNE / LV:</span>
+                        <span class="ml-1">{fmtNum(produto.ESTOQUE_UNE)} / {fmtNum(produto.ESTOQUE_LV)}</span>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
 
               <Show when={getProductsByGroup().length === 0}>
                 <div class="text-center py-8 text-muted">
@@ -816,11 +894,12 @@ export default function Rupturas() {
             {/* Footer */}
             <div class="p-4 border-t flex justify-between items-center bg-muted/30">
               <div class="text-sm text-muted">
-                Necessidade total: <strong class="text-red-500">{Math.round(getProductsByGroup().reduce((sum, p) => sum + p.NECESSIDADE, 0))} un</strong>
+                Necessidade total: <strong class="text-red-500">{fmtNum(getProductsByGroup().reduce((sum, p) => sum + p.NECESSIDADE, 0))} un</strong>
               </div>
               <button
                 onClick={() => setSelectedGroup(null)}
                 class="btn btn-primary"
+                aria-label="Fechar modal"
               >
                 Fechar
               </button>
@@ -846,15 +925,20 @@ export default function Rupturas() {
           </div>
         }>
           <Show when={data().length > 0} fallback={
-            <div class="p-12 text-center border border-dashed rounded-xl text-muted">
-              <Package size={48} class="mx-auto mb-4 opacity-20 text-green-500" />
-              <p class="text-lg font-medium text-green-500">Nenhuma ruptura crítica detectada!</p>
-              <p class="text-sm mt-2">Todos os produtos de alta venda possuem estoque adequado.</p>
+            <div class="border border-dashed rounded-xl">
+              {/* ✅ USABILIDADE: Empty State ilustrado */}
+              <EmptyStateSuccess
+                title="Nenhuma ruptura crítica detectada!"
+                description="Todos os produtos de alta venda possuem estoque adequado."
+              />
             </div>
           }>
-            <div class="border rounded-lg overflow-hidden bg-card shadow-sm">
+            {/* ✅ CORREÇÃO MOBILE: Desktop - Table, Mobile - Cards */}
+
+            {/* Desktop Table (hidden on mobile) */}
+            <div class="border rounded-lg overflow-hidden bg-card shadow-sm hidden md:block" role="region" aria-label="Tabela de rupturas críticas">
               <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
+                <table class="w-full text-sm text-left" role="table" aria-label="Lista completa de rupturas críticas">
                   <thead class="bg-muted/50 text-xs uppercase font-medium text-muted-foreground border-b">
                     <tr>
                       <th class="px-4 py-3">Produto</th>
@@ -923,9 +1007,84 @@ export default function Rupturas() {
                 </table>
               </div>
             </div>
+
+            {/* Mobile Cards (shown only on mobile) */}
+            <div class="md:hidden space-y-3">
+              <For each={data()}>
+                {(item) => (
+                  <div class="bg-card border-2 rounded-lg p-4 space-y-3 border-red-500/30">
+                    {/* Header with Product and Criticidade */}
+                    <div class="flex justify-between items-start gap-2">
+                      <div class="flex-1">
+                        <p class="font-semibold text-sm leading-tight">{item.NOME}</p>
+                        <p class="text-xs font-mono text-muted-foreground mt-1">SKU: {item.PRODUTO}</p>
+                      </div>
+                      <span class={`px-2 py-1 rounded-full text-xs font-bold border shrink-0 ${getCriticidadeColor(item.CRITICIDADE_PCT)}`}>
+                        {getCriticidadeLabel(item.CRITICIDADE_PCT)}
+                      </span>
+                    </div>
+
+                    {/* UNE Badge */}
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-1 bg-secondary rounded text-xs font-mono">{item.UNE}</span>
+                      <span class="text-xs text-muted-foreground truncate">{item.UNE_NOME}</span>
+                    </div>
+
+                    {/* Criticidade Progress */}
+                    <div class="pt-2 border-t">
+                      <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs text-muted-foreground">Criticidade</span>
+                        <span class="text-xs font-semibold">{item.CRITICIDADE_PCT.toFixed(0)}%</span>
+                      </div>
+                      <div class="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          class={`h-2 rounded-full ${item.CRITICIDADE_PCT >= 75 ? 'bg-red-500' : item.CRITICIDADE_PCT >= 50 ? 'bg-orange-500' : item.CRITICIDADE_PCT >= 25 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                          style={`width: ${item.CRITICIDADE_PCT}%`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Metrics Grid */}
+                    <div class="grid grid-cols-2 gap-3 pt-2 border-t text-xs">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-1 text-green-500">
+                          <ShoppingCart size={12} />
+                          <span class="text-muted-foreground">Venda 30d</span>
+                        </div>
+                        <p class="font-semibold">{Math.round(item.VENDA_30DD)} un</p>
+                      </div>
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-1 text-red-500">
+                          <Archive size={12} />
+                          <span class="text-muted-foreground">Est. Loja</span>
+                        </div>
+                        <p class="font-semibold text-red-500">{Math.round(item.ESTOQUE_UNE)} un</p>
+                      </div>
+                      <div class="space-y-1">
+                        <span class="text-muted-foreground">Est. CD</span>
+                        <p class="font-semibold text-red-500">{Math.round(item.ESTOQUE_CD)} un</p>
+                      </div>
+                      <div class="space-y-1">
+                        <span class="text-muted-foreground">Linha Verde</span>
+                        <p class="font-semibold text-blue-500">{Math.round(item.ESTOQUE_LV)} un</p>
+                      </div>
+                    </div>
+
+                    {/* Necessidade Highlight */}
+                    <div class="pt-2 border-t bg-orange-500/10 -mx-4 -mb-4 px-4 py-3 rounded-b-lg">
+                      <div class="flex justify-between items-center">
+                        <span class="text-xs font-medium text-muted-foreground">Necessidade de Transferência</span>
+                        <span class="text-lg font-bold text-orange-500">{Math.round(item.NECESSIDADE)} un</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
           </Show>
         </Show>
       </Show>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

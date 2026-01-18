@@ -168,6 +168,88 @@ class CodeRAGService:
             "languages": []
         }
     
+    def stream_query(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        filters: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Query the codebase with streaming response.
+        
+        Args:
+            message: User's question
+            history: Conversation history
+            filters: Optional filters
+            
+        Yields:
+            Dicts with 'type' ('token', 'references', 'error') and payload
+        """
+        if not self._ensure_initialized():
+            yield {
+                "type": "error",
+                "content": "Service not initialized. Check logs."
+            }
+            return
+
+        try:
+            # Build context
+            context_messages = []
+            if history:
+                for msg in history[-5:]:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    context_messages.append(f"{role}: {content}")
+            
+            full_query = message
+            if context_messages:
+                context_str = "\n".join(context_messages)
+                full_query = f"Contexto da conversa:\n{context_str}\n\nPergunta atual: {message}"
+
+            # Create a streaming query engine specifically for this request
+            # This is lightweight enough and ensures we don't mess up the cached sync engine
+            streaming_engine = self._index.as_query_engine(
+                similarity_top_k=5,
+                response_mode="tree_summarize",
+                streaming=True
+            )
+            
+            logger.info(f"[STREAM] Querying codebase: {message[:50]}...")
+            
+            # Execute query - returns a StreamingResponse
+            response = streaming_engine.query(full_query)
+            
+            # 1. Yield Source Nodes (References) immediately
+            code_references = []
+            if hasattr(response, 'source_nodes'):
+                for node in response.source_nodes[:5]:
+                    metadata = node.node.metadata
+                    code_references.append({
+                        "file": metadata.get("file_path", "unknown"),
+                        "score": node.score,
+                        "content": node.node.text[:500],
+                        "lines": str(metadata.get("lines", "")),
+                    })
+            
+            yield {
+                "type": "references",
+                "references": code_references
+            }
+            
+            # 2. Yield Tokens
+            for text in response.response_gen:
+                yield {
+                    "type": "token",
+                    "text": text
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in stream_query: {e}", exc_info=True)
+            yield {
+                "type": "error",
+                "content": str(e)
+            }
+
     def query(
         self,
         message: str,

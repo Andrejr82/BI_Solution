@@ -35,6 +35,77 @@ class PlaygroundChatRequest(BaseModel):
     max_tokens: int = Field(default=2048, ge=100, le=8192)
     json_mode: bool = False
     stream: bool = False
+    model: Optional[str] = None # Added for Compare Mode
+
+@router.post("/stream")
+async def playground_stream(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    request: PlaygroundChatRequest
+):
+    """
+    Streaming endpoint for Playground.
+    Supports streaming response via SSE (Server-Sent Events).
+    """
+    from fastapi.responses import StreamingResponse
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing")
+
+    model_name = request.model or settings.LLM_MODEL_NAME
+    
+    # Initialize adapter with request-specific settings
+    llm_adapter = GeminiLLMAdapter(
+        model_name=model_name,
+        gemini_api_key=settings.GEMINI_API_KEY,
+        system_instruction=request.system_instruction
+    )
+
+    # Prepare messages
+    messages = []
+    for msg in request.history:
+        role = "model" if msg.role == "assistant" else "user"
+        messages.append({"role": role, "content": msg.content})
+    messages.append({"role": "user", "content": request.message})
+
+    async def event_generator():
+        try:
+            # Yield start event
+            yield f"data: {json.dumps({'type': 'start', 'model': model_name})}\n\n"
+            
+            # Since stream_completion is a sync generator (using yield), we iterate it
+            # But we are in an async function. 
+            # Ideally GeminiLLMAdapter.stream_completion should be async or we run it in thread.
+            # But the underlying google genai stream is sync iterator usually.
+            # Let's assume direct iteration works for now or wrap it if it blocks.
+            
+            start_time = datetime.now()
+            
+            # Use asyncio.to_thread for blocking generator if needed, 
+            # but you can't easily iterate a sync generator in a thread from async loop without wrappers.
+            # For simplicity, we'll iterate directly (might block loop slightly but ok for playground)
+            
+            iterator = llm_adapter.stream_completion(messages)
+            
+            full_text = ""
+            
+            for chunk in iterator:
+                if "content" in chunk:
+                    text = chunk["content"]
+                    full_text += text
+                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+                elif "error" in chunk:
+                    yield f"data: {json.dumps({'type': 'error', 'text': chunk['error']})}\n\n"
+            
+            duration = (datetime.now() - start_time).total_seconds()
+            
+            # Yield done event with stats
+            yield f"data: {json.dumps({'type': 'done', 'metrics': {'time': duration, 'tokens': len(full_text)//4}})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Playground stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.post("/query")
 async def execute_query(

@@ -32,81 +32,58 @@ logger = logging.getLogger(__name__)
 # Flag para usar HybridAdapter (SQL/Parquet automático)
 USE_HYBRID_ADAPTER = os.getenv("UNE_USE_HYBRID_ADAPTER", "true").lower() == "true"
 
-# Mapeamento de colunas SQL Server → formato padrão
-COLUMN_MAPPING_SQL = {
-    'PRODUTO': 'codigo',
-    'NOME': 'nome_produto',
-    'UNE': 'une',
-    'ESTOQUE_UNE': 'estoque_atual',
-    'ESTOQUE_LV': 'linha_verde',
-    'MEDIA_CONSIDERADA_LV': 'mc',
-    'VENDA_30DD': 'venda_30_d',
-    'NOMESEGMENTO': 'nomesegmento',
-    'ESTOQUE_CD': 'estoque_cd', # Adicionado mapeamento para estoque_cd
-    'UNE_NOME': 'une_nome', # Added this for consistency
-    'NOMEFABRICANTE': 'nomefabricante', # Added this for consistency
+# Mapeamento de colunas: nomes legados (lowercase) → nomes reais do Parquet (UPPERCASE)
+# CORRIGIDO 2026-01-17: Invertido para usar nomes UPPERCASE como padrão
+COLUMN_MAPPING_LEGACY_TO_REAL = {
+    'codigo': 'PRODUTO',
+    'nome_produto': 'NOME',
+    'une': 'UNE',
+    'estoque_atual': 'ESTOQUE_UNE',
+    'linha_verde': 'ESTOQUE_LV',
+    'mc': 'MEDIA_CONSIDERADA_LV',
+    'venda_30_d': 'VENDA_30DD',
+    'nomesegmento': 'NOMESEGMENTO',
+    'estoque_cd': 'ESTOQUE_CD',
+    'une_nome': 'UNE_NOME',
+    'nomefabricante': 'NOMEFABRICANTE',
+    'estoque_lv': 'ESTOQUE_LV',
+    'media_considerada_lv': 'MEDIA_CONSIDERADA_LV',
+    'estoque_gondola_lv': 'ESTOQUE_GONDOLA_LV',
 }
 
-# Mapeamento de colunas Parquet padrão → formato padrão
-COLUMN_MAPPING_PARQUET = {
-    'estoque_lv': 'linha_verde',
-    'media_considerada_lv': 'mc',
-}
-
-@lru_cache(maxsize=1)
-def _get_data_adapter():
-    """Retorna adapter de dados (HybridAdapter ou Parquet direto) com cache"""
-    global USE_HYBRID_ADAPTER
-
-    if USE_HYBRID_ADAPTER:
-        try:
-            from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
-            adapter = HybridDataAdapter()
-            logger.info(f"Usando HybridAdapter - fonte: {adapter.current_source}")
-            return adapter
-        except Exception as e:
-            logger.warning(f"Erro ao inicializar HybridAdapter: {e}, usando Parquet direto")
-            USE_HYBRID_ADAPTER = False
-
-    # Fallback: usar Parquet direto
-    PARQUET_PATH_EXTENDED = os.path.join(os.getcwd(), "data", "parquet", "admmat_extended.parquet")
-    PARQUET_PATH_DEFAULT = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
-
-    if os.path.exists(PARQUET_PATH_EXTENDED):
-        return {'type': 'parquet', 'path': PARQUET_PATH_EXTENDED, 'extended': True}
-    else:
-        return {'type': 'parquet', 'path': PARQUET_PATH_DEFAULT, 'extended': False}
+# Mapeamento reverso para compatibilidade (UPPERCASE → lowercase)
+COLUMN_MAPPING_REAL_TO_LEGACY = {v: k for k, v in COLUMN_MAPPING_LEGACY_TO_REAL.items()}
 
 def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza DataFrame para ter colunas consistentes independente da fonte"""
-    # Verificar se precisa mapear colunas SQL
-    if 'PRODUTO' in df.columns:
-        # Dados vieram do SQL Server
-        for sql_col, std_col in COLUMN_MAPPING_SQL.items():
-            if sql_col in df.columns and std_col not in df.columns:
-                df[std_col] = df[sql_col]
-
-    # Verificar se precisa mapear colunas Parquet padrão
-    for parquet_col, std_col in COLUMN_MAPPING_PARQUET.items():
-        if parquet_col in df.columns and std_col not in df.columns:
-            df[std_col] = df[parquet_col]
-
-    # Mapear colunas do Parquet para nomes padronizados
-    # (mapeamento reverso do que é feito em _load_data)
-    if 'media_considerada_lv' in df.columns and 'mc' not in df.columns:
-        df['mc'] = df['media_considerada_lv']
-
-    if 'estoque_lv' in df.columns and 'linha_verde' not in df.columns:
-        df['linha_verde'] = df['estoque_lv']
-
-    if 'estoque_gondola_lv' in df.columns and 'estoque_gondola' not in df.columns:
-        df['estoque_gondola'] = df['estoque_gondola_lv']
-
+    """
+    Normaliza DataFrame para usar nomes UPPERCASE (padrão do Parquet).
+    Converte qualquer nome legado (lowercase) para o nome real (UPPERCASE).
+    """
+    # Renomear colunas legadas para nomes reais
+    df = df.rename(columns=COLUMN_MAPPING_LEGACY_TO_REAL)
+    
+    # Garantir que colunas essenciais existam (criar aliases se necessário)
+    # Isso permite que o código legado continue funcionando
+    if 'PRODUTO' in df.columns and 'codigo' not in df.columns:
+        df['codigo'] = df['PRODUTO']
+    if 'NOME' in df.columns and 'nome_produto' not in df.columns:
+        df['nome_produto'] = df['NOME']
+    if 'ESTOQUE_UNE' in df.columns and 'estoque_atual' not in df.columns:
+        df['estoque_atual'] = df['ESTOQUE_UNE']
+    if 'ESTOQUE_LV' in df.columns and 'linha_verde' not in df.columns:
+        df['linha_verde'] = df['ESTOQUE_LV']
+    if 'MEDIA_CONSIDERADA_LV' in df.columns and 'mc' not in df.columns:
+        df['mc'] = df['MEDIA_CONSIDERADA_LV']
+    if 'VENDA_30DD' in df.columns and 'venda_30_d' not in df.columns:
+        df['venda_30_d'] = df['VENDA_30DD']
+    if 'ESTOQUE_GONDOLA_LV' in df.columns and 'estoque_gondola' not in df.columns:
+        df['estoque_gondola'] = df['ESTOQUE_GONDOLA_LV']
+    
     return df
 
 def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.DataFrame:
     """
-    Carrega dados usando adapter apropriado (SQL ou Parquet) com validação
+    Carrega dados usando duckdb_adapter (Parquet) de forma otimizada.
 
     Args:
         filters: Filtros a aplicar (ex: {'une': 2586, 'codigo': 369947})
@@ -115,62 +92,48 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
     Returns:
         DataFrame normalizado e validado
     """
-    adapter = _get_data_adapter()
-
-    # Validar schema se for Parquet direto
-    if isinstance(adapter, dict):
-        validator = SchemaValidator()
-        # Pass the specific parquet file name to the validator
-        parquet_file_stem = Path(adapter['path']).stem
-        is_valid, errors = validator.validate_parquet_file(adapter['path'], table_name=parquet_file_stem)
-        if not is_valid:
-            logger.error(f"Schema inválido: {errors}")
-            raise ValueError(f"Schema do arquivo Parquet inválido: {errors}")
-
-    # Create reverse mappings (moved outside if columns block)
-    # PRIMEIRO: Mapeamentos padrão Parquet (lowercase)
-    reverse_mapping = {v: k for k, v in COLUMN_MAPPING_PARQUET.items()}
-    # SEGUNDO: Mapeamentos SQL (Uppercase) - Sobrescreve anteriores para priorizar Uppercase (admmat.parquet)
-    for k, v in COLUMN_MAPPING_SQL.items():
-        reverse_mapping[v] = k
-
-    # Mapear COLUNAS solicitadas
+    # Mapeamento reverso: nomes legados → nomes reais do Parquet
+    # Usado para traduzir requests com nomes legados para nomes reais
+    
+    # Mapear COLUNAS solicitadas (legado → real)
     parquet_cols_to_load = None
     if columns:
         parquet_cols_to_load = []
         for col in columns:
-            if col in reverse_mapping:
-                parquet_cols_to_load.append(reverse_mapping[col])
-            elif col == 'linha_verde':
-                parquet_cols_to_load.append('ESTOQUE_LV')
-            elif col == 'mc':
-                parquet_cols_to_load.append('MEDIA_CONSIDERADA_LV')
-            elif col in ['estoque_gondola_lv', 'ESTOQUE_GONDOLA', 'estoque_gondola']:
-                parquet_cols_to_load.append('ESTOQUE_GONDOLA_LV')
-            else:
-                parquet_cols_to_load.append(col)
+            # Tentar mapear nome legado para nome real
+            real_col = COLUMN_MAPPING_LEGACY_TO_REAL.get(col, col)
+            parquet_cols_to_load.append(real_col)
         # Unique
         parquet_cols_to_load = list(set([c for c in parquet_cols_to_load if c]))
     
-    # Mapear FILTROS solicitados
+    # Mapear FILTROS solicitados (legado → real)
     duckdb_filters = {}
     if filters:
         for col, val in filters.items():
-            mapped_col = col
-            if col in reverse_mapping:
-                mapped_col = reverse_mapping[col]
-            elif col == 'linha_verde':
-                mapped_col = 'ESTOQUE_LV'
-            elif col == 'mc':
-                mapped_col = 'MEDIA_CONSIDERADA_LV'
-            
-            duckdb_filters[mapped_col] = val
+            # Tentar mapear nome legado para nome real
+            real_col = COLUMN_MAPPING_LEGACY_TO_REAL.get(col, col)
+            duckdb_filters[real_col] = val
+
+    # --- RLS INJECTION (SEGURANÇA) ---
+    from app.core.context import get_current_user_segments
+    allowed_segments = get_current_user_segments()
+    if allowed_segments and "*" not in allowed_segments:
+        # Injetar filtro de segmento diretamente na query DuckDB
+        # DuckDBAdapter suporta lista para operador IN
+        duckdb_filters['NOMESEGMENTO'] = allowed_segments
+        logger.info(f"[RLS] Injetando filtro NOMESEGMENTO IN {allowed_segments} em _load_data")
+        
+        # Garantir que a coluna NOMESEGMENTO seja carregada se estivermos filtrando colunas
+        if parquet_cols_to_load is not None and 'NOMESEGMENTO' not in parquet_cols_to_load:
+            parquet_cols_to_load.append('NOMESEGMENTO')
+    # ---------------------------------
 
     try:
-        from app.infrastructure.data.duckdb_adapter import duckdb_adapter
+        from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
+        adapter = get_duckdb_adapter()
         logger.info(f"[DUCKDB] Load: Cols={len(parquet_cols_to_load) if parquet_cols_to_load else 'All'}, Filters={list(duckdb_filters.keys())}")
         
-        df = duckdb_adapter.load_data(
+        df = adapter.load_data(
             columns=parquet_cols_to_load,
             filters=duckdb_filters
         )
@@ -179,8 +142,7 @@ def _load_data(filters: Dict[str, Any] = None, columns: List[str] = None) -> pd.
 
     except Exception as e:
         logger.error(f"Erro Crítico no DuckDB: {e}", exc_info=True)
-        # Fallback de emergência (apenas se DuckDB falhar, o que é raro)
-        # Tentar ler com pandas puro sem filtros
+        # Fallback de emergência
         logger.warning("[FALLBACK] Tentando fallback para pd.read_parquet (lento)...")
         PARQUET_PATH_DEFAULT = os.path.join(os.getcwd(), "data", "parquet", "admmat.parquet")
         df = pd.read_parquet(PARQUET_PATH_DEFAULT, columns=parquet_cols_to_load)
@@ -1541,4 +1503,135 @@ def health_check():
     except Exception as e:
         logger.error(f"Erro em health_check: {e}", exc_info=True)
         return _standard_response({}, f"Erro: {e}", False)
+
+
+# ============================================================================
+# ✅ FIX 2026-01-15: Ferramenta de Análise Multi-Loja (evita loops de timeout)
+# ============================================================================
+
+@tool
+def analisar_produto_todas_lojas(produto_codigo: int) -> Dict[str, Any]:
+    """
+    Analisa um produto específico em TODAS as lojas de uma só vez.
+
+    USE ESTA FERRAMENTA quando o usuário pedir análise de um produto em "todas as lojas",
+    "cada loja", "todas as unidades" ou similar.
+
+    Retorna um resumo consolidado com:
+    - Lista de lojas que têm o produto em estoque
+    - Total de vendas nos últimos 30 dias (todas as lojas)
+    - Total de estoque disponível
+    - Lojas com ruptura (sem estoque mas com vendas)
+
+    Args:
+        produto_codigo: Código do produto (ex: 369947)
+
+    Returns:
+        Dicionário com análise consolidada do produto em todas as lojas
+    """
+    try:
+        logger.info(f"🔍 Analisando produto {produto_codigo} em todas as lojas...")
+
+        # Carregar dados do produto em todas as UNEs
+        df = _load_data(filters={"codigo": produto_codigo})
+
+        if df.empty:
+            return {
+                "success": False,
+                "produto": produto_codigo,
+                "mensagem": f"Produto {produto_codigo} não encontrado na base de dados.",
+                "sugestao": "Verifique se o código do produto está correto."
+            }
+
+        # Obter nome do produto
+        nome_produto = df['nome_produto'].iloc[0] if 'nome_produto' in df.columns else df.get('NOME', pd.Series(['Produto'])).iloc[0]
+
+        # Colunas de interesse
+        col_estoque = 'estoque_atual' if 'estoque_atual' in df.columns else 'ESTOQUE_UNE'
+        col_vendas = 'venda_30_d' if 'venda_30_d' in df.columns else 'VENDA_30DD'
+        col_une = 'une' if 'une' in df.columns else 'UNE'
+        col_une_nome = 'une_nome' if 'une_nome' in df.columns else 'UNE_NOME'
+        col_estoque_cd = 'estoque_cd' if 'estoque_cd' in df.columns else 'ESTOQUE_CD'
+
+        # Estatísticas consolidadas
+        total_lojas = len(df)
+        total_vendas = float(df[col_vendas].fillna(0).sum()) if col_vendas in df.columns else 0.0
+        total_estoque = float(df[col_estoque].fillna(0).sum()) if col_estoque in df.columns else 0.0
+        estoque_cd = float(df[col_estoque_cd].fillna(0).max()) if col_estoque_cd in df.columns else 0.0
+
+        # Lojas com estoque
+        lojas_com_estoque = df[df[col_estoque].fillna(0) > 0] if col_estoque in df.columns else pd.DataFrame()
+
+        # Lojas em ruptura (%ABAST <= 50% - Guia UNE)
+        col_lv = 'linha_verde' if 'linha_verde' in df.columns else 'ESTOQUE_LV'
+        if col_lv in df.columns:
+            lojas_ruptura = df[
+                (df[col_lv].fillna(0) > 0) &
+                ((df[col_estoque].fillna(0) / df[col_lv].fillna(1)) <= 0.5)
+            ]
+        else:
+            # Fallback: estoque = 0 se não tiver linha verde
+            lojas_ruptura = df[
+                (df[col_vendas].fillna(0) > 0) &
+                (df[col_estoque].fillna(0) == 0)
+            ] if col_vendas in df.columns and col_estoque in df.columns else pd.DataFrame()
+
+        # Top 5 lojas por vendas
+        top_lojas = df.nlargest(5, col_vendas) if col_vendas in df.columns else df.head(5)
+
+        # Preparar resumo das top lojas
+        top_lojas_resumo = []
+        for _, row in top_lojas.iterrows():
+            une_id = int(row.get(col_une, 0))
+            une_nome = row.get(col_une_nome, f"UNE {une_id}")
+            vendas = float(row.get(col_vendas, 0) or 0)
+            estoque = float(row.get(col_estoque, 0) or 0)
+            top_lojas_resumo.append({
+                "une": une_id,
+                "nome": une_nome,
+                "vendas_30d": vendas,
+                "estoque": estoque
+            })
+
+        # Preparar lista de lojas em ruptura
+        rupturas_resumo = []
+        for _, row in lojas_ruptura.head(10).iterrows():
+            une_id = int(row.get(col_une, 0))
+            une_nome = row.get(col_une_nome, f"UNE {une_id}")
+            vendas = float(row.get(col_vendas, 0) or 0)
+            rupturas_resumo.append({
+                "une": une_id,
+                "nome": une_nome,
+                "vendas_30d": vendas,
+                "estoque": 0
+            })
+
+        resultado = {
+            "success": True,
+            "produto": produto_codigo,
+            "nome": nome_produto,
+            "resumo": {
+                "total_lojas_com_produto": total_lojas,
+                "lojas_com_estoque": len(lojas_com_estoque),
+                "lojas_em_ruptura": len(lojas_ruptura),
+                "total_vendas_30d": round(total_vendas, 2),
+                "total_estoque_lojas": round(total_estoque, 2),
+                "estoque_cd": round(estoque_cd, 2)
+            },
+            "top_5_lojas_vendas": top_lojas_resumo,
+            "lojas_em_ruptura": rupturas_resumo,
+            "mensagem": f"Análise completa do produto {produto_codigo} ({nome_produto}) em {total_lojas} lojas."
+        }
+
+        logger.info(f"✅ Análise multi-loja concluída: {total_lojas} lojas, {total_vendas:.0f} vendas, {len(lojas_ruptura)} rupturas")
+        return resultado
+
+    except Exception as e:
+        logger.error(f"Erro em analisar_produto_todas_lojas: {e}", exc_info=True)
+        return {
+            "success": False,
+            "produto": produto_codigo,
+            "mensagem": f"Erro ao analisar produto: {str(e)}",
+            "sugestao": "Tente novamente ou verifique se o código do produto está correto."
+        }
 

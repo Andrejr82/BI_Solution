@@ -1,0 +1,82 @@
+================================================================================
+DIAGNOSTICO COMPLETO - AUTENTICACAO SUPABASE
+================================================================================
+
+1. CONFIGURACAO DO .ENV
+--------------------------------------------------------------------------------
+USE_SUPABASE_AUTH: True
+SUPABASE_URL: https://nmamxbriulivinlqqbmf.supabase.co
+SUPABASE_ANON_KEY: [CONFIGURADO]
+SUPABASE_SERVICE_KEY: [CONFIGURADO]
+
+[OK] Biblioteca supabase instalada
+
+2. TESTE DE CONEXAO COM SUPABASE
+--------------------------------------------------------------------------------
+[OK] Cliente Supabase criado com sucesso
+
+3. VERIFICAR SE USUARIO EXISTE NO SUPABASE
+--------------------------------------------------------------------------------
+[AVISO] Usuario 'admin' NAO encontrado na tabela user_profiles
+        O usuario pode nao existir ou a tabela nao esta configurada
+
+4. TESTE DE AUTENTICACAO COM SUPABASE AUTH
+--------------------------------------------------------------------------------
+Tentando login com:
+  Email: admin@agentbi.com
+  Senha: admin123
+
+[OK] AUTENTICACAO BEM-SUCEDIDA!
+
+Informacoes do usuario autenticado:
+  ID: 4291b79d-d43d-4a09-a88a-c51d2cbffc7f
+  Email: admin@agentbi.com
+  Email confirmado: True
+  Criado em: 2025-11-30 21:30:07.327953+00:00
+  Ultimo login: 2026-01-02 01:55:12.497521+00:00
+
+Token de acesso:
+  eyJhbGciOiJIUzI1NiIsImtpZCI6IjZxUThZR1NMY1Y2Y2lqcX...
+
+5. VERIFICAR USUARIOS EXISTENTES NO SUPABASE AUTH (se tiver service key)
+--------------------------------------------------------------------------------
+[ERRO] Falha ao listar usuarios: 'ClientOptions' object has no attribute 'storage'
+       Service key pode estar incorreta ou sem permissoes
+
+6. TESTE DE AUTENTICACAO VIA CODIGO DA APLICACAO
+--------------------------------------------------------------------------------
+Testando autenticacao com username: admin
+[OK] Autenticacao via AuthService bem-sucedida!
+     User ID: 4291b79d-d43d-4a09-a88a-c51d2cbffc7f
+     Username: admin
+     Email: admin@agentbi.com
+     Role: admin
+     Allowed Segments: ['*']
+
+Testando autenticacao com email: admin@agentbi.com
+[OK] Autenticacao via AuthService bem-sucedida!
+     User ID: 4291b79d-d43d-4a09-a88a-c51d2cbffc7f
+     Username: admin@agentbi.com
+     Email: admin@agentbi.com
+     Role: admin
+     Allowed Segments: ['*']
+
+================================================================================
+FIM DO DIAGNOSTICO
+================================================================================
+
+RESUMO E RECOMENDACOES:
+
+1. Se o usuario NAO existe no Supabase Auth:
+   - Crie manualmente no dashboard do Supabase
+   - Ou use autenticacao Parquet (USE_SUPABASE_AUTH=false)
+
+2. Se o usuario existe mas a senha esta incorreta:
+   - Resete a senha no dashboard do Supabase
+   - Ou atualize a senha no codigo
+
+3. Se quiser usar apenas Parquet (RECOMENDADO para desenvolvimento):
+   - Edite backend/.env:
+   - USE_SUPABASE_AUTH=false
+   - O sistema ira usar o arquivo users.parquet automaticamente
+

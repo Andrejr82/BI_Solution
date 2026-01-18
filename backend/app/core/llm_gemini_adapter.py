@@ -49,9 +49,9 @@ class GeminiLLMAdapter(BaseLLMAdapter):
         self.gemini_api_key = api_key
 
         # Use provided model name or fall back to settings (which loads from .env)
-        self.model_name = model_name or settings.LLM_MODEL_NAME or "gemini-3-flash-preview"
-        self.max_retries = 3  # ✅ Increased to 3 attempts
-        self.retry_delay = 0.5  # ✅ 500ms entre tentativas
+        self.model_name = model_name or settings.LLM_MODEL_NAME or "gemini-2.5-flash-lite"
+        self.max_retries = 5  # FIX 2026-01-07: Increased for silent retry with rate limits
+        self.retry_delay = 2.0  # 2s base delay (will be overridden by API suggestion)
 
         # Store configurable system instruction (default None)
         self.system_instruction = system_instruction
@@ -70,6 +70,31 @@ class GeminiLLMAdapter(BaseLLMAdapter):
             raise Exception(result["error"])
             
         return result.get("content", "")
+
+    def generate_with_history(self, messages: List[Dict[str, str]], system_instruction: Optional[str] = None, **kwargs) -> str:
+        """
+        Gera resposta considerando histórico e instrução de sistema dinâmica.
+        Usa get_completion (sync) sob o capô.
+        Obs: kwargs como max_tokens são ignorados por enquanto pois get_completion usa config padrão.
+        """
+        # Backup da instrução original
+        original_instruction = self.system_instruction
+        
+        try:
+            # Sobrescrever temporariamente se fornecido
+            if system_instruction:
+                self.system_instruction = system_instruction
+            
+            result = self.get_completion(messages)
+            
+            if "error" in result:
+                raise Exception(result["error"])
+                
+            return result.get("content", "")
+            
+        finally:
+            # Restaurar instrução original
+            self.system_instruction = original_instruction
 
     def get_llm(self):
         """
@@ -134,6 +159,79 @@ class GeminiLLMAdapter(BaseLLMAdapter):
              
         return AIMessage(content=result.get("content", ""))
 
+    def stream_completion(
+        self,
+        messages: List[Dict[str, str]],
+        tools: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    ):
+        """
+        Gera completion em streaming da API Gemini.
+        Yields chunks com {'content': str} ou {'tool_calls': ...}
+        """
+        # Se for Gemini 3 Flash Preview, usar REST Bypass (sem streaming por enquanto ou implementado via requests stream)
+        # Por simplicidade, vamos focar no suporte SDK para streaming primeiro
+        if "gemini-3" in self.model_name or "thinking" in self.model_name:
+            # Fallback para sync se REST não suportar stream fácil
+            result = self._generate_via_rest(messages, tools)
+            yield result
+            return
+
+        gemini_messages = self._convert_messages(messages)
+        
+        if tools:
+            gemini_tools = self._convert_tools(tools)
+        else:
+            gemini_tools = []
+
+        generation_config = genai.GenerationConfig(
+            temperature=0.1,
+            top_p=0.9,
+            top_k=20,
+            max_output_tokens=4096,
+        )
+
+        model = genai.GenerativeModel(
+            model_name=self.model_name,
+            tools=gemini_tools if gemini_tools else None,
+            generation_config=generation_config,
+            system_instruction=self.system_instruction,
+        )
+
+        try:
+            response = model.generate_content(
+                contents=gemini_messages,
+                stream=True,
+                request_options={"timeout": 30}
+            )
+
+            for chunk in response:
+                if chunk.candidates:
+                    part = chunk.candidates[0].content.parts[0]
+                    if part.text:
+                        yield {"content": part.text}
+                    elif part.function_call:
+                        # Streaming tool calls is tricky, usually comes in one chunk or we need to accumulate
+                        # For now, simplistic handling
+                        fc = part.function_call
+                        try:
+                            args = dict(fc.args)
+                        except:
+                            args = {}
+                        
+                        yield {
+                            "tool_calls": [{
+                                "id": f"call_{fc.name}",
+                                "function": {
+                                    "name": fc.name,
+                                    "arguments": json.dumps(args)
+                                },
+                                "type": "function"
+                            }]
+                        }
+        except Exception as e:
+            self.logger.error(f"Streaming error: {e}")
+            yield {"error": str(e)}
+
     def get_completion(
         self,
         messages: List[Dict[str, str]],
@@ -165,7 +263,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                         else:
                             gemini_tools = []
 
-                        # ✅ Configuração otimizada para Gemini 3 Flash + BI (precisão máxima)
+                        # Configuração otimizada para Gemini 3 Flash + BI (precisão máxima)
                         # Ref: https://georgian.io/reduce-llm-costs-and-latency-guide/
                         generation_config = genai.GenerationConfig(
                             temperature=0.1,  # Baixo para precisão em BI (function calling determinístico)
@@ -174,7 +272,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             max_output_tokens=4096,  # Reduzido (gráficos retornam JSON pequeno)
                         )
 
-                        # ✅ FIX CRÍTICO: Configurar tool_config com mode condicional
+                        # FIX CRÍTICO: Configurar tool_config com mode condicional
                         # Se detectar keywords de gráfico/visualização, FORÇAR uso de ferramentas (mode: ANY)
                         # Caso contrário, usar AUTO para dar flexibilidade ao LLM
                         tool_config = None
@@ -194,7 +292,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
                             mode = "ANY" if force_tool_use else "AUTO"
                             if force_tool_use:
-                                self.logger.warning(f"🎯 MODE: ANY - Forçando uso de ferramentas (keyword de gráfico detectada)")
+                                self.logger.warning(f"MODE: ANY - Forçando uso de ferramentas (keyword de gráfico detectada)")
 
                             tool_config = {
                                 "function_calling_config": {
@@ -209,13 +307,9 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             generation_config=generation_config,
                             # Use configurable system instruction (set during __init__)
                             system_instruction=self.system_instruction,
-                            # SPEED OPTIMIZATION: Set thinking_level=low for latency-sensitive apps (Gemini 3+)
-                            # Reduces response time by limiting model's thinking depth
-                            # Ref: https://ai.google.dev/gemini-api/docs/models
-                            thinking_level="low"
                         )
 
-                        # ✅ FIX CRÍTICO: Usar generate_content com contents completos
+                        # FIX CRÍTICO: Usar generate_content com contents completos
                         # Em vez de start_chat, para preservar thought_signatures corretamente
                         # Ref: https://ai.google.dev/gemini-api/docs/thought-signatures
                         # O SDK gerencia thought_signatures automaticamente quando usamos generate_content
@@ -224,9 +318,11 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             f"{self.max_retries})"
                         )
 
+                        # ✅ FIX 2026-01-15: Timeout aumentado de 15s para 30s
+                        # Queries complexas (análise multi-loja) precisam de mais tempo
                         response = model.generate_content(
                             contents=gemini_messages,
-                            request_options={"timeout": 15}
+                            request_options={"timeout": 30}
                         )
 
                         self.logger.info("Chamada Gemini concluída.")
@@ -240,10 +336,34 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                                 for part in candidate.content.parts:
                                     if part.function_call:
                                         function_call = part.function_call
+                                        
+                                        # Helper to convert ProtoBuf MapComposite to dict
+                                        # function_call.args is a MapComposite
+                                        try:
+                                            # The SDK usually allows dict() conversion directly
+                                            args_dict = dict(function_call.args)
+                                            # If deep conversion is needed for nested RepeatedComposite
+                                            # We can rely on json.dumps default handler or convert manually if needed
+                                            # But dict() usually works for the top level.
+                                            
+                                            # Robust recursive conversion just in case
+                                            def proto_to_dict(obj):
+                                                if hasattr(obj, 'items'):
+                                                    return {k: proto_to_dict(v) for k, v in obj.items()}
+                                                elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
+                                                    return [proto_to_dict(v) for v in obj]
+                                                return obj
+                                                
+                                            args_dict = proto_to_dict(function_call.args)
+                                            
+                                        except Exception as e:
+                                            self.logger.warning(f"Falha ao converter args do ProtoBuf: {e}")
+                                            args_dict = {}
+
                                         tool_call = {
                                             "id": f"call_{function_call.name}", # Gemini doesn't provide an ID, so we generate one
                                             "function": {
-                                                "arguments": json.dumps(dict(function_call.args)),
+                                                "arguments": json.dumps(args_dict),
                                                 "name": function_call.name,
                                             },
                                             "type": "function",
@@ -254,7 +374,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                                         # Ref: https://ai.google.dev/gemini-api/docs/thought-signatures
                                         if hasattr(part, 'thought_signature') and part.thought_signature:
                                             tool_call["thought_signature"] = part.thought_signature
-                                            self.logger.info(f"✅ Thought signature capturado para {function_call.name}")
+                                            self.logger.info(f"Thought signature capturado para {function_call.name}")
 
                                         tool_calls.append(tool_call)
                                         # Se há tool_call, o conteúdo textual deve ser vazio
@@ -272,6 +392,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
 
                     except Exception as e:
                         error_msg = str(e).lower()
+                        error_full = str(e)
 
                         retentable = any(
                             [
@@ -284,16 +405,33 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             ]
                         )
 
+                        # Extract retry delay from Gemini error message
+                        retry_seconds = None
+                        if "retry in" in error_msg:
+                            import re
+                            match = re.search(r'retry in ([\d.]+)s', error_full)
+                            if match:
+                                retry_seconds = float(match.group(1))
+                                self.logger.info(f"Gemini sugere retry em {retry_seconds}s")
+
                         self.logger.warning(
                             f"Erro Gemini na tentativa {attempt + 1}: {e} "
-                            f"(retentável: {retentable})"
+                            f"(retentável: {retentable}, retry_delay: {retry_seconds})"
                         )
 
-                        q.put({"error": f"Erro: {e}", "retry": retentable})
+                        # Return structured error with retry info
+                        error_result = {
+                            "error": f"Erro: {e}",
+                            "retry": retentable,
+                            "retry_seconds": retry_seconds,
+                            "error_type": "rate_limit" if "429" in error_msg or "quota" in error_msg else "api_error"
+                        }
+
+                        q.put(error_result)
 
                 thread = threading.Thread(target=worker)
                 thread.start()
-                thread.join(timeout=15.0)  # ✅ Gemini 3 Flash é 2x mais rápido que 1.5
+                thread.join(timeout=30.0)  # FIX 2025-12-27: Increased to 30s (1 retry only, was 3x15s=45s)
 
                 if thread.is_alive():
                     self.logger.warning(f"Thread timeout tentativa {attempt + 1}")
@@ -305,12 +443,39 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                     return result
 
                 if result.get("retry") and (attempt < self.max_retries - 1):
-                    delay = self.retry_delay * (2**attempt)
-                    self.logger.info(
-                        f"Aguardando {delay}s antes da próxima tentativa..."
-                    )
+                    # Use Gemini's suggested retry delay if available, otherwise exponential backoff
+                    api_suggested_delay = result.get("retry_seconds")
+
+                    if api_suggested_delay:
+                        # API explicitly said to wait X seconds (rate limit)
+                        delay = min(api_suggested_delay, 60)  # Cap at 60s
+                        self.logger.warning(
+                            f"🔄 Rate limit detectado. Aguardando {delay}s antes do retry "
+                            f"(tentativa {attempt + 1}/{self.max_retries}, silencioso para usuário)"
+                        )
+                    else:
+                        # Generic error - use exponential backoff
+                        delay = min(self.retry_delay * (2**attempt), 30)
+                        self.logger.warning(
+                            f"🔄 Erro retentável. Backoff exponencial: {delay}s "
+                            f"(tentativa {attempt + 1}/{self.max_retries})"
+                        )
+
                     time.sleep(delay)
                     continue
+
+                # After all retries failed, return generic error (no technical details for frontend)
+                if result.get("error_type") == "rate_limit":
+                    self.logger.error(
+                        f"❌ Rate limit persistiu após {self.max_retries} tentativas. "
+                        f"Retornando erro genérico para frontend."
+                    )
+                    # Return generic error without exposing rate limit details
+                    return {
+                        "error": "O serviço está temporariamente ocupado. Por favor, tente novamente em alguns instantes.",
+                        "error_type": "temporary_unavailable",
+                        "retryable": True
+                    }
 
                 return result
 
@@ -376,21 +541,21 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                 "function_declarations": raw_functions
             }]
 
-            # ✅ FIX: Mode condicional também no REST
+            # FIX: Mode condicional também no REST
             all_content_rest = " ".join([
                 str(m.get("parts", [{}])[0].get("text", ""))
                 for m in gemini_messages
             ]).lower()
 
             graph_keywords_rest = [
-                "gráfico", "grafico", "chart", "gere", "mostre", "crie",
+                "gráfico", "grafico", "chart", "crie um gráfico", "crie grafico",
                 "visualização", "visualizacao", "plote", "ranking visual"
             ]
             force_tool_use_rest = any(kw in all_content_rest for kw in graph_keywords_rest)
             mode_rest = "ANY" if force_tool_use_rest else "AUTO"
 
             if force_tool_use_rest:
-                self.logger.warning(f"🎯 REST MODE: ANY - Forçando ferramentas")
+                self.logger.warning(f"REST MODE: ANY - Forçando ferramentas")
 
             payload["toolConfig"] = {
                 "function_calling_config": {"mode": mode_rest}
@@ -438,7 +603,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                             # A MÁGICA: Capturar thoughtSignature
                             if 'thoughtSignature' in part:
                                 tc["thought_signature"] = part['thoughtSignature']
-                                self.logger.info(f"✅ REST: thought_signature capturado: {part['thoughtSignature'][:15]}...")
+                                self.logger.info(f"REST: thought_signature capturado: {part['thoughtSignature'][:15]}...")
                             elif 'thought_signature' in part:
                                 tc["thought_signature"] = part['thought_signature']
                             
@@ -538,7 +703,7 @@ class GeminiLLMAdapter(BaseLLMAdapter):
     def _convert_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         """
         Converte mensagens do formato OpenAI-like para formato Gemini.
-        MANTER MÉTODO ORIGINAL para compatibilidade
+        Suporta o novo formato do Agente (tool_call_id e role='function').
         """
         gemini_messages = []
 
@@ -546,10 +711,12 @@ class GeminiLLMAdapter(BaseLLMAdapter):
             role = msg.get("role", "user")
             content = msg.get("content", "")
             tool_calls = msg.get("tool_calls")
-            function_call = msg.get("function_call")
+            
+            # Detectar resposta de ferramenta (estilo novo do Agente)
+            is_tool_response = role == "function" or "tool_call_id" in msg
+            func_name = msg.get("name") or msg.get("function_call", {}).get("name")
 
             # Determine Gemini role based on actual content and OpenAI-like role
-            # IMPORTANT: Check for tool_calls and function_call FIRST, before checking role
             if tool_calls:
                 # Model's turn: calls a tool
                 parts = []
@@ -564,7 +731,6 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                     # CRÍTICO: Preservar thought_signature (obrigatório no Gemini 3)
                     if "thought_signature" in tc and tc["thought_signature"]:
                         part["thought_signature"] = tc["thought_signature"]
-                        pass  # Removed verbose logging for performance
 
                     parts.append(part)
 
@@ -572,31 +738,37 @@ class GeminiLLMAdapter(BaseLLMAdapter):
                     "role": "model",
                     "parts": parts
                 }
-            elif function_call:
+            elif is_tool_response:
                 # User's turn: provides tool response
+                # No Gemini, a resposta da ferramenta vem como papel 'user' contendo 'function_response'
                 final_content = content if content and content.strip() else "."
                 
-                gemini_msg = {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "function_response": {
-                                "name": function_call["name"],
-                                "response": {"content": final_content}
+                # Se não temos o nome da função (raro), não conseguimos gerar o formato correto
+                if not func_name:
+                    self.logger.warning("Mensagem de ferramenta sem nome de função. Enviando como texto.")
+                    gemini_msg = {"role": "user", "parts": [{"text": str(final_content)}]}
+                else:
+                    gemini_msg = {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "function_response": {
+                                    "name": func_name,
+                                    "response": {"content": final_content}
+                                }
                             }
-                        }
-                    ]
-                }
+                        ]
+                    }
             elif role == "user":
                 final_content = content if content and content.strip() else "."
-                gemini_msg = {"role": "user", "parts": [{"text": final_content}]}
+                gemini_msg = {"role": "user", "parts": [{"text": str(final_content)}]}
             elif role == "assistant" or role == "model":
                 final_content = content if content and content.strip() else "."
-                gemini_msg = {"role": "model", "parts": [{"text": final_content}]}
+                gemini_msg = {"role": "model", "parts": [{"text": str(final_content)}]}
             else: 
                 self.logger.warning(f"Unexpected role encountered: {role}. Treating as 'user'.")
                 final_content = content if content and content.strip() else "."
-                gemini_msg = {"role": "user", "parts": [{"text": final_content}]}
+                gemini_msg = {"role": "user", "parts": [{"text": str(final_content)}]}
 
             gemini_messages.append(gemini_msg)
 

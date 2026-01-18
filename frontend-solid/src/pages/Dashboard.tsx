@@ -5,6 +5,8 @@ import api from '../lib/api';
 import { PlotlyChart } from '../components/PlotlyChart';
 import { ChartDownloadButton } from '../components/ChartDownloadButton';
 import { AIInsightsPanel } from '../components/AIInsightsPanel';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { SkeletonKPI, SkeletonChart } from '../components/Skeleton';
 import auth from '@/store/auth';
 
 interface BusinessKPIs {
@@ -35,6 +37,7 @@ export default function Dashboard() {
     nome: string;
     vendas: number;
   } | null>(null);
+  const [showFullRanking, setShowFullRanking] = createSignal(false);
 
   // Chart specs para Plotly
   const [topProdutosChart, setTopProdutosChart] = createSignal<any>({});
@@ -74,16 +77,16 @@ export default function Dashboard() {
         const topProdutosSpec = {
           data: [{
             type: 'bar',
-            x: response.data.top_produtos.map(p => p.nome),
+            x: response.data.top_produtos.map(p => `${p.produto} - ${p.nome.substring(0, 30)}`),
             y: response.data.top_produtos.map(p => p.vendas),
             marker: {
-              color: response.data.top_produtos.map((_, i) => i === 0 ? '#8B7355' : '#C9A961'), // Marrom Caçula, Dourado
+              color: response.data.top_produtos.map((_, i) => i === 0 ? '#8B7355' : '#C9A961'),
               line: { color: '#E5E5E5', width: 1 }
             },
             text: response.data.top_produtos.map(p => p.vendas.toLocaleString()),
             textposition: 'outside',
             textfont: { color: '#2D2D2D' },
-            hovertemplate: '<b>%{x}</b><br>Vendas: %{y:,}<extra></extra>',
+            hovertemplate: '<b>Produto:</b> %{customdata.produto}<br><b>Nome:</b> %{customdata.nome}<br><b>Vendas:</b> %{y:,}<extra></extra>',
             customdata: response.data.top_produtos.map(p => ({ produto: p.produto, nome: p.nome, vendas: p.vendas }))
           }],
           layout: {
@@ -201,7 +204,8 @@ export default function Dashboard() {
   });
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6 max-w-[1600px] mx-auto">
+    <ErrorBoundary>
+      <div class="flex flex-col p-6 gap-6 max-w-[1600px] mx-auto">
       {/* 1. Context7: Executive Summary Header */}
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
         <div>
@@ -224,9 +228,6 @@ export default function Dashboard() {
                 <AlertTriangle size={12} class="mr-1" /> Situação Crítica
               </span>
             </Show>
-            <span class="text-sm text-muted ml-2">
-              Visão geral do desempenho do negócio
-            </span>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -238,17 +239,28 @@ export default function Dashboard() {
             class="btn btn-outline btn-icon"
             disabled={loading()}
             title="Atualizar dados"
+            aria-label={loading() ? 'Atualizando dados do dashboard' : 'Atualizar dados do dashboard'}
+            aria-busy={loading()}
           >
             <RefreshCw size={18} class={loading() ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Loading State */}
+      {/* ✅ USABILIDADE: Loading State com Skeletons */}
       <Show when={loading() && !kpis()}>
-        <div class="flex-1 flex flex-col items-center justify-center text-muted gap-4">
-          <RefreshCw size={48} class="animate-spin opacity-20" />
-          <p>Analisando dados do negócio...</p>
+        {/* KPI Skeletons */}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonKPI />
+          <SkeletonKPI />
+          <SkeletonKPI />
+          <SkeletonKPI />
+        </div>
+
+        {/* Chart Skeletons */}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonChart />
+          <SkeletonChart />
         </div>
       </Show>
 
@@ -265,8 +277,8 @@ export default function Dashboard() {
 
       <Show when={kpis() && !loading()}>
         {/* 2. Context7: Key Performance Indicators (The "What") */}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="kpi-card bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" role="region" aria-label="Indicadores chave de desempenho">
+          <div class="kpi-card bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group" role="article" aria-label="Valor total em estoque">
             <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <DollarSign size={48} />
             </div>
@@ -360,7 +372,7 @@ export default function Dashboard() {
               </h3>
               <span class="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">Top 5</span>
             </div>
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-auto">
               <table class="w-full text-sm">
                 <tbody>
                   <For each={kpis()!.top_produtos.slice(0, 5)}>
@@ -380,14 +392,10 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            {/* ✅ CORREÇÃO: Adicionado onClick para navegar ao Chat com query */}
             <div class="p-3 bg-muted/20 border-t text-center">
               <button
                 class="text-xs font-medium text-primary hover:underline"
-                onClick={() => {
-                  localStorage.setItem('example_query', 'Mostre o ranking completo dos top 20 produtos mais vendidos com análise detalhada');
-                  navigate('/chat');
-                }}
+                onClick={() => setShowFullRanking(true)}
               >
                 Ver ranking completo
               </button>
@@ -399,11 +407,11 @@ export default function Dashboard() {
       {/* Detail Modal */}
       <Show when={selectedProductInfo()}>
         <div
-          class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200"
+          class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-0 md:p-4 animate-in fade-in duration-200"
           onClick={() => setSelectedProductInfo(null)}
         >
           <div
-            class="bg-card border rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+            class="bg-card border rounded-none md:rounded-xl shadow-2xl w-full h-full md:h-auto max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div class="relative h-32 bg-gradient-to-r from-primary/20 to-accent/20 flex items-center justify-center">
@@ -434,20 +442,75 @@ export default function Dashboard() {
               </div>
 
               <div class="flex gap-3">
-                <button class="flex-1 btn btn-primary" onClick={() => {
-                  const product = selectedProductInfo();
-                  if (product) {
-                    localStorage.setItem('example_query', `Analise detalhadamente o desempenho de vendas do produto "${product.nome}" (SKU: ${product.produto})`);
-                    navigate('/chat');
-                  }
-                }}>
-                  Ver Análise Completa
+                <button class="flex-1 btn btn-secondary" onClick={() => setSelectedProductInfo(null)}>
+                  Fechar
                 </button>
               </div>
             </div>
           </div>
         </div>
       </Show>
-    </div>
+
+      {/* Full Ranking Modal */}
+      <Show when={showFullRanking()}>
+        <div
+          class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={() => setShowFullRanking(false)}
+        >
+          <div
+            class="bg-card border rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="p-6 border-b flex items-center justify-between bg-gradient-to-r from-primary/10 to-accent/10">
+              <div>
+                <h3 class="text-xl font-bold">Ranking Completo - Top 10 Produtos</h3>
+                <p class="text-sm text-muted mt-1">Vendas dos últimos 30 dias</p>
+              </div>
+              <button
+                onClick={() => setShowFullRanking(false)}
+                class="p-2 hover:bg-muted rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div class="overflow-auto max-h-[60vh]">
+              <table class="w-full">
+                <thead class="bg-muted/30 sticky top-0">
+                  <tr>
+                    <th class="p-3 text-left text-xs font-semibold uppercase">#</th>
+                    <th class="p-3 text-left text-xs font-semibold uppercase">Código</th>
+                    <th class="p-3 text-left text-xs font-semibold uppercase">Produto</th>
+                    <th class="p-3 text-right text-xs font-semibold uppercase">Vendas (30d)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={kpis()!.top_produtos}>
+                    {(produto, i) => (
+                      <tr class="border-b hover:bg-muted/20 transition-colors">
+                        <td class="p-3 font-mono text-muted text-center">{i() + 1}</td>
+                        <td class="p-3 font-mono text-sm">{produto.produto}</td>
+                        <td class="p-3 text-sm">{produto.nome}</td>
+                        <td class="p-3 text-right font-bold">{produto.vendas.toLocaleString()}</td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="p-4 border-t bg-muted/10">
+              <button
+                onClick={() => setShowFullRanking(false)}
+                class="w-full btn btn-primary"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+      </div>
+    </ErrorBoundary>
   );
 }

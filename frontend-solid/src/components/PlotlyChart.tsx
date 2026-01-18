@@ -5,7 +5,7 @@ import Plotly from 'plotly.js-dist-min';
 import { Maximize, Minimize } from 'lucide-solid';
 
 const CACULA_CHART_COLORS = [
-  '#8B7355', '#C9A961', '#6B7A5A', '#A68968', '#CC8B3C', 
+  '#8B7355', '#C9A961', '#6B7A5A', '#A68968', '#CC8B3C',
   '#5B7B9A', '#9B8875', '#B8984E', '#7A8B6F', '#B59B7A',
 ];
 
@@ -21,7 +21,7 @@ interface PlotlyChartProps {
 export const PlotlyChart = (props: PlotlyChartProps) => {
   let chartDiv: HTMLDivElement | undefined;
   let expandedChartDiv: HTMLDivElement | undefined;
-  
+
   const chartId = props.chartId || `chart-${Math.random().toString(36).substr(2, 9)}`;
   const [isExpanded, setIsExpanded] = createSignal(false);
 
@@ -29,7 +29,7 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
     const newState = !isExpanded();
     setIsExpanded(newState);
     document.body.style.overflow = newState ? 'hidden' : '';
-    
+
     // Pequeno delay para garantir que o DOM do modal esteja pronto
     setTimeout(renderPlot, 50);
   };
@@ -53,7 +53,7 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
   const renderPlot = () => {
     const spec = props.chartSpec();
     const targetDiv = isExpanded() ? expandedChartDiv : chartDiv;
-    
+
     if (!targetDiv || !spec || Object.keys(spec).length === 0) return;
 
     try {
@@ -63,10 +63,10 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
         font: {
           color: '#2D2D2D',
           family: 'Inter, sans-serif',
-          size: isExpanded() ? 13 : 11
+          size: isExpanded() ? 13 : 12
         },
         colorway: CACULA_CHART_COLORS,
-        margin: isExpanded() ? { l: 80, r: 40, t: 80, b: 100 } : (spec.layout?.margin || { l: 40, r: 20, t: 40, b: 40 }),
+        margin: isExpanded() ? { l: 80, r: 40, t: 80, b: 100 } : (spec.layout?.margin || { l: 50, r: 30, t: 50, b: 60 }),
         xaxis: { gridcolor: '#E5E5E5', ...spec.layout?.xaxis },
         yaxis: { gridcolor: '#E5E5E5', ...spec.layout?.yaxis },
         legend: {
@@ -102,8 +102,8 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
   return (
     <>
       <div
-        class="relative w-full overflow-hidden rounded-xl border bg-card group shadow-sm hover:shadow-md transition-shadow"
-        style={{ height: props.height || '400px' }}
+        class="relative w-full overflow-hidden rounded-xl border bg-card group shadow-sm hover:shadow-md transition-shadow min-w-[320px]"
+        style={{ height: props.height || '400px', 'min-height': '350px' }}
       >
         <div class="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
           <button
@@ -114,16 +114,16 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
             <Maximize size={18} />
           </button>
         </div>
-        
+
         <div ref={chartDiv} class="w-full h-full" id={chartId}></div>
       </div>
 
       <Show when={isExpanded()}>
-        <div 
+        <div
           class="fixed inset-0 z-[10000] bg-zinc-950/60 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-300"
           onClick={toggleExpand}
         >
-          <div 
+          <div
             class="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500"
             onClick={(e) => e.stopPropagation()}
           >
@@ -143,9 +143,9 @@ export const PlotlyChart = (props: PlotlyChartProps) => {
                 <Minimize size={22} class="group-hover:scale-110 transition-transform" />
               </button>
             </div>
-            
+
             <div class="flex-1 p-8 bg-[#FAFAFA] dark:bg-zinc-950/50">
-              <div 
+              <div
                 ref={expandedChartDiv}
                 id={`${chartId}-expanded`}
                 class="w-full h-full"

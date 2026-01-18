@@ -66,12 +66,51 @@
   --radius: 0.5rem;
 }
 
-body {
+/* ===== GLOBAL SCROLLBAR CUSTOMIZATION ===== */
+/* Modern thin scrollbar for Webkit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px; /* Critical for horizontal scrollbar visibility */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #E0E0E0; /* Light gray for subtle appearance */
+  border-radius: 20px;
+  border: 2px solid transparent; /* Creates padding effect */
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary); /* Highlight on hover */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #E0E0E0 transparent;
+}
+
+html, body {
   margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Utility Classes (Minimal Tailwind replacement) */
@@ -88,6 +127,7 @@ body {
 .w-full { width: 100%; }
 .h-screen { height: 100vh; }
 .h-full { height: 100%; }
+.min-h-full { min-height: 100%; }
 .text-center { text-align: center; }
 .font-bold { font-weight: 700; }
 .text-sm { font-size: 0.875rem; }
@@ -156,12 +196,29 @@ body {
 .label { font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; display: block; }
 
 /* Layout - LIGHT MODE CAÇULA */
-.app-layout { display: grid; grid-template-columns: 250px 1fr; height: 100vh; }
+.app-layout { display: grid; height: 100vh; }
 .sidebar {
   background-color: var(--sidebar-background); /* Light gray */
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  height: 100%; /* Ensure it fills the grid cell */
+  white-space: nowrap; /* Prevent text wrapping during transition */
+}
+
+/* Custom Scrollbar Utilities */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
 }
 .nav-item {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px;

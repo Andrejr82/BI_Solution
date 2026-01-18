@@ -17,25 +17,21 @@ interface InsightsData {
   insights: Insight[];
   total: number;
   generated_at: string;
+  cached?: boolean;
+  cache_age_hours?: number;
 }
 
 export function AIInsightsPanel() {
   const [isRefreshing, setIsRefreshing] = createSignal(false);
-  const user = auth.user;
 
   const fetchInsights = async (): Promise<InsightsData> => {
-    const token = auth.token();
-    if (!token) throw new Error('Not authenticated');
-
-    const response = await fetch('/api/v1/insights/proactive', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch insights');
-    }
-
-    return response.json();
+    // DEMO STABILIZATION: Temporarily disabled for demo stability
+    return {
+      insights: [],
+      total: 0,
+      generated_at: new Date().toISOString(),
+      cached: false
+    };
   };
 
   const [insights, { refetch }] = createResource(fetchInsights);
@@ -82,15 +78,10 @@ export function AIInsightsPanel() {
         <div class="flex flex-col">
           <div class="flex items-center gap-2">
             <Sparkles class="text-primary" size={24} />
-            <h3 class="text-xl font-bold tracking-tight">IA Retail Insights</h3>
-            <Show when={user()}>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 uppercase font-bold ml-2">
-                {user()?.role === 'admin' ? 'Visão Global' : 'Filtro por Segmento'}
-              </span>
-            </Show>
+            <h3 class="text-xl font-bold tracking-tight">Insights Estratégicos</h3>
           </div>
           <p class="text-xs text-muted-foreground mt-1">
-            Análise em tempo real baseada em tendências de varejo e estoque.
+            Análise baseada em tendências de varejo e estoque
           </p>
         </div>
         <button
@@ -170,7 +161,7 @@ export function AIInsightsPanel() {
                     <div class="flex items-center justify-between mt-4 pt-4 border-t border-dashed">
           <span class="flex items-center">
             <div class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
-            Gerado via Gemini 3.0 Flash
+            Gerado via Google Gemini 2.5 Flash-Lite
           </span>
                       <div class="text-[10px] text-muted-foreground">
                         {new Date(insight.created_at).toLocaleString('pt-BR')}

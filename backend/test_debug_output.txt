@@ -1,0 +1,13 @@
+
+=== TESTE COM DEBUG DETALHADO ===
+
+[1/1] Chamando LLMInsightsService.generate_proactive_insights()...
+
+[OK] Retornou 4 insights
+Tipo do retorno: <class 'list'>
+
+Primeiro insight:
+  Tipo: <class 'dict'>
+  Conteudo: {'insight': "A loja estß enfrentando rupturas significativas em produtos do segmento 'TECIDOS', com destaque para o 'TNT 40GRS 100%O LG 1.40 034 PRETO' e 'TNT 40GRS 100%O LG 1.40 044 AMARELO OURO'. Esses itens apresentam vendas expressivas nos ·ltimos 30 dias, mas com estoque negativo, indicando perda de vendas e insatisfaþÒo do cliente.", 'severidade': 'high', 'oportunidade': 'Reabastecer urgentemente os produtos em ruptura, especialmente os TNTs, para evitar perdas de vendas contÝnuas e melhorar a satisfaþÒo do cliente.'}
+
+Resultado: SUCESSO

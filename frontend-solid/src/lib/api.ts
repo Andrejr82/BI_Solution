@@ -87,7 +87,14 @@ export interface Ruptura {
   CRITICIDADE_PCT: number;
   NECESSIDADE: number;
   NOMESEGMENTO?: string;
-  NOMEGRUPO?: string;  // Categoria/Grupo de produto
+  NOMEGRUPO?: string;
+  NOMEFABRICANTE?: string;
+  // New rupture alert fields
+  PERC_ABAST: number;           // % Abastecimento (UNE/LV)
+  GATILHO_CRITICO: number;      // 1 if %ABAST <= 50%
+  FALHA_GATILHO: number;        // 1 if critical + no pending dispatch
+  DEFICIT_PARAMETRO: number;    // 1 if MC > GONDOLA and TRAVA=SIM
+  PISO_VIOLADO: number;         // 1 if LV < GONDOLA
 }
 
 export interface RupturasSummary {

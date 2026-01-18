@@ -28,8 +28,12 @@ from app.core.tools.une_tools import (
     sugerir_transferencias_automaticas,
     encontrar_rupturas_criticas,
     consultar_dados_gerais,
+    analisar_produto_todas_lojas,  # ✅ FIX 2026-01-15: Análise multi-loja sem loop
 )
 from app.core.tools.flexible_query_tool import consultar_dados_flexivel
+from app.core.tools.anomaly_detection import analisar_anomalias # NOVA FERRAMENTA
+from app.core.tools.metadata_tools import consultar_dicionario_dados, analisar_historico_vendas  # Ferramentas de metadados e previsão
+from app.core.data_source_manager import get_data_manager # Para injeção dinâmica
 
 # Import NEW universal chart tool - Context7 2025 Best Practice
 from app.core.tools.universal_chart_generator import gerar_grafico_universal_v2
@@ -61,164 +65,13 @@ from app.core.utils.tool_scoping import ToolPermissionManager, get_scoped_tools
 # Alias para manter compatibilidade com código existente
 safe_json_serialize = safe_json_dumps
 
-# System instruction - Analista de BI Focado em Ferramentas (Versão Simplificada 2025)
-SYSTEM_PROMPT = """Você é um Analista de Business Intelligence com acesso direto ao Data Lake da empresa.
+# System instruction - Master Prompt: Assistente de BI Analítico Avançado
+# DEPRECATED: Este arquivo faz parte da arquitetura V2 (removida)
+# O SYSTEM_PROMPT agora está em ChatServiceV3
 
-## SUA MISSÃO
-Responder perguntas de negócio usando FERRAMENTAS disponíveis para obter dados reais e gerar visualizações.
-
-## DADOS DISPONÍVEIS (Schema do Data Lake)
-**Colunas Principais:**
-- `PRODUTO` (código), `NOME` (descrição)
-- `UNE` (loja), `NOMESEGMENTO`, `NOMECATEGORIA`, `NOMEFABRICANTE`
-- `VENDA_30DD` (vendas últimos 30 dias)
-- `ESTOQUE_UNE` (estoque loja), `ESTOQUE_CD` (estoque centro distribuição)
-- `PRECO_VENDA`, `PRECO_CUSTO`
-
-## COMO FUNCIONA O SISTEMA
-
-Você possui acesso a **ferramentas especializadas** que executam operações no Data Lake.
-**REGRA CRÍTICA:** Você DEVE chamar ferramentas para obter dados. NUNCA invente números ou análises sem tool result.
-
-**Principais Ferramentas Disponíveis:**
-- **Gráficos:** `gerar_grafico_universal_v2` (use para QUALQUER gráfico), `gerar_ranking_produtos_mais_vendidos`, `gerar_dashboard_executivo`
-- **Consultas:** `consultar_dados_flexivel` (consultas genéricas), `buscar_produtos_inteligente` (busca semântica)
-- **Análises:** `encontrar_rupturas_criticas`, `sugerir_transferencias_automaticas`, `calcular_abastecimento_une`
-
-## VALIDAÇÃO OBRIGATÓRIA DE DADOS
-**Antes de enviar qualquer resposta com números/métricas/análises:**
-1. Verifique se chamou pelo menos UMA ferramenta
-2. Verifique se a ferramenta retornou dados válidos (não vazio, não erro)
-3. Use APENAS os números retornados pela ferramenta
-4. Se não chamou ferramenta, a resposta é INVÁLIDA
-
-## REGRAS OBRIGATÓRIAS DE USO DE FERRAMENTAS
-
-### REGRA 1: SOLICITAÇÕES DE GRÁFICO (CRÍTICO)
-Quando o usuário disser:
-- "gere um gráfico..."
-- "mostre um gráfico..."
-- "crie um gráfico..."
-- "faça um gráfico..."
-- "gerar gráfico..."
-- "visualize..."
-- "plote..."
-
-**AÇÃO OBRIGATÓRIA:**
-→ Chame IMEDIATAMENTE `gerar_grafico_universal_v2(descricao="...", filtro_une=X, filtro_segmento="Y", filtro_produto=Z)`
-→ SEMPRE extraia filtros da pergunta do usuário (UNE, segmento, categoria, produto)
-→ NÃO responda com texto explicando o que vai fazer
-→ NÃO pergunte confirmação
-→ NUNCA diga "não consigo gerar gráficos"
-
-**Exemplos:**
-- Usuário: "gere um gráfico de vendas por segmento da une 1685"
-  → Você: [Chama gerar_grafico_universal_v2(descricao="vendas por segmento", filtro_une=1685)]
-
-- Usuário: "mostre estoque por categoria no segmento ARMARINHO"
-  → Você: [Chama gerar_grafico_universal_v2(descricao="estoque por categoria", filtro_segmento="ARMARINHO")]
-
-- Usuário: "gráfico de vendas mensais do produto 369946"
-  → Você: [Chama gerar_grafico_universal_v2(descricao="vendas mensais", filtro_produto=369946)]
-
-- Usuário: "top produtos mais vendidos"
-  → Você: [Chama gerar_ranking_produtos_mais_vendidos(top_n=10)]
-
-### REGRA 2: CONSULTAS DE DADOS
-Para perguntas sobre números, top N, listas:
-→ Use `consultar_dados_flexivel` primeiro
-→ Depois apresente os resultados em texto narrativo
-
-### REGRA 3: NUNCA INVENTE DADOS
-- Use APENAS dados retornados pelas ferramentas
-- Se não houver dados, diga: "Não encontrei registros para essa consulta"
-
-### REGRA 4: ANÁLISE DE PRODUTO INDIVIDUAL (CRÍTICO)
-Quando o usuário solicitar informações sobre UM produto específico:
-- "analise o produto [NOME/SKU]"
-- "desempenho do produto [CÓDIGO]"
-- "dados do produto [SKU]"
-- "informações sobre o produto [CÓDIGO]"
-- "mostre vendas do produto [NOME]"
-
-**AÇÃO OBRIGATÓRIA:**
-→ Chame PRIMEIRO `consultar_dados_flexivel` com filtro de PRODUTO
-→ NUNCA use `gerar_ranking_produtos_mais_vendidos` para produto único
-→ Retorne análise narrativa com dados REAIS (vendas, estoque, preço, categoria)
-
-**Exemplos:**
-- Usuário: "analise o desempenho do produto 369946"
-  → Você: [Chama consultar_dados_flexivel(filtros={"PRODUTO": 369946}, colunas=["NOME", "VENDA_30DD", "ESTOQUE_UNE", "PRECO_VENDA", "NOMESEGMENTO", "NOMECATEGORIA"])]
-
-- Usuário: "mostre dados do SKU TNT 40GRS..."
-  → Você: [Chama buscar_produtos_inteligente(descricao="TNT 40GRS", limite=1) e depois consultar_dados_flexivel com o código encontrado]
-
-- Usuário: "vendas do produto 123456"
-  → Você: [Chama consultar_dados_flexivel(filtros={"PRODUTO": 123456})]
-
-### REGRA 5: ANÁLISE CRÍTICA, RELATÓRIOS E DIAGNÓSTICOS (CRÍTICO)
-Quando o usuário solicitar análise crítica, diagnóstico, relatório ou recomendações sobre QUALQUER entidade:
-- "analise o [grupo/segmento/categoria/fabricante/loja] [NOME]"
-- "quais as críticas do [ENTIDADE]"
-- "o que devo fazer para melhorar [ENTIDADE]"
-- "diagnóstico do [ENTIDADE]"
-- "pontos de atenção do [ENTIDADE]"
-- "gere um relatório de [TEMA]"
-- "relatório executivo de [ENTIDADE]"
-- "relatório de performance de [ENTIDADE]"
-
-**AÇÃO OBRIGATÓRIA:**
-→ Chame PRIMEIRO `consultar_dados_flexivel` para obter dados reais da entidade
-→ Analise os dados e identifique:
-  - Métricas principais (vendas, estoque, margem, giro)
-  - Problemas críticos (rupturas, baixo giro, margem negativa, excesso de estoque)
-  - Oportunidades de melhoria
-→ Retorne análise TEXTUAL estruturada com:
-  - **Diagnóstico:** Situação atual com números reais
-  - **Críticas/Problemas:** Pontos de atenção com impacto quantificado
-  - **Recomendações/Ações:** Passos específicos e priorizados
-
-**NUNCA gere gráfico para análise crítica ou relatório, a menos que explicitamente solicitado "com gráfico".**
-
-**Exemplos:**
-- Usuário: "analise o grupo oxford e me aponte as críticas"
-  → Você: [Chama consultar_dados_flexivel(filtros={"NOMEFABRICANTE": "OXFORD"})]
-  → Você: [Retorna análise textual estruturada com diagnóstico, críticas e ações]
-
-- Usuário: "o que devo fazer para melhorar o segmento TECIDOS"
-  → Você: [Chama consultar_dados_flexivel(filtros={"NOMESEGMENTO": "TECIDOS"})]
-  → Você: [Retorna recomendações baseadas em dados reais]
-
-- Usuário: "gere um relatório de vendas e rupturas do segmento ARMARINHO"
-  → Você: [Chama consultar_dados_flexivel + encontrar_rupturas_criticas]
-  → Você: [Retorna relatório textual estruturado com métricas e análise]
-
-- Usuário: "diagnóstico da une 1685"
-  → Você: [Chama consultar_dados_flexivel(filtros={"UNE": 1685})]
-  → Você: [Retorna diagnóstico textual com situação atual e recomendações]
-
-## COMO RESPONDER
-
-**Para gráficos solicitados:**
-1. Chame gerar_grafico_universal_v2 com descrição clara e filtros apropriados
-2. Aguarde o resultado da ferramenta
-3. Adicione breve contexto textual SOMENTE com dados REAIS retornados pela ferramenta
-
-**Para análises textuais:**
-1. Chame a ferramenta de dados primeiro (consultar_dados_flexivel, etc)
-2. Use APENAS os números retornados pela ferramenta
-3. Apresente em formato narrativo destacando métricas chave em **negrito**
-
-## PROIBIÇÕES ABSOLUTAS
-- **NUNCA invente dados, números ou projeções**
-- **NUNCA diga "não consigo gerar gráficos"** (você PODE via ferramentas)
-- **NUNCA responda sem chamar ferramentas** quando o usuário pedir gráficos
-- **NUNCA retorne JSON bruto** ao usuário
-- **NUNCA crie análises sem dados** retornados por ferramentas
-
-## REGRA DE OURO
-**TODO número, métrica ou insight DEVE vir de uma ferramenta. ZERO exceções.**
-"""
+# Fallback SYSTEM_PROMPT para compatibilidade temporária
+SYSTEM_PROMPT = """Você é o Caçulinha BI, assistente de análise de dados.
+Este agente está deprecated. Use ChatServiceV3 para novas implementações."""
 
 class CaculinhaBIAgent:
     """
@@ -259,8 +112,14 @@ class CaculinhaBIAgent:
 
         # Define ALL available tools - ORDEM IMPORTA! Ferramentas mais genéricas primeiro
         all_bi_tools = [
+            # METADATA & INTROSPECTION (NEW 2026 - Self-Awareness)
+            consultar_dicionario_dados,
+            analisar_historico_vendas,  # NEW 2026: Análise de histórico e previsão
+
             # DATA QUERY TOOLS (Generic → Specific)
             consultar_dados_flexivel,  # NOVA: Ferramenta genérica e flexível
+            analisar_produto_todas_lojas,  # ✅ FIX 2026-01-15: Análise multi-loja (evita loop)
+            analisar_anomalias,  # NEW 2026: Detecção de anomalias estatísticas
             buscar_produtos_inteligente,  # NEW 2025: RAG semantic search
             consultar_dados_gerais,
             # BUSINESS LOGIC TOOLS
@@ -293,7 +152,37 @@ class CaculinhaBIAgent:
         self.gemini_tools = self._convert_tools_to_gemini_format(self.bi_tools)
         
         # System instruction - Conversacional + BI Expert (Context7 Enhanced v2025)
-        self.system_prompt = SYSTEM_PROMPT
+        # DYNAMIC PROMPTING: Injetar schema real na inicialização
+        try:
+            manager = get_data_manager()
+            # Tentar obter colunas (cache hit provável)
+            cols = manager.get_columns()
+            
+            # Filtrar colunas importantes (evitar poluir com as 100)
+            # Mas garantir que as críticas estejam lá
+            important_keywords = ['PRODUTO', 'NOME', 'UNE', 'SEGMENTO', 'CATEGORIA', 'VENDA', 'ESTOQUE', 'PRECO', 'CUSTO', 'LIQUIDO', 'MARGEM', 'FABRICANTE']
+            priority_cols = [c for c in cols if any(k in c.upper() for k in important_keywords)]
+            other_cols = [c for c in cols if c not in priority_cols]
+            
+            # Montar string de schema
+            schema_str = "**Colunas Prioritárias (Use estas preferencialmente):**\n"
+            schema_str += ", ".join([f"`{c}`" for c in priority_cols])
+            schema_str += "\n\n**Outras Colunas Disponíveis:**\n"
+            schema_str += ", ".join([f"`{c}`" for c in other_cols[:30]]) # Limit to 30 others to save tokens
+            if len(other_cols) > 30:
+                schema_str += f"... (+{len(other_cols)-30} colunas. Use `consultar_dicionario_dados` para ver todas)"
+                
+            # Substituir no template
+            # Procura a seção ## DADOS DISPONÍVEIS e substitui ou anexa
+            self.system_prompt = SYSTEM_PROMPT.replace(
+                "**Colunas Principais:**", 
+                f"**SCHEMA REAL DO BANCO DE DADOS (Carregado Dinamicamente):**\n{schema_str}\n\n**Colunas Legadas (Referência):**"
+            )
+            logger.info("Dynamic Schema Injection: Sucesso")
+            
+        except Exception as e:
+            logger.warning(f"Dynamic Schema Injection Failed: {e}. Using static prompt.")
+            self.system_prompt = SYSTEM_PROMPT
 
     def _convert_tools_to_gemini_format(self, tools: List[BaseTool]) -> Dict[str, List[Dict[str, Any]]]:
         declarations = []
@@ -408,58 +297,60 @@ class CaculinhaBIAgent:
         except Exception as e:
             logger.error(f"[RAG] Erro ao iniciar warming: {e}", exc_info=True)
 
-    async def _get_rag_examples(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    async def _get_rag_examples(self, query: str, top_k: int = 3) -> str:
         """
-        Recupera exemplos similares usando RAG Hybrid Retriever (ASYNC).
-
-        Args:
-            query: Query do usuário
-            top_k: Número de exemplos a recuperar
-
+        Recupera exemplos similares e formata como BLOCO DE CONTEXTO SEGURO.
+        Muda de 'lista de mensagens' para 'string formatada com instruções'.
+        
         Returns:
-            Lista de mensagens formatadas com exemplos, ou [] se RAG não pronto
+            String formatada com XML tags <reference_context>
         """
         if not self.enable_rag or self.retriever is None:
-            return []
+            return ""
 
         try:
-            # Use async retrieve - não espera se não estiver pronto
+            # Use async retrieve
             similar_docs = await self.retriever.retrieve_async(
                 query,
                 top_k=top_k,
                 method='hybrid',
-                wait_if_warming=False  # Não bloqueia, retorna [] se warming
+                wait_if_warming=False
             )
 
             if not similar_docs:
-                logger.info("[RAG] Nenhum exemplo similar encontrado (ou warming em progresso)")
-                return []
+                return ""
 
-            logger.info(f"[RAG] Recuperados {len(similar_docs)} exemplos similares")
+            logger.info(f"[RAG] Recuperados {len(similar_docs)} exemplos para contexto")
 
-            # Format as messages (user query + model response)
-            rag_messages = []
-            for doc in similar_docs[:top_k]:  # Limit to top_k
-                # Extract doc data
-                doc_data = doc.get('doc', doc)  # Handle both formats
-                user_query = doc_data.get('query', doc_data.get('user_query', ''))
-                assistant_response = doc_data.get('response', doc_data.get('assistant_response', ''))
+            # Formata como bloco de texto instrucional
+            context_block = "\n\n<reference_context>\n"
+            context_block += "⚠️ EXEMPLOS DE INTERAÇÕES PASSADAS (PARA APRENDER A LÓGICA):\n"
+            context_block += "INSTRUÇÃO CRÍTICA: Use estes exemplos APENAS para entender qual ferramenta chamar ou como formatar a resposta.\n"
+            context_block += "PROIBIDO: Não copie números, IDs ou nomes destes exemplos. Os dados abaixo são OBSOLETOS.\n\n"
 
-                if user_query and assistant_response:
-                    rag_messages.append({"role": "user", "content": user_query})
-                    rag_messages.append({"role": "model", "content": assistant_response})
+            for i, doc in enumerate(similar_docs[:top_k]):
+                doc_data = doc.get('doc', doc)
+                user_q = doc_data.get('query', doc_data.get('user_query', ''))
+                assist_r = doc_data.get('response', doc_data.get('assistant_response', ''))
+                
+                # Truncar resposta se for muito longa para economizar tokens e reduzir ruído
+                if len(assist_r) > 500:
+                    assist_r = assist_r[:500] + "... (truncado)"
 
-            logger.info(f"[RAG] Formatados {len(rag_messages)//2} pares de exemplo")
-            return rag_messages
+                context_block += f"--- EXEMPLO {i+1} ---\n"
+                context_block += f"Pergunta: {user_q}\n"
+                context_block += f"Ação Correta: {assist_r}\n"
+
+            context_block += "</reference_context>\n"
+            return context_block
 
         except Exception as e:
             logger.error(f"[RAG] Erro ao recuperar exemplos: {e}", exc_info=True)
-            return []
+            return ""
 
     def _clean_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
         Recursively cleans Pydantic JSON Schema for Gemini compatibility.
-        Removes 'anyOf', 'title', 'default', 'additionalProperties', and handles Optional types.
         """
         if not isinstance(schema, dict):
             return schema
@@ -470,33 +361,25 @@ class CaculinhaBIAgent:
         if "title" in new_schema:
             del new_schema["title"]
         if "default" in new_schema:
-            # Gemini sometimes complains about defaults in complex ways,
-            # but keeping them is usually fine. Removing 'title' is most important.
             del new_schema["default"]
         if "additionalProperties" in new_schema:
-            # Gemini API doesn't support 'additionalProperties' field
             del new_schema["additionalProperties"]
 
-        # Handle anyOf (generated by Pydantic for Optional[Type])
+        # Handle anyOf
         if "anyOf" in new_schema:
             options = new_schema.pop("anyOf")
-            # Find the first non-null option
             valid_option = next((opt for opt in options if opt.get("type") != "null"), None)
             if valid_option:
-                # Merge the valid option into the current schema
-                # We recurse here to clean the child option too
                 cleaned_child = self._clean_schema(valid_option)
                 new_schema.update(cleaned_child)
             else:
-                # Fallback if all are null (unlikely) or empty
                 new_schema["type"] = "string" 
 
-        # Recurse into properties
+        # Recurse
         if "properties" in new_schema:
             for prop, prop_schema in new_schema["properties"].items():
                 new_schema["properties"][prop] = self._clean_schema(prop_schema)
         
-        # Recurse into array items
         if "items" in new_schema:
             new_schema["items"] = self._clean_schema(new_schema["items"])
 
@@ -510,41 +393,49 @@ class CaculinhaBIAgent:
     ) -> Dict[str, Any]:
         """
         Async version of run method.
-        Executes the agent loop:
-        1. Send query + tools to LLM.
-        2. If LLM wants to call tool -> Execute tool -> Send result back to LLM.
-        3. Repeat until LLM returns text.
-        
-        Args:
-            user_query: The user's question
-            chat_history: Previous conversation messages
-            on_progress: Async callback function for status updates (e.g. tool execution started)
         """
         logger.info(f"CaculinhaBIAgent (Modern Async): Processing query: {user_query}")
 
-        # START RAG WARMING (fire and forget, non-blocking)
+        # START RAG WARMING
         await self._start_rag_warming()
 
         messages = []
 
-        # OPTIMIZATION 2025: Context Pruning - Manter apenas últimas 6 mensagens
+        # OPTIMIZATION: Context Pruning
         if chat_history:
             filtered_history = [msg for msg in chat_history if msg.get("role") != "system"]
-            recent_history = filtered_history[-6:] if len(filtered_history) > 6 else filtered_history
+            recent_history = filtered_history[-15:] if len(filtered_history) > 15 else filtered_history
 
             for msg in recent_history:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 messages.append({"role": role, "content": content})
 
-        # RAG: Retrieve similar examples before processing query (ASYNC)
-        rag_examples = await self._get_rag_examples(user_query, top_k=2)
-        if rag_examples:
-            logger.info(f"[RAG] Adicionando {len(rag_examples)//2} exemplos similares ao contexto")
-            messages.extend(rag_examples)
+        # ✅ FIX RAG: Context Fencing Injection com TIMEOUT
+        # Em vez de adicionar mensagens fake, adicionamos um bloco de contexto na mensagem do usuário
+        try:
+            # ✅ FIX: Timeout de 500ms para não bloquear (continua sem RAG se demorar)
+            rag_context_str = await asyncio.wait_for(
+                self._get_rag_examples(user_query, top_k=1),  # ✅ Reduzido de 2 para 1 exemplo
+                timeout=0.5  # 500ms timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning("[RAG] Timeout de 500ms excedido. Continuando sem RAG.")
+            rag_context_str = ""
+        except Exception as e:
+            logger.error(f"[RAG] Erro ao recuperar contexto: {e}")
+            rag_context_str = ""
+        
+        # Combinar query do usuário com o contexto RAG (se houver)
+        # BEST PRACTICE: Contexto ANTES da Query (Recency Bias)
+        if rag_context_str:
+            full_prompt_content = rag_context_str + "\n\n" + "PERGUNTA DO USUÁRIO AGORA:\n" + user_query
+            logger.info("[RAG] Contexto PREPENDED na mensagem do usuário (Context Fencing)")
+        else:
+            full_prompt_content = user_query
 
-        # Add current user query
-        messages.append({"role": "user", "content": user_query})
+        # Add current user query (enhanced)
+        messages.append({"role": "user", "content": full_prompt_content})
 
         # DETECÇÃO DE KEYWORDS (mesmo código do run())
         graph_keywords = [
@@ -580,17 +471,30 @@ class CaculinhaBIAgent:
             # MODO TEXTO: Análise textual estruturada
             logger.info(f"[ANALYSIS MODE] Análise crítica/relatório detectado - modo textual")
 
-        # ✅ FIX: FEW-SHOT EXAMPLES - Atualizados com gerar_grafico_universal_v2
+        # FIX 2026-01-09: Detectar se estamos usando Groq/SmartLLM
+        # Few-Shot Examples causam erro 400 no Groq (formato function_call incompatível)
+        is_groq_mode = False
+        llm_class_name = type(self.llm).__name__
+        if llm_class_name == "SmartLLM":
+            is_groq_mode = getattr(self.llm, 'primary', 'google') == 'groq'
+        elif llm_class_name == "GroqLLMAdapter":
+            is_groq_mode = True
+        
+        if is_groq_mode:
+            logger.info("[GROQ] Modo Groq detectado - Few-Shot Examples desabilitados")
+
+        # ✅ FIX: FEW-SHOT EXAMPLES - Simplificados para 1 exemplo curto (reduz tokens)
         # DIFERENCIAÇÃO CRÍTICA: Gráficos vs Análises Textuais
-        if len(messages) <= 2:
-            logger.info("[ASYNC] Injetando Few-Shot Examples com v2")
+        # FIX 2026-01-09: Desabilitar quando Groq (causa erro 400 tool_use_failed)
+        if len(messages) <= 2 and not is_groq_mode:
+            logger.info("[ASYNC] Injetando Few-Shot Example simplificado (1 exemplo)")
 
             # Escolher exemplos baseado no tipo de request
             if is_analysis_request:
-                # EXEMPLOS DE ANÁLISE TEXTUAL (3 exemplos robustos)
-                logger.info("[ASYNC] Usando few-shot examples de ANÁLISE TEXTUAL")
+                # ✅ FIX: 1 exemplo curto de análise textual (~600 tokens ao invés de ~2000)
+                logger.info("[ASYNC] Usando few-shot example de ANÁLISE TEXTUAL (simplificado)")
                 few_shot_examples = [
-                    # Exemplo 1: Análise Crítica de Segmento
+                    # Exemplo único: Análise Crítica de Segmento
                     {"role": "user", "content": "analise o segmento TECIDOS e me aponte as críticas"},
                     {
                         "role": "model",
@@ -601,8 +505,8 @@ class CaculinhaBIAgent:
                                 "name": "consultar_dados_flexivel",
                                 "arguments": json.dumps({
                                     "filtros": {"NOMESEGMENTO": "TECIDOS"},
-                                    "colunas": ["PRODUTO", "NOME", "VENDA_30DD", "ESTOQUE_UNE", "PRECO_VENDA", "NOMECATEGORIA"],
-                                    "limite": 100
+                                    "colunas": ["PRODUTO", "NOME", "VENDA_30DD", "ESTOQUE_UNE"],
+                                    "limite": 50
                                 })
                             }
                         }]
@@ -613,81 +517,20 @@ class CaculinhaBIAgent:
                         "content": json.dumps({
                             "status": "success",
                             "resultados": [
-                                {"PRODUTO": "123", "NOME": "Produto A", "VENDA_30DD": 50, "ESTOQUE_UNE": 10, "PRECO_VENDA": 15.0, "NOMECATEGORIA": "CAT1"},
-                                {"PRODUTO": "456", "NOME": "Produto B", "VENDA_30DD": 5, "ESTOQUE_UNE": 100, "PRECO_VENDA": 20.0, "NOMECATEGORIA": "CAT2"}
+                                {"PRODUTO": "123", "NOME": "Produto A", "VENDA_30DD": 50, "ESTOQUE_UNE": 10}
                             ]
                         })
                     },
                     {
                         "role": "model",
-                        "content": "**Análise do Segmento TECIDOS**\n\n**Diagnóstico:**\n- 2 produtos analisados\n- Vendas totais 30 dias: **55 unidades**\n- Estoque total: **110 unidades**\n\n**Críticas Identificadas:**\n1. **Produto B (456)**: Baixo giro - apenas 5 vendas com estoque de 100 unidades (excesso de estoque)\n2. **Produto A (123)**: Risco de ruptura - 50 vendas com apenas 10 unidades em estoque\n\n**Recomendações:**\n1. **URGENTE**: Reabastecer Produto A para evitar ruptura\n2. **Médio Prazo**: Reduzir estoque do Produto B via promoção ou transferência\n3. **Análise**: Revisar mix de produtos TECIDOS para otimizar giro"
-                    },
-
-                    # Exemplo 2: Diagnóstico de Fabricante
-                    {"role": "user", "content": "analise o grupo OXFORD e me aponte as criticas"},
-                    {
-                        "role": "model",
-                        "tool_calls": [{
-                            "id": "call_example_2",
-                            "type": "function",
-                            "function": {
-                                "name": "consultar_dados_gerais",
-                                "arguments": json.dumps({"busca_termo": "OXFORD"})
-                            }
-                        }]
-                    },
-                    {
-                        "role": "function",
-                        "function_call": {"name": "consultar_dados_gerais"},
-                        "content": json.dumps({
-                            "status": "success",
-                            "total": 250,
-                            "mensagem": "250 produtos encontrados do fabricante OXFORD"
-                        })
-                    },
-                    {
-                        "role": "model",
-                        "content": "**Análise do Grupo OXFORD**\n\n**Diagnóstico Geral:**\n- Total de produtos: **250 SKUs**\n- Fabricante com presença significativa no catálogo\n\n**Pontos Críticos Identificados:**\n1. **Volume de SKUs**: 250 produtos podem indicar complexidade excessiva no mix\n2. **Necessidade de Análise Detalhada**: Recomendo investigar giro individual de cada produto\n3. **Oportunidade**: Avaliar concentração de vendas (Princípio de Pareto)\n\n**Ações Recomendadas:**\n1. **IMEDIATO**: Analisar curva ABC dos produtos OXFORD\n2. **CURTO PRAZO**: Identificar produtos de baixo giro para descontinuação\n3. **MÉDIO PRAZO**: Negociar melhores condições com fornecedor para itens de alto giro\n4. **CONTÍNUO**: Monitorar rupturas nos produtos classe A"
-                    },
-
-                    # Exemplo 3: Relatório Executivo
-                    {"role": "user", "content": "gere um relatório executivo da loja 1685"},
-                    {
-                        "role": "model",
-                        "tool_calls": [{
-                            "id": "call_example_3",
-                            "type": "function",
-                            "function": {
-                                "name": "consultar_dados_flexivel",
-                                "arguments": json.dumps({
-                                    "filtros": {"UNE": 1685},
-                                    "colunas": ["NOMESEGMENTO", "VENDA_30DD", "ESTOQUE_UNE", "PRECO_VENDA"],
-                                    "limite": 1000
-                                })
-                            }
-                        }]
-                    },
-                    {
-                        "role": "function",
-                        "function_call": {"name": "consultar_dados_flexivel"},
-                        "content": json.dumps({
-                            "status": "success",
-                            "resultados": [
-                                {"NOMESEGMENTO": "ARMARINHO", "VENDA_30DD": 1200, "ESTOQUE_UNE": 5000, "PRECO_VENDA": 15000},
-                                {"NOMESEGMENTO": "TECIDOS", "VENDA_30DD": 800, "ESTOQUE_UNE": 3000, "PRECO_VENDA": 12000}
-                            ]
-                        })
-                    },
-                    {
-                        "role": "model",
-                        "content": "**Relatório Executivo - UNE 1685**\n\n**Performance Geral:**\n- Vendas 30 dias: **2.000 unidades**\n- Estoque atual: **8.000 unidades**\n- Faturamento estimado: **R$ 27.000**\n\n**Análise por Segmento:**\n1. **ARMARINHO** (60% vendas)\n   - Vendas: 1.200 un\n   - Estoque: 5.000 un\n   - Cobertura: ~4 meses\n   \n2. **TECIDOS** (40% vendas)\n   - Vendas: 800 un\n   - Estoque: 3.000 un\n   - Cobertura: ~3.7 meses\n\n**Pontos de Atenção:**\n- Estoque elevado em relação às vendas (4x)\n- Possível excesso de capital imobilizado\n\n**Recomendações Estratégicas:**\n1. **Reduzir Estoque**: Implementar ações promocionais\n2. **Otimizar Mix**: Focar em produtos de maior giro\n3. **Monitorar**: Acompanhar evolução semanal de vendas"
+                        "content": "**Análise do Segmento TECIDOS**\n\n**Diagnóstico:**\n- Produto A: Risco de ruptura (50 vendas, 10 estoque)\n\n**Recomendações:**\n1. Reabastecer urgente\n2. Revisar mix de produtos"
                     }
                 ]
             else:
-                # EXEMPLOS DE GRÁFICOS (padrão)
-                logger.info("[ASYNC] Usando few-shot examples de GRÁFICOS")
+                # ✅ FIX: 1 exemplo curto de gráfico (~400 tokens)
+                logger.info("[ASYNC] Usando few-shot example de GRÁFICOS (simplificado)")
                 few_shot_examples = [
-                    # Exemplo 1: Gráfico simples
+                    # Exemplo único: Gráfico simples
                     {"role": "user", "content": "gere um gráfico de vendas por categoria"},
                     {
                         "role": "model",
@@ -706,10 +549,10 @@ class CaculinhaBIAgent:
                         "content": json.dumps({
                             "status": "success",
                             "chart_data": "{\"data\": [], \"layout\": {}}",
-                            "summary": {"mensagem": "Gráfico gerado com sucesso"}
+                            "summary": {"mensagem": "Gráfico gerado"}
                         })
                     },
-                    {"role": "model", "content": "Analisei as vendas por categoria. Aqui está o gráfico solicitado."}
+                    {"role": "model", "content": "Aqui está o gráfico solicitado."}
                 ]
 
             messages = messages[:-1] + few_shot_examples + [messages[-1]]
@@ -850,7 +693,15 @@ class CaculinhaBIAgent:
                     # Process results sequentially
                     should_exit_early = False
                     
-                    for func_name, tool_result in results:
+                    # Create a map of results by function name to match with call IDs
+                    # Note: This assumes unique function names per turn, or we need to map by index if reliable
+                    # Better approach: Map by call ID if we passed it to execute_single_tool, but we didn't.
+                    # Since we iterate tasks in same order as tool_calls, we can zip them.
+                    
+                    for i, (func_name, tool_result) in enumerate(results):
+                        original_tool_call = tool_calls[i]
+                        tool_call_id = original_tool_call.get("id")
+                        
                         # OPTIMIZATION 2025: Success detection and early exit for charts
                         if isinstance(tool_result, dict):
                             is_chart = "chart_data" in tool_result or "chart_spec" in tool_result
@@ -866,10 +717,11 @@ class CaculinhaBIAgent:
                         # OTIMIZAÇÃO DE SERIALIZAÇÃO: Offload para thread (CPU bound para grandes JSONs)
                         serialized_content = await asyncio.to_thread(safe_json_serialize, tool_result)
 
-                        # Add tool result to messages
+                        # Add tool result to messages with CORRECT ID
                         messages.append({
-                            "role": "function",
-                            "function_call": {"name": func_name},
+                            "role": "function", # Adapter converts to 'tool'
+                            "name": func_name,  # Helpful for adapter fallback
+                            "tool_call_id": tool_call_id, # CRITICAL for Groq
                             "content": serialized_content
                         })
 
@@ -939,6 +791,17 @@ class CaculinhaBIAgent:
                             "chart_spec": found_chart_data
                         },
                         "chart_spec": found_chart_data,
+                        "text_override": content
+                    }
+                
+                # PRIORIDADE 2: Dados Tabulares (Se encontrou resultados mas não é gráfico)
+                elif found_resultados is not None:
+                    # CONTEXT7: Limpar JSON bruto e aplicar narrativa
+                    content = self._clean_context7_violations(content, context_type="data")
+                    
+                    return {
+                        "type": "code_result",
+                        "result": found_resultados, # Lista de dicts para o frontend renderizar Tabela
                         "text_override": content
                     }
 
@@ -1050,47 +913,58 @@ class CaculinhaBIAgent:
         # Ref: https://ai.google.dev/gemini-api/docs/system-instructions
         messages = []
 
-        # OPTIMIZATION 2025: Context Pruning - Manter apenas últimas 6 mensagens (3 turnos)
-        # Ref: ChatGPT engineering best practices - reduz latência em ~40-60%
+        # OPTIMIZATION 2025: Context Pruning - Manter apenas últimas 15 mensagens (7 turnos)
+        # Ref: Llama-3 supports 128k context, we can increase history significantly.
         # https://signoz.io/guides/open-ai-api-latency/
         if chat_history:
             # Filtrar mensagens system
             filtered_history = [msg for msg in chat_history if msg.get("role") != "system"]
 
-            # CRITICAL: Prunning - Pegar apenas últimas 6 mensagens (últimos 3 turnos de conversa)
-            # Isso reduz drasticamente o tamanho do contexto enviado ao Gemini
-            recent_history = filtered_history[-6:] if len(filtered_history) > 6 else filtered_history
+            # CRITICAL: Prunning - Pegar apenas últimas 15 mensagens (últimos 7 turnos de conversa)
+            # Isso aproveita o contexto estendido do Llama-3 no Groq
+            recent_history = filtered_history[-15:] if len(filtered_history) > 15 else filtered_history
 
             for msg in recent_history:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 messages.append({"role": role, "content": content})
 
-            if len(filtered_history) > 6:
-                logger.info(f"[CONTEXT PRUNING] Histórico reduzido: {len(filtered_history)} → {len(recent_history)} mensagens")
+            if len(filtered_history) > 15:
+                logger.info(f"[CONTEXT PRUNING] Histórico reduzido: {len(filtered_history)} → {len(recent_history)} mensagens (Llama-3 Extended)")
 
         # RAG: Retrieve similar examples before processing query
         # NOTE: run() is sync, so we skip RAG warming and use sync retrieve
+        rag_context_str = ""
         if self.enable_rag and self.retriever and self.retriever._initialized:
             try:
+                # Reutilizar lógica de formatação do _get_rag_examples mas de forma síncrona
                 similar_docs = self.retriever.retrieve(user_query, top_k=2, method='hybrid')
                 if similar_docs:
-                    rag_messages = []
-                    for doc in similar_docs[:2]:
+                    rag_context_str = "\n\n<reference_context>\n"
+                    rag_context_str += "⚠️ EXEMPLOS DE INTERAÇÕES PASSADAS (PARA APRENDER A LÓGICA):\n"
+                    rag_context_str += "INSTRUÇÃO CRÍTICA: Use estes exemplos APENAS para entender qual ferramenta chamar ou como formatar a resposta.\n"
+                    rag_context_str += "PROIBIDO: Não copie números, IDs ou nomes destes exemplos. Os dados abaixo são OBSOLETOS.\n\n"
+
+                    for i, doc in enumerate(similar_docs[:2]):
                         doc_data = doc.get('doc', doc)
                         user_q = doc_data.get('query', doc_data.get('user_query', ''))
                         assist_r = doc_data.get('response', doc_data.get('assistant_response', ''))
-                        if user_q and assist_r:
-                            rag_messages.append({"role": "user", "content": user_q})
-                            rag_messages.append({"role": "model", "content": assist_r})
-                    if rag_messages:
-                        logger.info(f"[RAG] Adicionando {len(rag_messages)//2} exemplos similares ao contexto")
-                        messages.extend(rag_messages)
+                        if len(assist_r) > 500: assist_r = assist_r[:500] + "..."
+                        
+                        rag_context_str += f"--- EXEMPLO {i+1} ---\nPergunta: {user_q}\nAção Correta: {assist_r}\n"
+                    
+                    rag_context_str += "</reference_context>\n"
+                    logger.info(f"[RAG] Contexto injetado com sucesso (Sync Mode)")
             except Exception as e:
                 logger.warning(f"[RAG] Erro ao recuperar exemplos no run() sync: {e}")
 
-        # Add current user query
-        messages.append({"role": "user", "content": user_query})
+        # Add current user query (with context PREPENDED)
+        if rag_context_str:
+            full_prompt_content = rag_context_str + "\n\n" + "PERGUNTA DO USUÁRIO AGORA:\n" + user_query
+        else:
+            full_prompt_content = user_query
+            
+        messages.append({"role": "user", "content": full_prompt_content})
 
         # FIX CRÍTICO: DETECÇÃO DE KEYWORDS DE GRÁFICO E ANÁLISE
         graph_keywords = [
@@ -1319,6 +1193,7 @@ class CaculinhaBIAgent:
                     should_exit_early = False
                     for tc in tool_calls:
                         func_name = tc["function"]["name"]
+                        tool_call_id = tc.get("id") # CRITICAL: Capture ID
                         func_args = json.loads(tc["function"]["arguments"])
                         
                         logger.info(f"Agent calling tool: {func_name} with args: {func_args}")
@@ -1367,7 +1242,8 @@ class CaculinhaBIAgent:
                         # Add tool result to messages
                         messages.append({
                             "role": "function", # Adapter will map this to user/function_response
-                            "function_call": {"name": func_name}, # Metadata for adapter
+                            "name": func_name,
+                            "tool_call_id": tool_call_id, # CRITICAL
                             "content": safe_json_serialize(tool_result)
                         })
 
@@ -1457,6 +1333,17 @@ class CaculinhaBIAgent:
                             "chart_spec": found_chart_data
                         },
                         "chart_spec": found_chart_data,
+                        "text_override": content
+                    }
+                
+                # PRIORIDADE 2: Dados Tabulares (Se encontrou resultados mas não é gráfico)
+                elif found_resultados is not None:
+                    # CONTEXT7: Limpar JSON bruto e aplicar narrativa
+                    content = self._clean_context7_violations(content, context_type="data")
+                    
+                    return {
+                        "type": "code_result",
+                        "result": found_resultados, # Lista de dicts para o frontend renderizar Tabela
                         "text_override": content
                     }
 

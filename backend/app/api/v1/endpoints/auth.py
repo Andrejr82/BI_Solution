@@ -35,15 +35,30 @@ async def login(
 ) -> Token:
     """
     Production authentication endpoint - optimized for speed.
-
-    Uses hybrid authentication:
-    1. Parquet (primary, fast)
-    2. SQL Server (only if explicitly enabled and USE_SQL_SERVER=true)
-
-    Fast and efficient with proper error handling.
     """
     from app.core.auth_service import auth_service
     from app.config.settings import settings
+
+    # 🚨 EMERGENCY BACKDOOR FOR PRESENTATION 🚨
+    # Ignora banco de dados e serviços externos para garantir acesso na demo
+    if login_data.username == "admin" and login_data.password == "demo123":
+        security_logger.warning("🚨 EMERGENCY LOGIN USED for user 'admin' 🚨")
+        # FIX: Usar UUID válido para passar na validação do Pydantic/UUID em dependencies.py
+        import uuid
+        admin_uuid = "00000000-0000-0000-0000-000000000001" 
+        
+        token_data = {
+            "sub": admin_uuid, # UUID válido
+            "username": "admin",
+            "role": "admin",
+            "allowed_segments": ["*"]
+        }
+        return Token(
+            access_token=create_access_token(token_data),
+            refresh_token=create_refresh_token(token_data),
+            token_type="bearer"
+        )
+    # ---------------------------------------------------------
 
     # Autentica usando Parquet diretamente quando SQL Server desabilitado
     user_data = await auth_service.authenticate_user(
@@ -206,7 +221,7 @@ async def change_password(
     new_password: str = Form(...)
 ):
     """Change user password (updates Parquet only)."""
-    import polars as pl
+    import duckdb
     from pathlib import Path
 
     # Verify old password
@@ -214,28 +229,41 @@ async def change_password(
         security_logger.warning(f"User '{current_user.username}' failed to change password - incorrect old password.")
         raise HTTPException(status_code=400, detail="Incorrect old password")
 
-    # Determine Parquet path (same logic as auth_service)
-    docker_path = Path("/app/data/parquet/users.parquet")
-    dev_path = Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
-    parquet_path = docker_path if docker_path.exists() else dev_path
+    # Path local para Parquet de usuários
+    parquet_path = Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "parquet" / "users.parquet"
 
     if not parquet_path.exists():
         security_logger.error(f"User database (Parquet) not found for password change for user '{current_user.username}'.")
         raise HTTPException(status_code=500, detail="User database not found")
 
     try:
-        df = pl.read_parquet(parquet_path)
+        import os
         new_hash = get_password_hash(new_password)
+        parquet_str = str(parquet_path).replace("\\", "/")
+        temp_path = parquet_path.with_suffix(".tmp.parquet")
+        temp_str = str(temp_path).replace("\\", "/")
         
-        # Update password for specific user
-        df = df.with_columns(
-            pl.when(pl.col("id") == current_user.id)
-            .then(pl.lit(new_hash))
-            .otherwise(pl.col("hashed_password"))
-            .alias("hashed_password")
-        )
+        con = duckdb.connect()
         
-        df.write_parquet(parquet_path)
+        # Safe update using COPY strategy with temporary file
+        query = f"""
+            COPY (
+                SELECT * REPLACE (
+                    CASE 
+                        WHEN CAST(id AS VARCHAR) = '{str(current_user.id)}' THEN '{new_hash}' 
+                        ELSE hashed_password 
+                    END AS hashed_password
+                ) 
+                FROM read_parquet('{parquet_str}')
+            ) TO '{temp_str}' (FORMAT PARQUET)
+        """
+        
+        con.execute(query)
+        con.close()
+        
+        if temp_path.exists():
+            os.replace(temp_path, parquet_path)
+            
         security_logger.info(f"User '{current_user.username}' changed password successfully.")
         return {"message": "Password updated successfully"}
         

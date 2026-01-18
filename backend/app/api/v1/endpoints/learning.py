@@ -1,7 +1,8 @@
-from typing import Annotated, Dict, Any, List
+from typing import Annotated, Dict, Any, List, Optional
 from pathlib import Path
 import json
 import os
+import logging
 
 import polars as pl
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,10 @@ from app.api.dependencies import get_current_active_user
 from app.core.data_scope_service import data_scope_service
 from app.infrastructure.database.models import User
 from app.config.settings import settings
+from app.core.learning.continuous_learner import get_continuous_learner
+from app.core.rag.hybrid_retriever import get_hybrid_retriever
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/learning", tags=["Learning"])
 
@@ -294,3 +299,202 @@ async def get_patterns(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching patterns: {str(e)}")
+
+
+# ============================================================================
+# CONTINUOUS LEARNING ENDPOINTS (2025)
+# ============================================================================
+
+class FeedbackSubmission(BaseModel):
+    """Modelo para submissão de feedback com continuous learning."""
+    query: str
+    response: Dict[str, Any]
+    feedback_type: str  # 'positive', 'negative', 'partial'
+    user_comment: Optional[str] = None
+    confidence_score: Optional[float] = None
+    session_id: Optional[str] = None
+
+
+@router.post("/submit-feedback")
+async def submit_feedback(
+    feedback: FeedbackSubmission,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> Dict[str, Any]:
+    """
+    Submete feedback e processa com continuous learning.
+
+    Este endpoint implementa o Online Feedback Loop moderno:
+    - Feedback positivo → Golden Dataset
+    - Feedback negativo → Review Queue
+    - Baixa confiança → Human Routing
+    - Auto-trigger de otimização
+    """
+    try:
+        learner = get_continuous_learner()
+
+        result = await learner.process_interaction(
+            query=feedback.query,
+            response=feedback.response,
+            feedback_type=feedback.feedback_type,
+            user_comment=feedback.user_comment,
+            confidence_score=feedback.confidence_score,
+            session_id=feedback.session_id,
+            user_id=str(current_user.id)
+        )
+
+        logger.info(f"Feedback processado: {feedback.feedback_type} - {result['actions_taken']}")
+
+        return {
+            "success": True,
+            "message": "Feedback processado com sucesso",
+            "actions_taken": result['actions_taken'],
+            "recommendations": result['recommendations'],
+            "stats": result['stats']
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao processar feedback: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao processar feedback: {str(e)}")
+
+
+@router.get("/golden-dataset-stats")
+async def get_golden_dataset_stats(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> Dict[str, Any]:
+    """
+    Retorna estatísticas do Golden Dataset.
+
+    Golden Dataset contém:
+    - Exemplos positivos validados
+    - Itens aguardando review humano
+    """
+    try:
+        learner = get_continuous_learner()
+        stats = learner.get_golden_dataset_stats()
+
+        return {
+            "success": True,
+            "stats": stats
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao obter stats do golden dataset: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pending-reviews")
+async def get_pending_reviews(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    limit: int = 10
+) -> Dict[str, Any]:
+    """
+    Retorna itens pendentes de review humano, ordenados por prioridade.
+
+    Requer role 'admin' para acessar.
+    """
+    # Verificar se é admin
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Apenas administradores podem acessar reviews")
+
+    try:
+        learner = get_continuous_learner()
+        reviews = learner.get_pending_reviews(limit=limit)
+
+        return {
+            "success": True,
+            "total_pending": len(reviews),
+            "reviews": reviews
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao obter pending reviews: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trigger-optimization")
+async def trigger_optimization(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> Dict[str, Any]:
+    """
+    Trigger manual de otimização de prompts.
+
+    Normalmente executa automaticamente a cada N feedbacks,
+    mas pode ser executado manualmente por administradores.
+    """
+    # Verificar se é admin
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Apenas administradores podem trigger otimização")
+
+    try:
+        learner = get_continuous_learner()
+        result = await learner._trigger_prompt_optimization()
+
+        return {
+            "success": True,
+            "message": "Otimização executada com sucesso",
+            "result": result
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao trigger otimização: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hybrid-retriever-stats")
+async def get_hybrid_retriever_stats(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> Dict[str, Any]:
+    """
+    Retorna estatísticas do Hybrid Retriever (BM25 + Dense).
+    """
+    try:
+        retriever = get_hybrid_retriever()
+        stats = retriever.get_stats()
+
+        return {
+            "success": True,
+            "stats": stats
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao obter stats do retriever: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RetrievalQuery(BaseModel):
+    """Modelo para query de retrieval."""
+    query: str
+    top_k: int = 5
+    method: str = 'hybrid'  # 'hybrid', 'bm25', ou 'dense'
+
+
+@router.post("/test-retrieval")
+async def test_retrieval(
+    retrieval_query: RetrievalQuery,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> Dict[str, Any]:
+    """
+    Testa o sistema de retrieval híbrido.
+
+    Útil para debugging e validação do sistema de RAG.
+    """
+    try:
+        retriever = get_hybrid_retriever()
+
+        results = retriever.retrieve(
+            query=retrieval_query.query,
+            top_k=retrieval_query.top_k,
+            method=retrieval_query.method
+        )
+
+        return {
+            "success": True,
+            "query": retrieval_query.query,
+            "method": retrieval_query.method,
+            "results_count": len(results),
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Erro no test retrieval: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

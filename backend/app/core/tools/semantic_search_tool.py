@@ -16,7 +16,9 @@ from typing import Dict, Any, List, Optional
 from langchain_core.tools import tool
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
-import polars as pl
+import duckdb
+import pandas as pd
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,9 @@ def _get_embeddings_model():
     if _EMBEDDINGS_MODEL is None:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment")
+            # Fallback mock/warning if key missing during init (prevents crash)
+            logger.warning("GEMINI_API_KEY not found. Embeddings will fail if called.")
+            return None
 
         _EMBEDDINGS_MODEL = GoogleGenerativeAIEmbeddings(
             model="models/embedding-001",
@@ -54,23 +58,24 @@ def _initialize_vector_store() -> FAISS:
 
     logger.info("Initializing FAISS vector store with product embeddings...")
 
-    # OTIMIZAÇÃO 2025-12-28: Cache persistente para evitar recomputação de embeddings
     try:
-        from pathlib import Path
-
         cache_dir = Path("backend/data/cache/embeddings")
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_index = cache_dir / "product_embeddings_faiss.index"
+        
+        embeddings_model = _get_embeddings_model()
+        if not embeddings_model:
+             raise ValueError("Embeddings model not initialized (missing API Key)")
 
         # Tentar carregar do cache primeiro
         if cache_index.exists():
             logger.info(f"Loading cached embeddings from {cache_index}...")
             try:
-                embeddings_model = _get_embeddings_model()
                 _VECTOR_STORE_CACHE = FAISS.load_local(
                     str(cache_dir),
                     embeddings_model,
-                    index_name="product_embeddings_faiss"
+                    index_name="product_embeddings_faiss",
+                    allow_dangerous_deserialization=True # Necessary for loading pickled files
                 )
                 logger.info(f"Successfully loaded cached vector store")
                 return _VECTOR_STORE_CACHE
@@ -78,26 +83,36 @@ def _initialize_vector_store() -> FAISS:
                 logger.warning(f"Failed to load cache: {e}. Regenerating embeddings...")
 
         # Se cache não existe ou falhou, criar novos embeddings
-        # Carregar dados de produtos
+        # Carregar dados de produtos via DuckDB (Substituindo Polars)
         parquet_path = "C:/Agente_BI/BI_Solution/backend/data/parquet/admmat.parquet"
-        df = pl.read_parquet(parquet_path)
+        
+        # Fallback path logic
+        if not os.path.exists(parquet_path):
+             parquet_path = "/app/app/data/parquet/admmat.parquet" # Docker path attempt
+        if not os.path.exists(parquet_path):
+             # Try relative
+             parquet_path = "data/parquet/admmat.parquet"
 
-        # Extrair nomes únicos de produtos
-        products_df = df.select([
-            pl.col("PRODUTO").cast(pl.Utf8).alias("codigo"),
-            pl.col("NOME").fill_null("").alias("nome")
-        ]).unique()
+        # DuckDB Query to get unique products
+        con = duckdb.connect(":memory:")
+        try:
+            query = f"""
+                SELECT DISTINCT 
+                    CAST(PRODUTO AS VARCHAR) as codigo, 
+                    COALESCE(NOME, '') as nome
+                FROM read_parquet('{parquet_path}')
+            """
+            products_df = con.execute(query).fetchdf()
+        finally:
+            con.close()
 
         texts = [
             f"{row['codigo']} | {row['nome']}"
-            for row in products_df.iter_rows(named=True)
+            for _, row in products_df.iterrows()
         ]
 
         logger.info(f"Creating embeddings for {len(texts)} unique products...")
         logger.warning(f"This will consume API quota. Future runs will use cache.")
-
-        # Criar embeddings e vector store
-        embeddings_model = _get_embeddings_model()
 
         _VECTOR_STORE_CACHE = FAISS.from_texts(
             texts=texts,
@@ -119,6 +134,8 @@ def _initialize_vector_store() -> FAISS:
 
     except Exception as e:
         logger.error(f"Failed to initialize vector store: {e}", exc_info=True)
+        # Em caso de falha crítica (ex: sem API Key), não crashar o app, retornar None ou mock?
+        # Melhor lançar erro para ser tratado no tool call
         raise
 
 
@@ -130,18 +147,6 @@ def _reciprocal_rank_fusion(
 ) -> List[str]:
     """
     Combina resultados de semantic e keyword search usando Reciprocal Rank Fusion.
-
-    RRF Formula: score(d) = Σ 1 / (k + rank(d))
-    onde k é uma constante (default=60) e rank(d) é a posição do documento.
-
-    Args:
-        semantic_results: Resultados da busca semântica
-        keyword_results: Resultados da busca por palavra-chave
-        limit: Número máximo de resultados
-        k: Constante RRF (default=60)
-
-    Returns:
-        Lista mesclada e ranqueada de resultados
     """
     scores = {}
 
@@ -168,56 +173,62 @@ def buscar_produtos_inteligente(
 ) -> Dict[str, Any]:
     """
     Busca produtos usando IA semântica (RAG) com tolerância a typos e sinônimos.
-
-    Esta ferramenta combina busca semântica (embeddings) com busca tradicional
-    por palavra-chave, resultando em melhor recall e precisão.
-
-    Exemplos de uso:
-    - "cola para sapato" → encontra "Cola de Sapateiro"
-    - "maquiagem rosto" → encontra "Base", "Pó Compacto", etc.
-    - "tinta cabelo" → encontra "Tintura Capilar", "Coloração"
-
-    Args:
-        descricao: Descrição natural do produto que procura
-        limite: Número máximo de resultados (default: 10)
-        usar_hybrid: Se True, combina semantic + keyword (default: True)
-
-    Returns:
-        Dicionário com produtos encontrados e scores de relevância
     """
     logger.info(f"Busca inteligente: '{descricao}' (limite={limite}, hybrid={usar_hybrid})")
 
     try:
-        # Carregar dados completos
         parquet_path = "C:/Agente_BI/BI_Solution/backend/data/parquet/admmat.parquet"
-        df = pl.read_parquet(parquet_path)
+        # Path resolution logic (simplified)
+        if not os.path.exists(parquet_path):
+             parquet_path = "/app/app/data/parquet/admmat.parquet"
+        if not os.path.exists(parquet_path):
+             parquet_path = "data/parquet/admmat.parquet"
 
-        # 1. SEMANTIC SEARCH (sempre executado)
-        vector_store = _initialize_vector_store()
-        semantic_docs = vector_store.similarity_search(descricao, k=limite * 2)
+        # 1. SEMANTIC SEARCH
+        try:
+            vector_store = _initialize_vector_store()
+            semantic_docs = vector_store.similarity_search(descricao, k=limite * 2)
+            semantic_product_codes = [
+                doc.page_content.split(" | ")[0]
+                for doc in semantic_docs
+            ]
+        except Exception as e:
+            logger.warning(f"Semantic search failed (using keyword only): {e}")
+            semantic_product_codes = []
+            usar_hybrid = False # Fallback to keyword only
 
-        # Extrair códigos de produto dos resultados semânticos
-        semantic_product_codes = [
-            doc.page_content.split(" | ")[0]
-            for doc in semantic_docs
-        ]
+        con = duckdb.connect(":memory:")
+        
+        # Helper to fetch details for codes
+        def fetch_details(codes):
+            if not codes: return []
+            codes_str = ", ".join([f"'{c}'" for c in codes])
+            # Handle potential quoting issues in codes
+            # Assuming codes are safe strings or numerics
+            # Better: use parameter binding if possible, but DuckDB python API list support is tricky in WHERE IN
+            # Constructing a temporary table is safer for many items.
+            
+            # Simplified for POC:
+            query = f"""
+                SELECT DISTINCT
+                    PRODUTO, NOME, NOMESEGMENTO, NOMECATEGORIA, 
+                    LIQUIDO_38 as PRECO_VENDA, ESTOQUE_UNE, VENDA_30DD, UNE,
+                    CASE WHEN UNE IS NOT NULL THEN CAST(UNE AS VARCHAR) ELSE 'N/A' END as UNE_NOME
+                FROM read_parquet('{parquet_path}')
+                WHERE CAST(PRODUTO AS VARCHAR) IN ({codes_str})
+                LIMIT {limite}
+            """
+            return con.execute(query).fetchdf().to_dict(orient='records')
 
         if not usar_hybrid:
-            # Apenas semantic search
-            results_df = df.filter(
-                pl.col("PRODUTO").cast(pl.Utf8).is_in(semantic_product_codes)
-            ).unique(subset=["PRODUTO"])
-
-            produtos = results_df.select([
-                "PRODUTO",
-                "NOME",
-                "NOMESEGMENTO",
-                "NOMECATEGORIA",
-                "PRECO_VENDA",
-                "ESTOQUE_UNE",
-                "VENDA_30DD"
-            ]).head(limite).to_dicts()
-
+            # Semantic Only (or Semantic Fallback result)
+            if not semantic_product_codes:
+                 # Try purely keyword if semantic failed completely and not hybrid requested (edge case)
+                 pass 
+            
+            produtos = fetch_details(semantic_product_codes)
+            con.close()
+            
             return {
                 "status": "success",
                 "search_type": "semantic_only",
@@ -226,44 +237,45 @@ def buscar_produtos_inteligente(
                 "message": f"Encontrados {len(produtos)} produtos via busca semântica"
             }
 
-        # 2. KEYWORD SEARCH (fallback tradicional)
-        keyword_results_df = df.filter(
-            pl.col("NOME").str.to_lowercase().str.contains(descricao.lower())
-        ).unique(subset=["PRODUTO"]).head(limite * 2)
+        # 2. KEYWORD SEARCH
+        # DuckDB LIKE is case insensitive by default? No, use ILIKE.
+        keyword_query = f"""
+            SELECT DISTINCT CAST(PRODUTO AS VARCHAR) as code
+            FROM read_parquet('{parquet_path}')
+            WHERE LOWER(NOME) LIKE '%{descricao.lower()}%'
+            LIMIT {limite * 2}
+        """
+        keyword_results = con.execute(keyword_query).fetchall()
+        keyword_product_codes = [r[0] for r in keyword_results]
 
-        keyword_product_codes = keyword_results_df.select(
-            pl.col("PRODUTO").cast(pl.Utf8)
-        ).to_series().to_list()
-
-        # 3. RECIPROCAL RANK FUSION (merge)
+        # 3. RRF MERGE
         merged_codes = _reciprocal_rank_fusion(
             semantic_results=semantic_product_codes,
             keyword_results=keyword_product_codes,
             limit=limite
         )
 
-        # 4. Buscar detalhes completos dos produtos mesclados
-        final_df = df.filter(
-            pl.col("PRODUTO").cast(pl.Utf8).is_in(merged_codes)
-        ).unique(subset=["PRODUTO"])
-
-        # Preservar ordem do RRF
-        final_df = final_df.sort(
-            by=pl.col("PRODUTO").cast(pl.Utf8),
-            maintain_order=True
-        )
-
-        produtos = final_df.select([
-            "PRODUTO",
-            "NOME",
-            "NOMESEGMENTO",
-            "NOMECATEGORIA",
-            "PRECO_VENDA",
-            "ESTOQUE_UNE",
-            "VENDA_30DD",
-            "UNE",
-            "UNE_NOME"
-        ]).head(limite).to_dicts()
+        # 4. FETCH DETAILS
+        # We need to fetch details for merged codes AND preserve order?
+        # SQL IN doesn't preserve order. We sort in python.
+        
+        produtos_df = con.execute(f"""
+            SELECT DISTINCT
+                CAST(PRODUTO AS VARCHAR) as PRODUTO, 
+                NOME, NOMESEGMENTO, NOMECATEGORIA, 
+                LIQUIDO_38 as PRECO_VENDA, ESTOQUE_UNE, VENDA_30DD, UNE
+            FROM read_parquet('{parquet_path}')
+            WHERE CAST(PRODUTO AS VARCHAR) IN ({", ".join([f"'{c}'" for c in merged_codes])})
+        """).fetchdf()
+        
+        con.close()
+        
+        # Sort based on merged_codes order
+        produtos_df['PRODUTO'] = produtos_df['PRODUTO'].astype(str)
+        produtos_df = produtos_df.set_index('PRODUTO')
+        # Reindex handles sorting and missing keys
+        produtos_df = produtos_df.reindex(merged_codes).dropna()
+        produtos = produtos_df.reset_index().to_dict(orient='records')
 
         return {
             "status": "success",
@@ -291,10 +303,6 @@ def buscar_produtos_inteligente(
 def reinicializar_vector_store() -> Dict[str, Any]:
     """
     Reinicializa o vector store (útil se dados foram atualizados).
-    Use apenas quando necessário, pois recria todos os embeddings.
-
-    Returns:
-        Status da reinicialização
     """
     global _VECTOR_STORE_CACHE
 

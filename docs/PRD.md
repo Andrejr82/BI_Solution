@@ -1,9 +1,9 @@
 # Product Requirements Document (PRD)
 # Agent Solution BI - Lojas Caçula
 
-**Versão:** 2.0
-**Data:** 21 de Dezembro de 2025
-**Status:** Em Produção
+**Versão:** 2.1
+**Data:** 28 de Dezembro de 2025
+**Status:** Em Produção (Fase de Modernização e Manutenção)
 **Proprietário do Produto:** Gerência de BI & Engenharia de IA
 
 ---
@@ -158,7 +158,8 @@ A solução elimina a necessidade de expertise técnica em SQL ou BI tradicional
 | RF-10 | Suporte a tabelas markdown em respostas | P1 | ✅ Implementado |
 | RF-11 | Cache semântico de respostas (6h TTL) | P1 | ✅ Implementado |
 | RF-12 | Sistema de feedback (positivo/negativo) | P1 | ✅ Implementado |
-| RF-13 | Exportação de gráficos (PNG/SVG) | P2 | 🟡 Planejado |
+| RF-13 | Exportação de gráficos (PNG/SVG) | P2 | ✅ Implementado |
+| RF-14 | Edição de mensagens enviadas | P2 | ✅ Implementado |
 
 **Capacidades do Chat:**
 - **Consultas Analíticas:** "Top 10 produtos por vendas no último mês na UNE 2".
@@ -167,29 +168,17 @@ A solução elimina a necessidade de expertise técnica em SQL ou BI tradicional
 - **Transferências:** "Sugira transferências para a UNE 5 baseadas em vendas".
 - **Pareto:** "Mostre a curva ABC de produtos por receita".
 
-**Tipos de Resposta:**
-1. **Texto Narrativo:** Explicações e insights da IA.
-2. **Gráficos Interativos:** Bar, Line, Pie, Scatter, Pareto (Plotly).
-3. **Tabelas Markdown:** Dados tabulares formatados.
-4. **Código Python:** Exibição opcional do código gerado (modo debug).
-
 ---
 
 ### 4.3 Dashboard Estratégico
 
 | ID | Requisito | Prioridade | Status |
 |----|-----------|-----------|--------|
-| RF-14 | KPIs em tempo real (Valor Estoque, Ruptura, Mix) | P0 | ✅ Implementado |
-| RF-15 | Filtros por segmento/categoria/UNE | P1 | ✅ Implementado |
-| RF-16 | Gráfico de tendência de vendas (30 dias) | P1 | ✅ Implementado |
-| RF-17 | Análise de Pareto (80/20) por receita | P0 | ✅ Implementado |
-| RF-18 | Mapa de calor de performance por UNE | P2 | 🟡 Planejado |
-
-**KPIs Exibidos:**
-- **Valor Total de Estoque:** Soma de `ESTOQUE_UNE * PRECO_CUSTO`.
-- **Taxa de Ruptura:** Percentual de produtos com `ESTOQUE_UNE = 0` e `VENDA_30DD > 0`.
-- **Mix de Produtos:** Distribuição por segmento/categoria.
-- **Cobertura Média:** Média de `ESTOQUE_UNE / VENDA_30DD * 30`.
+| RF-15 | KPIs em tempo real (Valor Estoque, Ruptura, Mix) | P0 | ✅ Implementado |
+| RF-16 | Filtros por segmento/categoria/UNE | P1 | ✅ Implementado |
+| RF-17 | Gráfico de tendência de vendas (30 dias) | P1 | ✅ Implementado |
+| RF-18 | Análise de Pareto (80/20) por receita | P0 | ✅ Implementado |
+| RF-19 | Dashboards interativos com drill-down | P1 | ✅ Implementado |
 
 ---
 
@@ -197,17 +186,10 @@ A solução elimina a necessidade de expertise técnica em SQL ou BI tradicional
 
 | ID | Requisito | Prioridade | Status |
 |----|-----------|-----------|--------|
-| RF-19 | Lista de rupturas críticas com priorização | P0 | ✅ Implementado |
-| RF-20 | Drill-down por UNE/Segmento/Categoria | P1 | ✅ Implementado |
-| RF-21 | Identificação de produtos com estoque em CD | P0 | ✅ Implementado |
-| RF-22 | Cálculo de perda de receita estimada | P1 | ✅ Implementado |
-| RF-23 | Alertas automáticos (email/notificação) | P2 | 🟡 Planejado |
-
-**Critérios de Ruptura Crítica:**
-- `ESTOQUE_UNE = 0` (sem estoque na loja).
-- `VENDA_30DD > 0` (teve venda nos últimos 30 dias).
-- `ESTOQUE_CD > 0` (há disponibilidade no CD para transferência).
-- Priorização por `VENDA_30DD DESC` (produtos de maior giro primeiro).
+| RF-20 | Lista de rupturas críticas com priorização | P0 | ✅ Implementado |
+| RF-21 | Drill-down por UNE/Segmento/Categoria | P1 | ✅ Implementado |
+| RF-22 | Identificação de produtos com estoque em CD | P0 | ✅ Implementado |
+| RF-23 | Cálculo de perda de receita estimada | P1 | ✅ Implementado |
 
 ---
 
@@ -216,19 +198,9 @@ A solução elimina a necessidade de expertise técnica em SQL ou BI tradicional
 | ID | Requisito | Prioridade | Status |
 |----|-----------|-----------|--------|
 | RF-24 | Algoritmo de sugestão CD → Loja | P0 | ✅ Implementado |
-| RF-25 | Validação de regras de negócio (MC, ICMS) | P1 | ✅ Implementado |
-| RF-26 | Histórico de transferências solicitadas | P2 | ✅ Implementado |
-| RF-27 | Aprovação workflow (gestor → logística) | P2 | 🟡 Planejado |
-| RF-28 | Integração com ERP para execução | P3 | 📋 Backlog |
-
-**Lógica de Sugestão:**
-```python
-# Pseudocódigo
-if (ESTOQUE_UNE == 0 and VENDA_30DD > 0 and ESTOQUE_CD > 0):
-    quantidade_sugerida = min(VENDA_30DD / 30 * 7, ESTOQUE_CD)  # 7 dias de cobertura
-    if valida_mc(produto) and valida_icms(une_origem, une_destino):
-        criar_sugestao(produto, quantidade_sugerida)
-```
+| RF-25 | Seleção inteligente de UNE (1→1, 1→N, N→N) | P1 | ✅ Implementado |
+| RF-26 | Validação de regras de negócio (MC, ICMS) | P1 | ✅ Implementado |
+| RF-27 | Histórico de transferências solicitadas | P2 | ✅ Implementado |
 
 ---
 
@@ -236,14 +208,9 @@ if (ESTOQUE_UNE == 0 and VENDA_30DD > 0 and ESTOQUE_CD > 0):
 
 | ID | Requisito | Prioridade | Status |
 |----|-----------|-----------|--------|
-| RF-29 | Análise automática de crescimento MoM | P1 | ✅ Implementado |
-| RF-30 | Identificação de produtos com excesso de estoque | P1 | ✅ Implementado |
-| RF-31 | Sugestões de ação baseadas em padrões | P2 | 🟡 Planejado |
-| RF-32 | Alertas de anomalias (quedas abruptas) | P2 | 🟡 Planejado |
-
-**Exemplos de Insights:**
-- "A categoria Papelaria teve queda de 12% nas vendas nas UNEs 3, 5 e 7. Considere revisar mix ou campanhas promocionais."
-- "O produto X tem 90 dias de cobertura de estoque. Avalie promoção ou devolução ao fornecedor."
+| RF-28 | Análise automática de crescimento MoM | P1 | ✅ Implementado |
+| RF-29 | Identificação de produtos com excesso de estoque | P1 | ✅ Implementado |
+| RF-30 | Painel de Insights gerado por IA | P1 | ✅ Implementado |
 
 ---
 
@@ -251,528 +218,53 @@ if (ESTOQUE_UNE == 0 and VENDA_30DD > 0 and ESTOQUE_CD > 0):
 
 | ID | Requisito | Prioridade | Status |
 |----|-----------|-----------|--------|
-| RF-33 | Busca semântica de queries similares (FAISS) | P1 | ✅ Implementado |
-| RF-34 | Coleta de exemplos de sucesso para RAG | P1 | ✅ Implementado |
-| RF-35 | Auto-correção de código (Self-Healing) | P1 | ✅ Implementado |
-| RF-36 | Fine-tuning do modelo com dados da Caçula | P3 | 📋 Backlog |
-
-**Funcionamento:**
-1. Usuário faz pergunta complexa.
-2. Sistema busca queries similares bem-sucedidas no índice FAISS.
-3. Exemplos são injetados no prompt do Gemini.
-4. Código gerado é executado; se houver erro, sistema tenta corrigir automaticamente.
+| RF-31 | Busca semântica de queries similares (FAISS) | P1 | ✅ Implementado |
+| RF-32 | Coleta de exemplos de sucesso para RAG | P1 | ✅ Implementado |
+| RF-33 | Auto-correção de código (Self-Healing) | P1 | ✅ Implementado |
+| RF-34 | Indexação de base de código para Code Chat | P2 | ✅ Implementado |
 
 ---
 
 ## 5. Requisitos Não-Funcionais
 
-### 5.1 Performance
+### 5.1 Performance e Limpeza
 
-| ID | Requisito | Métrica | Prioridade |
-|----|-----------|---------|-----------|
-| RNF-01 | Consultas analíticas < 3 segundos (p95) | 95% < 3s | P0 |
-| RNF-02 | Geração de gráficos < 5 segundos | 95% < 5s | P0 |
-| RNF-03 | Carregamento de dashboard < 2 segundos | p95 < 2s | P1 |
-| RNF-04 | Suporte a 1M+ linhas em queries Polars | ✅ Testado | P0 |
-| RNF-05 | Cache hit rate > 40% | Redução de custos LLM | P1 |
-
-**Otimizações Implementadas:**
-- **Motor Polars:** Processamento paralelo de DataFrames.
-- **DuckDB:** Queries SQL sobre Parquet com push-down de predicados.
-- **Cache Semântico:** Reduz chamadas redundantes ao Gemini.
-- **Lazy Loading:** Importações pesadas carregadas sob demanda.
-
----
-
-### 5.2 Escalabilidade
-
-| ID | Requisito | Prioridade | Status |
-|----|-----------|-----------|--------|
-| RNF-06 | Suporte a 100 usuários simultâneos | P1 | ✅ Validado |
-| RNF-07 | Processamento de datasets > 5GB | P2 | ✅ Validado |
-| RNF-08 | Arquitetura stateless para clustering | P2 | ✅ Implementado |
-| RNF-09 | Auto-scaling em cloud (CPU/RAM) | P3 | 📋 Planejado |
-
----
-
-### 5.3 Segurança
-
-| ID | Requisito | Prioridade | Status |
-|----|-----------|-----------|--------|
-| RNF-10 | Autenticação JWT com expiração | P0 | ✅ Implementado |
-| RNF-11 | Mascaramento de PII (CPF, email) | P0 | ✅ Implementado |
-| RNF-12 | Rate limiting (10 req/min por usuário) | P1 | ✅ Implementado |
-| RNF-13 | Sanitização de inputs contra injection | P0 | ✅ Implementado |
-| RNF-14 | Execução de código em sandbox isolado | P1 | 🟡 Parcial |
-| RNF-15 | Auditoria de ações sensíveis (logs) | P1 | ✅ Implementado |
-| RNF-16 | HTTPS obrigatório em produção | P0 | ✅ Implementado |
-
-**Controles Implementados:**
-- **Segment-Based Access Control:** Usuários veem apenas dados permitidos.
-- **Code Execution Sandbox:** Código Python executado com escopo limitado (sem imports maliciosos).
-- **Structured Logging:** Auditoria completa com níveis `INFO`, `WARNING`, `ERROR`.
-
----
-
-### 5.4 Confiabilidade
-
-| ID | Requisito | Prioridade | Status |
-|----|-----------|-----------|--------|
-| RNF-17 | Uptime 99.5% (< 3.6h downtime/mês) | P0 | 🟡 Em Monitoramento |
-| RNF-18 | Fallback automático Parquet → SQL Server | P1 | ✅ Implementado |
-| RNF-19 | Fallback LLM: Gemini → DeepSeek | P1 | ✅ Implementado |
-| RNF-20 | Health checks (`/health` endpoint) | P0 | ✅ Implementado |
-| RNF-21 | Graceful degradation em caso de falha | P1 | ✅ Implementado |
-
----
-
-### 5.5 Usabilidade
-
-| ID | Requisito | Prioridade | Status |
-|----|-----------|-----------|--------|
-| RNF-22 | Interface responsiva (desktop/tablet) | P1 | ✅ Implementado |
-| RNF-23 | Tempo de aprendizado < 30 min | P1 | ✅ Validado |
-| RNF-24 | Acessibilidade WCAG 2.1 AA | P2 | 🟡 Parcial |
-| RNF-25 | Suporte a português brasileiro | P0 | ✅ Implementado |
-
----
-
-### 5.6 Manutenibilidade
-
-| ID | Requisito | Prioridade | Status |
-|----|-----------|-----------|--------|
-| RNF-26 | Cobertura de testes > 70% | P1 | 🟡 Em Progresso |
-| RNF-27 | Documentação de API (OpenAPI/Swagger) | P1 | ✅ Implementado |
-| RNF-28 | Logs estruturados com correlação | P0 | ✅ Implementado |
-| RNF-29 | Code style: PEP8 (backend), ESLint (frontend) | P1 | ✅ Implementado |
-
----
-
-## 6. Casos de Uso Principais
-
-### UC-01: Análise de Performance de Categoria
-**Ator:** Gestor de Categoria
-**Pré-condição:** Usuário autenticado com acesso ao segmento "Tecidos".
-**Fluxo Principal:**
-1. Usuário acessa página de Chat.
-2. Digita: "Mostre os top 10 produtos de Tecidos por vendas no último mês".
-3. Sistema processa query via Gemini.
-4. Sistema executa código Polars para agregar dados.
-5. Sistema retorna gráfico de barras + tabela com dados.
-6. Usuário visualiza e exporta gráfico.
-
-**Pós-condição:** Query registrada para aprendizado do sistema.
-
----
-
-### UC-02: Resolução de Ruptura Crítica
-**Ator:** Gerente de Loja (UNE 1)
-**Pré-condição:** Produto X está em ruptura na UNE 1 mas disponível no CD.
-**Fluxo Principal:**
-1. Usuário acessa Dashboard de Rupturas.
-2. Sistema exibe lista priorizada de produtos em ruptura.
-3. Usuário identifica Produto X no topo da lista.
-4. Usuário clica em "Ver Sugestões de Transferência".
-5. Sistema calcula quantidade ideal baseada em histórico de vendas.
-6. Usuário valida sugestão e clica em "Aprovar Transferência".
-7. Sistema registra solicitação para processamento logístico.
-
-**Pós-condição:** Transferência agendada; estoque da UNE será reposto.
-
----
-
-### UC-03: Análise Estratégica de Pareto
-**Ator:** Diretor Executivo
-**Pré-condição:** Usuário autenticado com acesso global.
-**Fluxo Principal:**
-1. Usuário acessa Dashboard de Analytics.
-2. Seleciona filtro "Curva ABC por Receita".
-3. Sistema gera gráfico de Pareto (barras + linha acumulada).
-4. Sistema destaca:
-   - Classe A: 20% dos produtos (80% da receita) - Verde.
-   - Classe B: 30% dos produtos (15% da receita) - Amarelo.
-   - Classe C: 50% dos produtos (5% da receita) - Vermelho.
-5. Usuário identifica foco estratégico em Classe A.
-6. Usuário exporta dados para apresentação.
-
-**Pós-condição:** Decisão de priorizar compras/campanhas em produtos Classe A.
-
----
-
-### UC-04: Feedback de Resposta da IA
-**Ator:** Qualquer usuário
-**Pré-condição:** IA forneceu uma resposta a uma query.
-**Fluxo Principal:**
-1. Usuário visualiza resposta da IA.
-2. Usuário clica em 👍 (feedback positivo) ou 👎 (feedback negativo).
-3. Se negativo, sistema exibe campo para comentário opcional.
-4. Sistema registra feedback com metadados (query, resposta, timestamp).
-5. Sistema atualiza índice RAG com exemplo (se positivo).
-
-**Pós-condição:** IA aprende com feedback para melhorar respostas futuras.
+| ID | Requisito | Métrica | Status |
+|----|-----------|---------|--------|
+| RNF-01 | Consultas analíticas < 3 segundos (p95) | 95% < 3s | ✅ Implementado |
+| RNF-02 | Geração de gráficos < 5 segundos | 95% < 5s | ✅ Implementado |
+| RNF-03 | Arquitetura limpa (sem arquivos obsoletos) | < 100 arquivos raiz | ✅ Atualizado (28/12) |
+| RNF-04 | Cache semântico otimizado | hit rate > 40% | ✅ Implementado |
 
 ---
 
 ## 7. Stack Tecnológica
 
 ### 7.1 Frontend
-
-| Componente | Tecnologia | Versão | Justificativa |
-|-----------|-----------|--------|--------------|
-| Framework | SolidJS | 1.8+ | Performance superior (sem Virtual DOM), reatividade fina |
-| Estilização | TailwindCSS | 3.x | Produtividade, consistência visual |
-| Gráficos | Plotly.js | 2.x | Interatividade, suporte a múltiplos tipos de gráficos |
-| HTTP Client | Axios | 1.x | API familiar, interceptors para auth |
-| Streaming | EventSource | Nativo | SSE para chat em tempo real |
-| Build | Vite | 5.x | Build rápido, HMR eficiente |
-| Testes | Vitest + Testing Library | - | Compatibilidade com SolidJS |
-
----
+- **Framework:** SolidJS 1.8+ (Performance nativa)
+- **Visualização:** Plotly.js 2.x
+- **Estilização:** TailwindCSS 3.x
+- **Build Tool:** Vite 5.x
 
 ### 7.2 Backend
-
-| Componente | Tecnologia | Versão | Justificativa |
-|-----------|-----------|--------|--------------|
-| Framework | FastAPI | 0.104+ | Performance, validação automática, OpenAPI |
-| Runtime | Python | 3.11+ | Type hints, asyncio nativo |
-| Processamento | Polars | 0.19+ | Velocidade 10-100x superior ao Pandas |
-| Query Engine | DuckDB | 0.9+ | SQL sobre Parquet, push-down otimizações |
-| LLM | Google Gemini | 3.0 Flash | Native function calling, custo-benefício |
-| Orquestração | LangGraph | 0.2+ | Workflows de agentes multi-etapa |
-| Embeddings | Sentence-Transformers | 2.x | Busca semântica de queries |
-| Vector Store | FAISS | 1.x | Similaridade eficiente |
-| Auth | JWT (python-jose) | 3.x | Stateless, escalável |
-| Logging | Structlog | 23.x | Logs estruturados, correlação de requests |
-| Validação | Pydantic | 2.x | Schemas type-safe |
-
----
-
-### 7.3 Infraestrutura
-
-| Componente | Tecnologia | Ambiente Prod |
-|-----------|-----------|--------------|
-| Web Server | Uvicorn (ASGI) | + Nginx reverse proxy |
-| Database | SQL Server 2019+ | Dados transacionais/auth |
-| Analytics Storage | Apache Parquet | Arquivos colunares |
-| Cache | In-memory TTL Cache | Redis (futuro) |
-| Deployment | Docker + Docker Compose | Kubernetes (futuro) |
-| CI/CD | GitHub Actions | - |
-| Monitoring | Estruturado (a definir) | Prometheus + Grafana (futuro) |
+- **Framework:** FastAPI 0.104+
+- **Motor de Dados:** Polars + DuckDB (Processamento Colunar)
+- **IA:** Google Gemini 3.0 Flash
+- **RAG:** FAISS + Sentence-Transformers
 
 ---
 
 ## 8. Roadmap de Produto
 
-### Fase 1: MVP ✅ CONCLUÍDO (Q4 2024)
-
-**Objetivos:** Validar conceito de BI conversacional com funcionalidades core.
-
-**Entregas:**
-- ✅ Autenticação JWT com controle de segmento.
-- ✅ Chat BI básico com Gemini.
-- ✅ Geração de gráficos (bar, line, pie).
-- ✅ Dashboard de KPIs.
-- ✅ Gestão de rupturas críticas.
-- ✅ Sugestões de transferência.
-- ✅ Integração Parquet (admmat.parquet).
-
-**Métricas de Sucesso:**
-- 10 usuários pilotos (gestores de categoria).
-- 80% de satisfação em testes de usabilidade.
-- Consultas em < 5 segundos (p95).
-
----
-
-### Fase 2: Otimização & Scale ✅ CONCLUÍDO (Q1 2025)
-
-**Objetivos:** Melhorar performance, confiabilidade e adicionar features avançadas.
-
-**Entregas:**
-- ✅ Migração para DuckDB (queries 5x mais rápidas).
-- ✅ Cache semântico (redução de 40% em custos LLM).
-- ✅ Análise de Pareto (Curva ABC).
-- ✅ AI Insights proativos (crescimento MoM, excesso de estoque).
-- ✅ Sistema de feedback e aprendizado (RAG).
-- ✅ Fallback automático (Gemini → DeepSeek, Parquet → SQL).
-- ✅ Structured logging e auditoria.
-
-**Métricas de Sucesso:**
-- 50 usuários ativos.
-- Consultas em < 3 segundos (p95).
-- Cache hit rate > 40%.
-- Uptime 99.5%.
-
----
-
-### Fase 3: Expansão de Capacidades 🟡 EM ANDAMENTO (Q2-Q3 2025)
-
-**Objetivos:** Adicionar features de IA avançada e integração operacional.
-
-**Planejadas:**
-- 🟡 Alertas automáticos (email/push) para rupturas críticas.
-- 🟡 Previsão de demanda com ML (ARIMA/Prophet).
-- 🟡 Análise de sazonalidade (identificação de picos/quedas cíclicas).
-- 🟡 Integração com ERP para execução automática de transferências.
-- 🟡 Workflow de aprovação multi-nível (gestor → logística → execução).
-- 🟡 Exportação avançada (Excel, PDF com logo Caçula).
-- 🟡 Dashboard mobile-first (app nativo ou PWA).
-
-**Métricas de Sucesso:**
-- 100+ usuários ativos.
-- Redução de 15% em rupturas (vs baseline Q1).
-- NPS > 8.0.
-
----
-
-### Fase 4: IA Autônoma 📋 BACKLOG (Q4 2025)
-
-**Objetivos:** Evolução para agente autônomo que toma decisões operacionais.
-
-**Conceito:**
-- **Agente Autônomo de Transferências:** IA executa transferências automaticamente baseada em regras pré-aprovadas (ex: "sempre transferir produtos Classe A em ruptura com estoque CD > 10 unidades").
-- **Assistente Executivo:** IA prepara relatórios diários personalizados para cada gestor.
-- **Anomaly Detection:** Alertas inteligentes de comportamentos anômalos (ex: queda abrupta de 30% em vendas).
-
-**Requisitos:**
-- Auditoria completa de ações autônomas.
-- Sistema de rollback (desfazer transferências incorretas).
-- Aprovação da diretoria para autonomia crítica.
-
----
-
-## 9. Métricas de Sucesso
-
-### 9.1 Métricas de Produto (Observáveis no Sistema)
-
-| Métrica | Definição | Meta | Frequência |
-|---------|-----------|------|-----------|
-| Daily Active Users (DAU) | Usuários únicos por dia | 80% dos gestores | Diário |
-| Query Success Rate | % de queries completadas sem erro | > 95% | Semanal |
-| Average Response Time | Tempo médio de resposta (p95) | < 3s | Diário |
-| Cache Hit Rate | % de queries atendidas via cache | > 40% | Diário |
-| Feedback Score | Média de feedbacks positivos/total | > 85% | Semanal |
-| Feature Adoption | % uso de features (Rupturas, Pareto, etc) | > 60% | Mensal |
-
----
-
-### 9.2 Métricas de Negócio (Impacto Operacional)
-
-| Métrica | Definição | Meta | Frequência |
-|---------|-----------|------|-----------|
-| Taxa de Ruptura Crítica | % produtos Classe A em ruptura | < 5% | Semanal |
-| Cobertura de Estoque Otimizada | % produtos com 7-30 dias cobertura | > 70% | Mensal |
-| Redução de Tempo de Análise | Tempo médio para obter insights | -80% vs manual | Trimestral |
-| Capital Imobilizado | Valor estoque Classe C com > 60d cobertura | -10% vs baseline | Trimestral |
-| NPS (Net Promoter Score) | Recomendação do sistema (0-10) | > 8.0 | Trimestral |
-
----
-
-## 10. Riscos e Mitigações
-
-### Riscos Técnicos
-
-| ID | Risco | Probabilidade | Impacto | Mitigação | Status |
-|----|-------|--------------|---------|-----------|--------|
-| RT-01 | Falha de API do Gemini | Média | Alto | Fallback automático para DeepSeek | ✅ Implementado |
-| RT-02 | Queries lentas em datasets grandes | Baixa | Médio | DuckDB + Parquet otimizado | ✅ Implementado |
-| RT-03 | Execução de código malicioso | Baixa | Alto | Sandbox de execução + sanitização | 🟡 Parcial |
-| RT-04 | Downtime do SQL Server | Média | Médio | Fallback para Parquet | ✅ Implementado |
-| RT-05 | Escalabilidade (> 200 usuários simultâneos) | Média | Médio | Arquitetura stateless + auto-scaling | 📋 Planejado |
-
----
-
-### Riscos de Negócio
-
-| ID | Risco | Probabilidade | Impacto | Mitigação | Status |
-|----|-------|--------------|---------|-----------|--------|
-| RN-01 | Baixa adoção por resistência a IA | Média | Alto | Treinamento + comunicação de valor | 🟡 Em Andamento |
-| RN-02 | Imprecisão da IA gera decisões incorretas | Média | Alto | Feedback loop + validação humana crítica | ✅ Implementado |
-| RN-03 | Custos elevados de API LLM | Baixa | Médio | Cache agressivo + modelos menores | ✅ Implementado |
-| RN-04 | Dependência de qualidade de dados | Alta | Alto | Validação de schema + alertas de qualidade | 🟡 Parcial |
-| RN-05 | Complexidade operacional (manutenção) | Média | Médio | Documentação extensiva + equipe treinada | ✅ Implementado |
-
----
-
-### Riscos de Segurança/Compliance
-
-| ID | Risco | Probabilidade | Impacto | Mitigação | Status |
-|----|-------|--------------|---------|-----------|--------|
-| RS-01 | Vazamento de dados via queries indevidas | Baixa | Alto | Segment-based access + mascaramento PII | ✅ Implementado |
-| RS-02 | Ataque de injection (SQL/Code) | Baixa | Alto | Sanitização + queries parametrizadas | ✅ Implementado |
-| RS-03 | Acesso não autorizado | Média | Alto | JWT + rate limiting + auditoria | ✅ Implementado |
-| RS-04 | Exposição de credenciais em logs | Baixa | Alto | Redação automática de secrets em logs | ✅ Implementado |
-
----
-
-## 11. Dependências e Integrações
-
-### Sistemas Internos
-- **SQL Server (ADMMAT):** Fonte primária de dados transacionais.
-- **Parquet Files:** Armazenamento analítico de alta performance.
-- **Supabase (Opcional):** Auth alternativa e sincronização de usuários.
-
-### Serviços Externos
-- **Google Gemini API:** Processamento de linguagem natural e geração de código.
-- **DeepSeek API (Fallback):** LLM alternativo em caso de quota/rate limit.
-
-### Integrações Futuras
-- **ERP Caçula:** Execução automática de transferências.
-- **Sistema de Notificações:** Emails/push para alertas.
-- **Data Warehouse:** Sincronização bidirecional para histórico consolidado.
-
----
-
-## 12. Requisitos de Deployment
-
-### Ambientes
-
-**Desenvolvimento:**
-- Execução local via `start.bat` (Windows) ou `npm run dev`.
-- Backend: `http://127.0.0.1:8000`.
-- Frontend: `http://localhost:3000`.
-
-**Homologação:**
-- Deploy via Docker Compose.
-- Dados de teste/mock.
-- SSL com certificado self-signed.
-
-**Produção:**
-- Deploy em servidor dedicado ou cloud (Azure/AWS).
-- Nginx como reverse proxy (terminação SSL).
-- Backup automático de Parquet e banco de dados.
-- Monitoramento via Prometheus + Grafana.
-
-### Configuração de Ambiente
-
-**Variáveis Críticas (.env):**
-```env
-# Gemini
-GEMINI_API_KEY=<chave_api>
-LLM_MODEL_NAME=gemini-3-flash-preview
-
-# Segurança
-SECRET_KEY=<gerado_via_openssl>
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-
-# Database
-SQL_SERVER_CONNECTION_STRING=<dsn_sql_server>
-
-# Optional: Supabase
-USE_SUPABASE_AUTH=true
-SUPABASE_URL=<url>
-SUPABASE_ANON_KEY=<key>
-```
-
----
-
-## 13. Critérios de Aceitação (DoD - Definition of Done)
-
-### Para Features
-- [ ] Requisito funcional implementado conforme especificação.
-- [ ] Testes unitários com cobertura > 70%.
-- [ ] Testes manuais executados e aprovados.
-- [ ] Documentação atualizada (README, API docs).
-- [ ] Code review aprovado.
-- [ ] Sem regressões em funcionalidades existentes.
-- [ ] Performance dentro das métricas (< 3s para queries).
-
-### Para Releases
-- [ ] Todas as features planejadas entregues.
-- [ ] Bugs críticos resolvidos (P0).
-- [ ] Testes de integração executados.
-- [ ] Deploy em homologação validado.
-- [ ] Changelog atualizado.
-- [ ] Comunicação aos stakeholders.
-
----
-
-## 14. Glossário
-
-| Termo | Definição |
-|-------|-----------|
-| **UNE** | Unidade de Negócio (Loja física da rede Caçula). |
-| **CD** | Centro de Distribuição. |
-| **Ruptura** | Produto sem estoque na loja (ESTOQUE_UNE = 0). |
-| **Ruptura Crítica** | Ruptura + vendas recentes + estoque disponível no CD. |
-| **Classe A/B/C** | Classificação Pareto: A (80% receita), B (15%), C (5%). |
-| **MC** | Margem de Contribuição (markup mínimo exigido). |
-| **Cobertura** | Dias de estoque baseado em vendas médias (ESTOQUE / VENDA_DIA). |
-| **RAG** | Retrieval-Augmented Generation (busca semântica + LLM). |
-| **SSE** | Server-Sent Events (streaming HTTP). |
-| **Parquet** | Formato de arquivo colunar para analytics. |
-| **Polars** | Motor de DataFrames multi-threaded (alternativa ao Pandas). |
-| **DuckDB** | OLAP database in-process para queries SQL em Parquet. |
-
----
-
-## 15. Contatos e Responsabilidades
-
-| Área | Responsável | Email | Função |
-|------|------------|-------|--------|
-| Product Owner | [Nome] | [email] | Priorização de backlog, validação de entregas |
-| Tech Lead | [Nome] | [email] | Arquitetura, code reviews, decisões técnicas |
-| Backend Dev | [Nome] | [email] | Implementação de APIs, agentes, ferramentas |
-| Frontend Dev | [Nome] | [email] | Interface SolidJS, dashboards, UX |
-| Data Engineer | [Nome] | [email] | Pipelines de dados, otimização Parquet/SQL |
-| DevOps | [Nome] | [email] | Deploy, CI/CD, monitoramento |
-| QA | [Nome] | [email] | Testes manuais/automatizados, validação de qualidade |
-
----
-
-## 16. Apêndices
-
-### A. Datasets de Referência
-
-**Arquivo Principal:** `backend/data/parquet/admmat.parquet`
-- **Registros:** 1,113,822
-- **Colunas:** 97
-- **Tamanho:** ~150MB
-- **Schema:** Ver `docs/PARQUET_SCHEMA_REFERENCE.md`
-
-**Colunas Chave:**
-- `PRODUTO`, `NOME`, `UNE`, `UNE_NOME`
-- `NOMESEGMENTO`, `NOMECATEGORIA`, `NOMEFABRICANTE`
-- `ESTOQUE_UNE`, `ESTOQUE_CD`, `VENDA_30DD`
-- `PRECO_VENDA`, `PRECO_CUSTO`, `MC_MINIMO`
-
----
-
-### B. Exemplos de Queries Suportadas
-
-**Análise de Vendas:**
-- "Top 10 produtos por vendas no último mês"
-- "Compare vendas de Tecidos vs Papelaria nos últimos 3 meses"
-- "Produtos com crescimento acima de 20% MoM"
-
-**Gestão de Estoque:**
-- "Produtos com mais de 60 dias de cobertura"
-- "Quais produtos estão em ruptura na UNE 5?"
-- "Mostre a curva ABC por receita"
-
-**Operacional:**
-- "Sugira transferências para a UNE 2"
-- "Produtos com estoque no CD mas em ruptura nas lojas"
-- "Categorias com maior taxa de ruptura"
-
----
-
-### C. Temas Visuais (Lojas Caçula)
-
-**Paleta de Cores:**
-```css
---primary: #8B7355;        /* Marrom Caçula */
---accent: #C9A961;         /* Dourado/Bronze */
---success: #166534;        /* Verde Classe A */
---warning: #CA8A04;        /* Amarelo Classe B */
---danger: #991B1B;         /* Vermelho Classe C/D */
---background: #FAFAFA;     /* Fundo Claro */
---text: #1F2937;           /* Texto Escuro */
-```
-
-**Tipografia:**
-- **Títulos:** Inter, peso 600-700
-- **Corpo:** Inter, peso 400-500
-- **Código:** Fira Code, monospace
+### Fase 1: MVP (Q4 2024) ✅
+- Core do Agente BI e Dashboards.
+
+### Fase 2: Otimização & Modernização (Q1 2025) ✅
+- **Implementado em 28/12/2025:** Limpeza completa de arquivos obsoletos, consolidação de documentação técnica e melhoria no sistema de backups/restore.
+
+### Fase 3: Integração & Automação (Q2-Q3 2025) 🟡
+- 🟡 Alertas automáticos (email/push).
+- 🟡 Integração direta com ERP para execução de pedidos.
 
 ---
 
@@ -781,18 +273,8 @@ SUPABASE_ANON_KEY=<key>
 | Versão | Data | Autor | Mudanças |
 |--------|------|-------|----------|
 | 1.0 | 2024-11-15 | [Nome] | Versão inicial do PRD |
-| 1.5 | 2024-12-10 | [Nome] | Adição de Pareto, AI Insights, RAG |
-| 2.0 | 2025-12-21 | [Nome] | Atualização completa pós-migração DuckDB, features Fase 2 |
-
----
-
-**Documento aprovado por:**
-- [ ] Diretor de Operações
-- [ ] Gerente de BI
-- [ ] Tech Lead
-- [ ] Product Owner
-
-**Próxima revisão:** Trimestral (Março 2026)
+| 2.0 | 2025-12-21 | [Nome] | Atualização DuckDB e RAG |
+| 2.1 | 2025-12-28 | Gemini Agent | Atualização pós-limpeza de arquitetura e validação de features de exportação e seleção UNE. |
 
 ---
 

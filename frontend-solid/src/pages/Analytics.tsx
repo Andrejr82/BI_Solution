@@ -1,14 +1,16 @@
-import { createSignal, onMount, Show, createResource, For, createEffect } from 'solid-js';
+import { createSignal, onMount, Show, createResource, For, createEffect, createMemo } from 'solid-js';
 import { BarChart3, TrendingUp, RefreshCw, Filter, X, Download, Eye } from 'lucide-solid';
 import api, { analyticsApi, ABCDetailItem } from '../lib/api'; // Import analyticsApi and ABCDetailItem
 import { PlotlyChart } from '../components/PlotlyChart';
 import { ChartDownloadButton } from '../components/ChartDownloadButton';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 interface SalesAnalysis {
   vendas_por_categoria: Array<{
     categoria: string;
     vendas: number;
   }>;
+  chart_title?: string;
   giro_estoque: Array<{
     produto: string;
     nome: string;
@@ -39,6 +41,7 @@ export default function Analytics() {
   const [data, setData] = createSignal<SalesAnalysis | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [abortController, setAbortController] = createSignal<AbortController | null>(null);
 
   // Filtros
   const [categoria, setCategoria] = createSignal('');
@@ -50,6 +53,16 @@ export default function Analytics() {
   const [selectedClasse, setSelectedClasse] = createSignal<'A' | 'B' | 'C' | null>(null);
   const [abcDetails, setAbcDetails] = createSignal<ABCDetailItem[]>([]);
   const [loadingABC, setLoadingABC] = createSignal(false);
+
+  // ✅ PERFORMANCE: Paginação para tabela ABC (evita renderizar centenas de linhas)
+  const [abcPage, setAbcPage] = createSignal(1);
+  const abcItemsPerPage = 50;
+  const paginatedAbcDetails = createMemo(() => {
+    const start = (abcPage() - 1) * abcItemsPerPage;
+    const end = start + abcItemsPerPage;
+    return abcDetails().slice(start, end);
+  });
+  const abcTotalPages = createMemo(() => Math.ceil(abcDetails().length / abcItemsPerPage));
 
   // Carregar opções de filtro (segmentos e todas as categorias)
   const [allFilterOptions] = createResource<FilterOptions>(async () => {
@@ -94,6 +107,11 @@ export default function Analytics() {
     return currentCategoria;
   });
 
+  // ✅ PERFORMANCE: Reset página quando dados ABC mudam
+  createEffect(() => {
+    abcDetails(); // Track changes
+    setAbcPage(1); // Reset to first page
+  });
 
   // Chart specs
   const [vendasCategoriaChart, setVendasCategoriaChart] = createSignal<any>({});
@@ -101,6 +119,11 @@ export default function Analytics() {
   const [distribuicaoABCChart, setDistribuicaoABCChart] = createSignal<any>({});
 
   const loadData = async () => {
+    // Aborta qualquer requisição anterior para evitar condições de corrida
+    abortController()?.abort();
+    const newController = new AbortController();
+    setAbortController(newController);
+
     setLoading(true);
     setError(null);
 
@@ -110,16 +133,26 @@ export default function Analytics() {
       if (segmento()) params.append('segmento', segmento());
       if (grupo()) params.append('grupo', grupo());
 
-      const response = await api.get<SalesAnalysis>(`/analytics/sales-analysis?${params.toString()}`);
+      const response = await api.get<SalesAnalysis>(`/analytics/sales-analysis?${params.toString()}`, {
+        signal: newController.signal // Passa o sinal para a requisição
+      });
       setData(response.data);
 
       // Gerar gráficos
       generateCharts(response.data);
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Requisição de análise de vendas abortada.');
+        return; // Não define erro para requisições abortadas
+      }
       console.error('Erro ao carregar análise:', err);
       setError(err.response?.data?.detail || 'Erro ao carregar análise de vendas');
     } finally {
       setLoading(false);
+      // Limpa o controller se esta for a requisição mais recente
+      if (abortController() === newController) {
+        setAbortController(null);
+      }
     }
   };
 
@@ -192,7 +225,7 @@ export default function Analytics() {
         }],
         layout: {
           title: {
-            text: 'Vendas por Categoria (Top 10)',
+            text: analysisData.chart_title || 'Vendas por Categoria (Top 10)',
             font: { size: 16, color: '#2D2D2D', family: 'Inter, sans-serif' }
           },
           xaxis: {
@@ -270,33 +303,36 @@ export default function Analytics() {
     // 3. LOJAS CAÇULA - GRÁFICO DE PARETO REAL (ABC)
     const abc = analysisData.distribuicao_abc;
     if (abc.detalhes && abc.detalhes.length > 0) {
+      // Limitar aos top 20 produtos para melhor visualização
+      const topProducts = abc.detalhes.slice(0, 20);
+
       const paretoSpec = {
         data: [
           {
             type: 'bar',
-            x: abc.detalhes.map(p => p.NOME.substring(0, 20)),
-            y: abc.detalhes.map(p => p.receita),
+            x: topProducts.map((p, i) => `${i + 1}. ${p.NOME.substring(0, 15)}`),
+            y: topProducts.map(p => p.receita),
             name: 'Faturamento (R$)',
             marker: {
-              color: abc.detalhes.map(p => 
+              color: topProducts.map(p =>
                 p.classe === 'A' ? '#166534' : (p.classe === 'B' ? '#CA8A04' : '#991B1B')
               ),
               line: { color: '#FFFFFF', width: 1 },
               opacity: 0.9
             },
-            hovertemplate: '<b>%{x}</b><br>Receita: R$ %{y:,.2f}<br>Classe: %{customdata}<extra></extra>',
-            customdata: abc.detalhes.map(p => p.classe)
+            hovertemplate: '<b>%{customdata.nome}</b><br>Receita: R$ %{y:,.2f}<br>Classe: %{customdata.classe}<extra></extra>',
+            customdata: topProducts.map(p => ({ nome: p.NOME, classe: p.classe }))
           },
           {
             type: 'scatter',
             mode: 'lines+markers',
-            x: abc.detalhes.map(p => p.NOME.substring(0, 20)),
-            y: abc.detalhes.map(p => p.perc_acumulada),
+            x: topProducts.map((p, i) => `${i + 1}. ${p.NOME.substring(0, 15)}`),
+            y: topProducts.map(p => p.perc_acumulada),
             name: '% Acumulada',
             yaxis: 'y2',
             line: { color: '#1E293B', width: 3, shape: 'spline' },
-            marker: { 
-              color: '#1E293B', 
+            marker: {
+              color: '#1E293B',
               size: 8,
               symbol: 'diamond'
             },
@@ -331,10 +367,10 @@ export default function Analytics() {
             ticktext: ['0%', '20%', '40%', '60%', '80%', '95%', '100%'],
             tickfont: { size: 10, color: '#1E293B', font: { weight: 'bold' } }
           },
-          legend: { 
-            orientation: 'h', 
-            x: 0.5, 
-            y: -0.25, 
+          legend: {
+            orientation: 'h',
+            x: 0.5,
+            y: -0.25,
             xanchor: 'center',
             bgcolor: 'rgba(255,255,255,0.7)',
             bordercolor: '#E2E8F0',
@@ -377,11 +413,17 @@ export default function Analytics() {
   };
 
   onMount(() => {
-    loadData();
+    // Adiciona um pequeno atraso para a chamada inicial de loadData.
+    // Isso permite que o createResource para allFilterOptions comece a carregar primeiro,
+    // evitando que duas requisições pesadas atinjam o backend exatamente ao mesmo tempo.
+    setTimeout(() => {
+      loadData();
+    }, 500);
   });
 
   return (
-    <div class="flex flex-col h-full p-6 gap-6">
+    <ErrorBoundary>
+      <div class="flex flex-col p-6 gap-6">
       {/* Header */}
       <div class="flex justify-between items-end">
         <div>
@@ -395,6 +437,8 @@ export default function Analytics() {
           onClick={loadData}
           class="btn btn-outline gap-2"
           disabled={loading()}
+          aria-label={loading() ? 'Atualizando análise de vendas' : 'Atualizar análise de vendas'}
+          aria-busy={loading()}
         >
           <RefreshCw size={16} class={loading() ? 'animate-spin' : ''} />
           Atualizar
@@ -402,7 +446,7 @@ export default function Analytics() {
       </div>
 
       {/* Filters */}
-      <div class="card p-4 border">
+      <div class="card p-4 border" role="region" aria-label="Filtros de análise">
         <div class="flex items-center gap-2 mb-3">
           <Filter size={20} />
           <h3 class="font-semibold">Filtros</h3>
@@ -415,6 +459,7 @@ export default function Analytics() {
                 setGrupo('');
                 loadData();
               }}
+              aria-label="Limpar todos os filtros"
             >
               <X size={16} />
               Limpar Filtros
@@ -424,11 +469,14 @@ export default function Analytics() {
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           {/* Segmento */}
+          {/* ✅ CORREÇÃO MOBILE: min-h-[44px] para touch-friendly */}
           <select
-            class="input"
+            class="input min-h-[44px]"
             value={segmento()}
             onChange={(e) => setSegmento(e.currentTarget.value)}
             disabled={allFilterOptions.loading}
+            aria-label="Filtrar por segmento"
+            aria-busy={allFilterOptions.loading}
           >
             <option value="">Todos os Segmentos</option>
             <Show when={allFilterOptions()}>
@@ -440,10 +488,12 @@ export default function Analytics() {
 
           {/* Categoria (filtro dinâmico) */}
           <select
-            class="input"
+            class="input min-h-[44px]"
             value={categoria()}
             onChange={(e) => setCategoria(e.currentTarget.value)}
             disabled={filteredCategoryOptions.loading}
+            aria-label="Filtrar por categoria"
+            aria-busy={filteredCategoryOptions.loading}
           >
             <option value="">Todas as Categorias</option>
             <Show when={filteredCategoryOptions()}>
@@ -455,10 +505,12 @@ export default function Analytics() {
 
           {/* Grupo (filtro dinâmico) */}
           <select
-            class="input"
+            class="input min-h-[44px]"
             value={grupo()}
             onChange={(e) => setGrupo(e.currentTarget.value)}
             disabled={filteredGroupOptions.loading}
+            aria-label="Filtrar por grupo"
+            aria-busy={filteredGroupOptions.loading}
           >
             <option value="">Todos os Grupos</option>
             <Show when={filteredGroupOptions()}>
@@ -469,9 +521,11 @@ export default function Analytics() {
           </select>
 
           <button
-            class="btn btn-primary"
+            class="btn btn-primary min-h-[44px]"
             onClick={loadData}
             disabled={loading()}
+            aria-label="Aplicar filtros selecionados"
+            aria-busy={loading()}
           >
             Aplicar Filtros
           </button>
@@ -490,6 +544,7 @@ export default function Analytics() {
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"
+                  aria-label={`Remover filtro de segmento ${segmento()}`}
                 >
                   <X size={14} />
                 </button>
@@ -504,6 +559,7 @@ export default function Analytics() {
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"
+                  aria-label={`Remover filtro de categoria ${categoria()}`}
                 >
                   <X size={14} />
                 </button>
@@ -518,6 +574,7 @@ export default function Analytics() {
                     loadData();
                   }}
                   class="hover:bg-primary/30 rounded"
+                  aria-label={`Remover filtro de grupo ${grupo()}`}
                 >
                   <X size={14} />
                 </button>
@@ -548,9 +605,9 @@ export default function Analytics() {
       <Show when={!loading() && data()}>
         <div class="space-y-6">
           {/* Row 1: Vendas por Categoria */}
-          <div class="card p-6 border">
+          <div class="card p-6 border" role="region" aria-label="Gráfico de vendas por categoria">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="font-semibold">Vendas por Categoria (Top 10)</h3>
+              <h3 class="font-semibold">{data()?.chart_title || "Vendas por Categoria (Top 10)"}</h3>
               <ChartDownloadButton
                 chartId="analytics-vendas-categoria-chart"
                 filename="analytics_vendas_categoria"
@@ -576,7 +633,7 @@ export default function Analytics() {
           {/* Row 2: Two columns */}
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Giro de Estoque */}
-            <div class="card p-6 border">
+            <div class="card p-6 border" role="region" aria-label="Gráfico de giro de estoque">
               <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold">Giro de Estoque (Top 15)</h3>
                 <ChartDownloadButton
@@ -602,7 +659,7 @@ export default function Analytics() {
             </div>
 
             {/* Distribuição ABC */}
-            <div class="card p-6 border">
+            <div class="card p-6 border" role="region" aria-label="Gráfico de análise ABC">
               <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold">Análise de Pareto (ABC por Receita)</h3>
                 <ChartDownloadButton
@@ -628,10 +685,11 @@ export default function Analytics() {
 
               {/* Summary of ABC classes - CLICKABLE */}
               <Show when={data()!.distribuicao_abc.receita_por_classe}>
-                <div class="grid grid-cols-3 gap-2 mt-4">
+                <div class="grid grid-cols-3 gap-2 mt-4" role="group" aria-label="Classes ABC interativas">
                   <button
                     onClick={() => handleABCClick('A')}
                     class="p-2 rounded bg-green-500/10 border border-green-500/20 text-center hover:bg-green-500/20 transition-colors cursor-pointer group"
+                    aria-label={`Ver detalhes da Classe A - ${data()!.distribuicao_abc.A} produtos responsáveis por 80% da receita`}
                   >
                     <p class="text-[10px] text-green-700 font-bold uppercase">Classe A</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.A} SKUs</p>
@@ -643,6 +701,7 @@ export default function Analytics() {
                   <button
                     onClick={() => handleABCClick('B')}
                     class="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-center hover:bg-yellow-500/20 transition-colors cursor-pointer group"
+                    aria-label={`Ver detalhes da Classe B - ${data()!.distribuicao_abc.B} produtos responsáveis por 15% da receita`}
                   >
                     <p class="text-[10px] text-yellow-700 font-bold uppercase">Classe B</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.B} SKUs</p>
@@ -654,6 +713,7 @@ export default function Analytics() {
                   <button
                     onClick={() => handleABCClick('C')}
                     class="p-2 rounded bg-red-500/10 border border-red-500/20 text-center hover:bg-red-500/20 transition-colors cursor-pointer group"
+                    aria-label={`Ver detalhes da Classe C - ${data()!.distribuicao_abc.C} produtos responsáveis por 5% da receita`}
                   >
                     <p class="text-[10px] text-red-700 font-bold uppercase">Classe C</p>
                     <p class="text-sm font-bold">{data()!.distribuicao_abc.C} SKUs</p>
@@ -676,7 +736,7 @@ export default function Analytics() {
               <div>
                 <h4 class="font-bold text-lg mb-2">Entendendo sua Curva ABC (Princípio de Pareto)</h4>
                 <p class="text-sm text-muted-foreground leading-relaxed">
-                  Diferente de uma análise simplista, sua Curva ABC é calculada com base na <strong>contribuição financeira real</strong> (Receita) de cada produto. 
+                  Diferente de uma análise simplista, sua Curva ABC é calculada com base na <strong>contribuição financeira real</strong> (Receita) de cada produto.
                   Isso permite identificar onde o seu capital está gerando mais retorno:
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
@@ -716,19 +776,27 @@ export default function Analytics() {
 
       {/* Modal ABC Details */}
       <Show when={showABCModal()}>
-        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowABCModal(false)}>
-          <div class="bg-background rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {/* ✅ CORREÇÃO MOBILE: p-0 no mobile para fullscreen, p-4 no desktop */}
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 md:p-4" onClick={() => setShowABCModal(false)}>
+          {/* ✅ CORREÇÃO MOBILE: fullscreen no mobile (h-full rounded-none), normal no desktop */}
+          <div
+            class="bg-background rounded-none md:rounded-lg shadow-2xl max-w-6xl w-full h-full md:h-auto md:max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="abc-modal-title"
+            aria-describedby="abc-modal-description"
+          >
             {/* Header */}
             <div class="flex justify-between items-center p-6 border-b">
               <div>
-                <h3 class="text-xl font-bold flex items-center gap-2">
-                  <span class={`inline-block w-3 h-3 rounded-full ${
-                    selectedClasse() === 'A' ? 'bg-green-500' :
+                <h3 id="abc-modal-title" class="text-xl font-bold flex items-center gap-2">
+                  <span class={`inline-block w-3 h-3 rounded-full ${selectedClasse() === 'A' ? 'bg-green-500' :
                     selectedClasse() === 'B' ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}></span>
+                    }`}></span>
                   SKUs da Classe {selectedClasse()}
                 </h3>
-                <p class="text-sm text-muted-foreground mt-1">
+                <p id="abc-modal-description" class="text-sm text-muted-foreground mt-1">
                   {abcDetails().length} produtos encontrados
                 </p>
               </div>
@@ -737,6 +805,7 @@ export default function Analytics() {
                   onClick={downloadABCCSV}
                   class="btn btn-outline gap-2"
                   disabled={abcDetails().length === 0}
+                  aria-label="Baixar lista de produtos em CSV"
                 >
                   <Download size={16} />
                   Baixar CSV
@@ -744,6 +813,7 @@ export default function Analytics() {
                 <button
                   onClick={() => setShowABCModal(false)}
                   class="btn btn-outline"
+                  aria-label="Fechar modal"
                 >
                   <X size={16} />
                 </button>
@@ -766,7 +836,10 @@ export default function Analytics() {
               </Show>
 
               <Show when={!loadingABC() && abcDetails().length > 0}>
-                <table class="w-full">
+                {/* ✅ CORREÇÃO MOBILE: Desktop - Table, Mobile - Cards */}
+
+                {/* Desktop Table (hidden on mobile) */}
+                <table class="w-full hidden md:table" role="table" aria-label={`Produtos da classe ${selectedClasse()}`}>
                   <thead class="sticky top-0 bg-secondary border-b">
                     <tr>
                       <th class="text-left p-3 text-xs font-semibold uppercase">Produto</th>
@@ -778,7 +851,8 @@ export default function Analytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={abcDetails()}>
+                    {/* ✅ PERFORMANCE: Usa dados paginados */}
+                    <For each={paginatedAbcDetails()}>
                       {(item) => (
                         <tr class="border-b hover:bg-secondary/50 transition-colors">
                           <td class="p-3 font-mono text-sm">{item.PRODUTO}</td>
@@ -796,11 +870,75 @@ export default function Analytics() {
                     </For>
                   </tbody>
                 </table>
+
+                {/* Mobile Cards (shown only on mobile) */}
+                <div class="md:hidden space-y-3">
+                  {/* ✅ PERFORMANCE: Usa dados paginados */}
+                  <For each={paginatedAbcDetails()}>
+                    {(item) => (
+                      <div class="bg-card border rounded-lg p-4 space-y-2">
+                        <div class="flex justify-between items-start">
+                          <div class="flex-1">
+                            <p class="font-medium text-sm">{item.NOME}</p>
+                            <p class="text-xs font-mono text-muted-foreground mt-1">SKU: {item.PRODUTO}</p>
+                          </div>
+                          <span class="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-semibold">
+                            {item.perc_acumulada.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span class="text-muted-foreground">UNE:</span>
+                            <span class="ml-1 font-mono">{item.UNE}</span>
+                          </div>
+                          <div>
+                            <span class="text-muted-foreground">Loja:</span>
+                            <span class="ml-1">{item.UNE_NOME || '-'}</span>
+                          </div>
+                        </div>
+                        <div class="pt-2 border-t">
+                          <span class="text-xs text-muted-foreground">Receita: </span>
+                          <span class="text-sm font-semibold">
+                            R$ {item.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+
+                {/* ✅ PERFORMANCE: Controles de Paginação */}
+                <Show when={abcTotalPages() > 1}>
+                  <div class="flex justify-between items-center px-4 py-3 border-t bg-muted/10" role="navigation" aria-label="Paginação de produtos">
+                    <div class="text-sm text-muted-foreground" aria-live="polite">
+                      Página {abcPage()} de {abcTotalPages()} | Total: {abcDetails().length} itens
+                    </div>
+                    <div class="flex gap-2">
+                      <button
+                        onClick={() => setAbcPage(Math.max(1, abcPage() - 1))}
+                        disabled={abcPage() === 1}
+                        class="px-3 py-1 text-sm bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                        aria-label="Página anterior"
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        onClick={() => setAbcPage(Math.min(abcTotalPages(), abcPage() + 1))}
+                        disabled={abcPage() === abcTotalPages()}
+                        class="px-3 py-1 text-sm bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                        aria-label="Próxima página"
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                </Show>
               </Show>
             </div>
           </div>
         </div>
       </Show>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

@@ -1,9 +1,22 @@
-# core/tools/mcp_sql_server_tools.py
+"""
+MCP Parquet Tools - Ferramentas para buscar dados em Parquet
+
+MIGRATED TO DUCKDB (2025-12-31)
+- Queries SQL diretas (mais rápido)
+- Zero loading do arquivo inteiro
+- Predicate pushdown automático
+"""
 import os
-import pandas as pd
+import sys
+from pathlib import Path
 from typing import Dict, Any
 from langchain_core.tools import tool
 import logging
+
+# Add backend to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
 
 # Caminho para o arquivo Parquet - Fonte única: Filial_Madureira
 PARQUET_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "parquet")
@@ -12,32 +25,47 @@ FILIAL_MADUREIRA_PATH = os.path.join(PARQUET_DIR, "Filial_Madureira.parquet")
 
 @tool
 def get_product_data(product_code: str) -> Dict[str, Any]:
-    """Busca dados de um produto em Filial_Madureira.parquet."""
-    logging.info(f"Buscando produto: {product_code}")
+    """Busca dados de um produto em Filial_Madureira.parquet usando DuckDB."""
+    logging.info(f"[DUCKDB] Buscando produto: {product_code}")
 
     try:
         if not os.path.exists(FILIAL_MADUREIRA_PATH):
             logging.error(f"Arquivo não encontrado: {FILIAL_MADUREIRA_PATH}")
             return {"error": "Fonte de dados não encontrada."}
 
-        df = pd.read_parquet(FILIAL_MADUREIRA_PATH)
+        adapter = get_duckdb_adapter()
+        parquet_path = str(Path(FILIAL_MADUREIRA_PATH).resolve()).replace("\\", "/")
 
-        # Converter para string se a coluna de código existir
-        if "CODIGO" in df.columns:
-            df["CODIGO"] = df["CODIGO"].astype(str)
-            product_code = str(product_code)
-            product_info = df[df["CODIGO"] == product_code]
-        elif "codigo" in df.columns:
-            df["codigo"] = df["codigo"].astype(str)
-            product_code = str(product_code)
-            product_info = df[df["codigo"] == product_code]
+        # Verificar qual coluna existe (CODIGO ou codigo)
+        schema = adapter.connection.execute(f"""
+            SELECT column_name
+            FROM (DESCRIBE SELECT * FROM read_parquet('{parquet_path}'))
+        """).fetchall()
+
+        columns = [col[0] for col in schema]
+        code_column = None
+        if "CODIGO" in columns:
+            code_column = "CODIGO"
+        elif "codigo" in columns:
+            code_column = "codigo"
         else:
             return {"error": "Coluna de código não encontrada."}
 
-        if product_info.empty:
+        # Query DuckDB direta com filtro
+        result = adapter.connection.execute(f"""
+            SELECT *
+            FROM read_parquet('{parquet_path}')
+            WHERE CAST("{code_column}" AS VARCHAR) = ?
+        """, [str(product_code)]).fetchall()
+
+        if not result:
             return {"data": f"Produto não encontrado: {product_code}"}
 
-        return {"data": product_info.to_dict(orient="records")}
+        # Converter para dict
+        column_names = [col[0] for col in schema]
+        product_info = [dict(zip(column_names, row)) for row in result]
+
+        return {"data": product_info}
 
     except Exception as e:
         logging.error(f"Erro ao buscar produto: {e}", exc_info=True)
@@ -46,25 +74,30 @@ def get_product_data(product_code: str) -> Dict[str, Any]:
 
 @tool
 def get_product_stock(product_id: int) -> Dict[str, Any]:
-    """Retorna dados de um produto específico em Filial_Madureira."""
-    logging.info(f"Buscando dados do produto: {product_id}")
+    """Retorna estoque de um produto específico em Filial_Madureira usando DuckDB."""
+    logging.info(f"[DUCKDB] Buscando estoque do produto: {product_id}")
+
     try:
         if not os.path.exists(FILIAL_MADUREIRA_PATH):
             logging.error(f"Arquivo não encontrado: {FILIAL_MADUREIRA_PATH}")
             return {"error": "Fonte de dados não encontrada."}
 
-        df = pd.read_parquet(FILIAL_MADUREIRA_PATH)
+        adapter = get_duckdb_adapter()
+        parquet_path = str(Path(FILIAL_MADUREIRA_PATH).resolve()).replace("\\", "/")
 
-        product_stock_info = df[df["PRODUTO"] == product_id_str]
+        # Query DuckDB para buscar estoque
+        result = adapter.connection.execute(f"""
+            SELECT PRODUTO, ESTOQUE
+            FROM read_parquet('{parquet_path}')
+            WHERE CAST(PRODUTO AS VARCHAR) = ?
+            LIMIT 1
+        """, [str(product_id)]).fetchone()
 
-        if product_stock_info.empty:
+        if not result:
             return {"data": f"Nenhum produto encontrado com o ID {product_id}."}
 
-        # Assumindo que a coluna de estoque se chama 'ESTOQUE'
-        stock = product_stock_info["ESTOQUE"].iloc[
-            0
-        ]  # Pega o primeiro valor de estoque encontrado
-        return {"data": {"product_id": product_id, "stock": stock}}
+        produto_id, estoque = result
+        return {"data": {"product_id": product_id, "stock": estoque}}
 
     except Exception as e:
         logging.error(f"Erro ao buscar estoque do produto: {e}", exc_info=True)
@@ -76,11 +109,13 @@ def get_product_stock(product_id: int) -> Dict[str, Any]:
 @tool
 def list_product_categories() -> Dict[str, Any]:
     """
-    Retorna uma lista de todas as categorias de produtos disponíveis no arquivo Parquet 'Filial_Madureira.parquet'.
+    Retorna uma lista de todas as categorias de produtos disponíveis
+    no arquivo Parquet 'Filial_Madureira.parquet' usando DuckDB.
     """
     logging.info(
-        "Listando categorias de produtos do arquivo Parquet 'Filial_Madureira.parquet'."
+        "[DUCKDB] Listando categorias de produtos do arquivo Parquet 'Filial_Madureira.parquet'."
     )
+
     try:
         if not os.path.exists(FILIAL_MADUREIRA_PATH):
             logging.error(f"Arquivo Parquet não encontrado em: {FILIAL_MADUREIRA_PATH}")
@@ -88,16 +123,34 @@ def list_product_categories() -> Dict[str, Any]:
                 "error": "Fonte de dados de produtos (Filial_Madureira.parquet) não encontrada."
             }
 
-        df = pd.read_parquet(FILIAL_MADUREIRA_PATH)
+        adapter = get_duckdb_adapter()
+        parquet_path = str(Path(FILIAL_MADUREIRA_PATH).resolve()).replace("\\", "/")
 
-        # Assumindo que a coluna de categoria se chama 'CATEGORIA'
-        if "CATEGORIA" not in df.columns:
+        # Verificar se coluna CATEGORIA existe
+        schema = adapter.connection.execute(f"""
+            SELECT column_name
+            FROM (DESCRIBE SELECT * FROM read_parquet('{parquet_path}'))
+        """).fetchall()
+
+        columns = [col[0] for col in schema]
+
+        if "CATEGORIA" not in columns:
             return {
                 "error": "Coluna 'CATEGORIA' não encontrada no arquivo Filial_Madureira.parquet."
             }
 
-        categories = df["CATEGORIA"].unique().tolist()
-        return {"data": {"categories": categories}}
+        # Query DuckDB para obter categorias distintas
+        categories = adapter.connection.execute(f"""
+            SELECT DISTINCT CATEGORIA
+            FROM read_parquet('{parquet_path}')
+            WHERE CATEGORIA IS NOT NULL
+            ORDER BY CATEGORIA
+        """).fetchall()
+
+        # Extrair valores das tuplas
+        categories_list = [cat[0] for cat in categories]
+
+        return {"data": {"categories": categories_list}}
 
     except Exception as e:
         logging.error(f"Erro ao listar categorias de produtos: {e}", exc_info=True)
@@ -106,7 +159,7 @@ def list_product_categories() -> Dict[str, Any]:
         }
 
 
-# A lista de ferramentas agora reflete a nova arquitetura.
+# A lista de ferramentas agora usa DuckDB internamente
 sql_tools = [
     get_product_data,
     get_product_stock,

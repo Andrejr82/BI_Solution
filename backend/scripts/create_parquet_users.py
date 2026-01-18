@@ -3,8 +3,12 @@ Create users.parquet file for authentication when SQL Server is not available
 
 Password: Admin@2024
 Pre-generated hash using bcrypt
+
+MIGRATED TO DUCKDB (2025-12-31)
+- Uses Pandas for DataFrame creation
+- Pandas -> Parquet for small datasets
 """
-import polars as pl
+import pandas as pd
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -37,14 +41,14 @@ users_data = {
     "last_login": [None, None]
 }
 
-# Create DataFrame
-df = pl.DataFrame(users_data)
+# Create DataFrame with Pandas
+df = pd.DataFrame(users_data)
 
 # Save to parquet
 output_path = Path(__file__).parent.parent.parent / "data" / "parquet" / "users.parquet"
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-df.write_parquet(output_path)
+df.to_parquet(output_path, index=False)
 
 print(f"[OK] Created users.parquet at {output_path}")
 print(f"\nDefault credentials:")

@@ -3,13 +3,19 @@ import { useNavigate } from '@solidjs/router';
 import auth from '@/store/auth';
 import { LogIn, Loader2 } from 'lucide-solid';
 import { Logo } from '@/components/Logo';
+import { toastManager } from '@/components/Toast';
 
 export default function Login() {
   console.log('🔵 Login component mounting...');
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
+  const [showForgotModal, setShowForgotModal] = createSignal(false);
   const navigate = useNavigate();
-  
+
+  // Helpers
+  const loading = () => auth.loading();
+  const error = () => auth.error();
+
   // Log when rendering
   createEffect(() => {
     console.log('🔵 Login component rendered. Auth loading:', auth.loading());
@@ -18,26 +24,30 @@ export default function Login() {
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     console.log('🔐 Login attempt:', { username: username(), passwordLength: password().length });
-    
+
     if (!username() || !password()) {
       console.error('❌ Username or password empty');
+      toastManager.warning('Por favor, preencha usuário e senha');
       return;
     }
-    
+
     try {
       console.log('📡 Calling auth.login...');
       const success = await auth.login(username(), password());
       console.log('✅ Login result:', success);
-      
+
       if (success) {
         console.log('🎉 Login successful! Navigating to dashboard...');
-        // Usar window.location.href para forçar reload completo e garantir que o estado seja propagado
-        window.location.href = '/dashboard';
+        toastManager.success('Login realizado com sucesso!');
+        // ✅ CORREÇÃO: Usar navigate() do SolidJS Router para manter SPA behavior
+        setTimeout(() => navigate('/dashboard', { replace: true }), 500);
       } else {
         console.error('❌ Login failed');
+        toastManager.error('Usuário ou senha inválidos');
       }
     } catch (error) {
       console.error('💥 Login error:', error);
+      toastManager.error('Erro ao fazer login. Tente novamente.');
     }
   };
 
@@ -81,7 +91,7 @@ export default function Login() {
           </Show>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} class="space-y-4">
+          <form onSubmit={handleSubmit} class="space-y-4" aria-label="Formulário de login">
             {/* Username Field */}
             <div class="space-y-2">
               <label for="username" class="block text-sm font-medium text-foreground">
@@ -95,6 +105,9 @@ export default function Login() {
                 placeholder="Digite seu usuário"
                 required
                 autocomplete="username"
+                aria-label="Nome de usuário"
+                aria-required="true"
+                aria-invalid={auth.error() ? 'true' : 'false'}
                 class="w-full px-4 py-3 bg-white border-2 border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
             </div>
@@ -112,17 +125,31 @@ export default function Login() {
                 placeholder="Digite sua senha"
                 required
                 autocomplete="current-password"
+                aria-label="Senha"
+                aria-required="true"
+                aria-invalid={error() ? 'true' : 'false'}
                 class="w-full px-4 py-3 bg-white border-2 border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(true)}
+                  class="text-xs text-primary hover:text-primary/80 hover:underline transition-colors"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
             </div>
 
             {/* Submit Button - Lojas Caçula */}
             <button
               type="submit"
-              disabled={auth.loading()}
+              disabled={loading()}
+              aria-label={loading() ? 'Entrando no sistema' : 'Entrar no sistema'}
+              aria-busy={loading()}
               class="w-full py-3 px-4 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-semibold rounded-lg shadow-lg shadow-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <Show when={auth.loading()} fallback={<>Entrar</>}>
+              <Show when={loading()} fallback={<>Entrar</>}>
                 <Loader2 size={20} class="animate-spin" />
                 <span>Entrando...</span>
               </Show>
@@ -140,6 +167,36 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <Show when={showForgotModal()}>
+        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div class="text-center space-y-2">
+              <div class="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900">Recuperar Senha</h3>
+              <p class="text-sm text-gray-500">
+                Por questões de segurança, a redefinição de senha deve ser solicitada à equipe de TI.
+              </p>
+            </div>
+
+            <div class="bg-muted/50 p-3 rounded-lg text-sm text-center border space-y-1">
+              <p class="font-medium text-foreground">Entre em contato:</p>
+              <p class="text-muted-foreground">suporte@cacula.com.br</p>
+              <p class="text-muted-foreground text-xs">(21) 9999-9999 (Ramal TI)</p>
+            </div>
+
+            <button
+              onClick={() => setShowForgotModal(false)}
+              class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

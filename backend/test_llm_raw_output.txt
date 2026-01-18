@@ -1,0 +1,51 @@
+
+=== TESTE DA RESPOSTA RAW DO LLM ===
+
+[1/2] Coletando dados...
+OK - Vendas: 3739971.9709999384
+
+[2/2] Chamando LLM (google)...
+
+============================================================
+RESPOSTA RAW DO LLM:
+============================================================
+```json
+[
+  {
+    "insight": "Hß uma ruptura crÝtica nos produtos 'TNT 40GRS 100%O LG 1.40 034 PRETO' e 'TNT 40GRS 100%O LG 1.40 044 AMARELO OURO', com vendas significativas nos ·ltimos 30 dias e estoque negativo. Isso indica perda de vendas e insatisfaþÒo do cliente.",
+    "severity": "high",
+    "opportunity": "ReposiþÒo imediata desses itens para evitar perdas contÝnuas e atender Ó demanda."
+  },
+  {
+    "insight": "O produto 'PAPEL CHAMEX A4 75GRS 500FLS' Ú o campeÒo de vendas em unidades nos ·ltimos 30 dias, mas o estoque unitßrio Ú relativamente baixo em comparaþÒo com a demanda. Hß tambÚm uma duplicidade de entradas para o mesmo produto, o que pode indicar um problema de consolidaþÒo de dados.",
+    "severity": "medium",
+    "opportunity": "Avaliar a necessidade de aumentar o estoque deste item de alta demanda e investigar a duplicaþÒo de entradas para otimizar a gestÒo de estoque."
+  },
+  {
+    "insight": "A categoria 'TECIDOS' apresenta m·ltiplas rupturas, com destaque para os TNTs, o que sugere um problema recorrente na gestÒo de estoque desta categoria. A venda sem estoque nesses itens Ú expressiva.",
+    "severity": "high",
+    "opportunity": "Revisar a polÝtica de estoque e a cadeia de suprimentos para a categoria 'TECIDOS' para evitar futuras rupturas e garantir a disponibilidade de produtos populares."
+  },
+  {
+    "insight": "Existem grandes volumes de 'SACOLA VERDE 40X50 0.03U - P/USO CACULA' e 'SACOLA VERDE 50X60 0.04U - P/USO CACULA' em estoque, com zero vendas nos ·ltimos 30 dias. Isso representa capital parado e custos de armazenagem desnecessßrios.",
+    "severity": "medium",
+    "opportunity": "Implementar estratÚgias de liquidaþÒo ou promoþÒo para esses itens de estoque parado, ou reavaliar a necessidade de mantÛ-los no portf¾lio."
+  }
+]
+```
+============================================================
+
+Tentando parsear JSON...
+
+[OK] JSON parseado com sucesso!
+Tipo: <class 'list'>
+Numero de insights: 4
+
+Primeiro insight:
+{
+  "insight": "Hß uma ruptura crÝtica nos produtos 'TNT 40GRS 100%O LG 1.40 034 PRETO' e 'TNT 40GRS 100%O LG 1.40 044 AMARELO OURO', com vendas significativas nos ·ltimos 30 dias e estoque negativo. Isso indica perda de vendas e insatisfaþÒo do cliente.",
+  "severity": "high",
+  "opportunity": "ReposiþÒo imediata desses itens para evitar perdas contÝnuas e atender Ó demanda."
+}
+
+Resultado: SUCESSO

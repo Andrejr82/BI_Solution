@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     CACHE_TTL_MINUTES: int = 360 # 6 hours for LLM responses
     CACHE_MAX_AGE_DAYS: int = 7 # For cache cleaner
     AGENT_GRAPH_CACHE_TTL_MINUTES: int = 360 # 6 hours for agent graph cache
+    
+    # Cache Directory (Updated to v2 to bypass corruption)
+    CACHE_DIR: str = "data/cache_v2"
 
     # RAG (Retrieval Augmented Generation)
     RAG_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
@@ -106,11 +109,21 @@ class Settings(BaseSettings):
     # Prometheus
     METRICS_ENABLED: bool = True
 
-    # AI / LLM - Usando Gemini 3 Flash Preview (modelo mais inteligente e rápido da Google)
+    # AI / LLM - Multi-provider Support
+    # FIX 2026-01-09: Groq é o LLM principal (mais rápido, sem rate limit frequente)
+    LLM_PROVIDER: Literal["google", "groq", "mock"] = "google"
+    
+    # Google Gemini
     GEMINI_API_KEY: str | None = None
-    LLM_MODEL_NAME: str = "gemini-3-flash-preview"
-    INTENT_CLASSIFICATION_MODEL: str = "gemini-3-flash-preview"
-    CODE_GENERATION_MODEL: str = "gemini-3-flash-preview"
+    LLM_MODEL_NAME: str = "gemini-2.5-flash-lite"
+    
+    # Groq
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
+
+    # Modelos de Tarefa
+    INTENT_CLASSIFICATION_MODEL: str = "gemini-2.5-flash-lite"
+    CODE_GENERATION_MODEL: str = "gemini-2.5-flash-lite"
 
     # Data Sources
     PARQUET_DATA_PATH: str = Field(default="data/parquet/admmat.parquet")
@@ -128,7 +141,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = Field(default="")
     SUPABASE_ANON_KEY: str = Field(default="")
     SUPABASE_SERVICE_ROLE_KEY: str = Field(default="")  # Required for admin operations
-    USE_SUPABASE_AUTH: bool = Field(default=False)  # Disabled by default to align with Parquet auth
+    USE_SUPABASE_AUTH: bool = Field(default=True)  # Enabled by default per user request
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
@@ -194,4 +207,32 @@ def get_settings() -> Settings:
 
 
 # Global settings instance
+try:
+    # MANUAL ENV LOADER (Robustness Fix)
+    # Pydantic sometimes fails to read .env if shell vars are set or cache is stale
+    # This block forces loading from .env if not already set or to override
+    _base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    _env = os.path.join(_base, ".env")
+    if os.path.exists(_env):
+        with open(_env, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"): continue
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip()
+                    # Remove quotes if present
+                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                        v = v[1:-1]
+                    
+                    # Override or Set
+                    # We want to force read from file if pydantic is failing, 
+                    # but usually env vars have precedence.
+                    # However, since we cleared shell vars, this should fill them.
+                    # If we want to strictly follow .env file content:
+                    os.environ[k] = v
+except Exception as e:
+    pass
+
 settings = get_settings()

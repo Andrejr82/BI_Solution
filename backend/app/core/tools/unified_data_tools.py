@@ -320,10 +320,22 @@ def obter_estoque(
         return {"status": "error", "message": f"Erro: {str(e)}"}
 
 
+# Importação do novo tool flexível
+from app.core.tools.flexible_query_tool import consultar_dados_flexivel
+from app.core.tools.offline_chart_tool import gerar_grafico_offline
+# ✅ FIX 2026-01-14: Importar ferramenta principal de gráficos mencionada no SYSTEM_PROMPT
+from app.core.tools.universal_chart_generator import gerar_grafico_universal_v2
+# ✅ FIX 2026-01-15: Ferramenta de análise multi-loja (evita loops de timeout)
+from app.core.tools.une_tools import analisar_produto_todas_lojas
+
 # Lista de ferramentas unificadas - EXPORTAÇÃO IMPORTANTE
 unified_tools = [
     listar_colunas_disponiveis,
     consultar_dados,
     buscar_produto,
     obter_estoque,
+    consultar_dados_flexivel,       # Ferramenta principal de consulta de dados
+    analisar_produto_todas_lojas,   # ✅ FIX 2026-01-15: Análise multi-loja sem loop
+    gerar_grafico_universal_v2,     # ✅ FIX: Ferramenta principal de gráficos
+    gerar_grafico_offline,          # Ferramenta de backup para gráficos offline
 ]

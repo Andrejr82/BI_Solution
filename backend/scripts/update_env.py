@@ -14,7 +14,7 @@ env_file = Path(__file__).parent.parent / ".env"
 
 # Nova DATABASE_URL
 new_database_url = (
-    "mssql+aioodbc://AgenteVirtual:Cacula@2020@FAMILIA\\\\SQLJR,1433/agentbi"
+    "mssql+aioodbc://AgenteVirtual:Cacula@2020@127.0.0.1,1433/Projeto_Caculinha"
     "?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
 )
 

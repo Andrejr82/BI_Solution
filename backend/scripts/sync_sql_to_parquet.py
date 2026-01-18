@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 # Configurações extraídas do que funcionou no AuthService
-SERVER = "localhost,1433"
+SERVER = "127.0.0.1,1433"
 DATABASE = "Projeto_Caculinha" # Banco com dados completos
 USERNAME = "AgenteVirtual"
 PASSWORD = "Cacula@2020"

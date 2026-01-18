@@ -62,7 +62,7 @@ def _clean_json_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class CustomLangChainLLM(BaseChatModel):
-    llm_adapter: BaseLLMAdapter
+    llm_adapter: Any # Allow SmartLLM (Duck Typing)
     tools: Optional[List[Any]] = None # Adicionado para permitir o campo 'tools'
 
     @property

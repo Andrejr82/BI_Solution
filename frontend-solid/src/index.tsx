@@ -1,48 +1,63 @@
 /* src/index.tsx - Versão ULTRA SIMPLIFICADA sem verificação de versão */
 import { render } from 'solid-js/web';
 import { Router, Route, Navigate } from '@solidjs/router';
-import { Show } from 'solid-js';
+import { Show, lazy, Suspense } from 'solid-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import './index.css';
 
-// Importar Layout e Páginas
+// ✅ PERFORMANCE: Eager imports (rotas públicas - carregadas imediatamente)
 import Layout from './Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Chat from './pages/Chat';
-import Analytics from './pages/Analytics';
-import Reports from './pages/Reports';
-import Learning from './pages/Learning';
-import Playground from './pages/Playground';
-import Profile from './pages/Profile';
-import Admin from './pages/Admin';
-import Rupturas from './pages/Rupturas';
-import Transfers from './pages/Transfers';
-import Diagnostics from './pages/Diagnostics';
-import Examples from './pages/Examples';
-import Help from './pages/Help';
 import SharedConversation from './pages/SharedConversation';
-import CodeChat from './pages/CodeChat';
-import About from './pages/About';
+
+// ✅ PERFORMANCE: Lazy imports (code splitting - carregadas sob demanda)
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DashboardV2 = lazy(() => import('./pages/DashboardV2'));
+const Chat = lazy(() => import('./pages/Chat'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Learning = lazy(() => import('./pages/Learning'));
+const Playground = lazy(() => import('./pages/Playground'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Rupturas = lazy(() => import('./pages/Rupturas'));
+const Transfers = lazy(() => import('./pages/Transfers'));
+const Diagnostics = lazy(() => import('./pages/Diagnostics'));
+const Examples = lazy(() => import('./pages/Examples'));
+const Help = lazy(() => import('./pages/Help'));
+const CodeChat = lazy(() => import('./pages/CodeChat'));
+const About = lazy(() => import('./pages/About'));
 
 // Importar Store de Autenticação
 import auth from './store/auth';
 
+// ✅ USABILIDADE: Toast Notifications & Confirm Dialogs
+import { ToastContainer } from './components/Toast';
+import { ConfirmDialogContainer } from './components/ConfirmDialog';
+
+// ✅ ACESSIBILIDADE: Screen Reader Announcer
+import { ScreenReaderAnnouncer } from './components/ScreenReaderAnnouncer';
+
 console.log('✅ All imports loaded successfully');
 
 // Componente de Proteção de Rotas
+// ✅ PERFORMANCE: Adiciona Suspense para lazy loading
 function PrivateRoute(props: { component: any }) {
   return (
     <Show
       when={auth.isAuthenticated()}
       fallback={<Navigate href="/login" />}
     >
-      {props.component}
+      <Suspense fallback={<PageLoader />}>
+        {props.component}
+      </Suspense>
     </Show>
   );
 }
 
 // Componente de Proteção de Rotas com RBAC
+// 🔧 FIX: Admin SEMPRE tem acesso total a todas as rotas
+// ✅ PERFORMANCE: Adiciona Suspense para lazy loading
 function RoleRoute(props: { component: any; requiredRole: string }) {
   return (
     <Show
@@ -50,18 +65,37 @@ function RoleRoute(props: { component: any; requiredRole: string }) {
       fallback={<Navigate href="/login" />}
     >
       <Show
-        when={auth.user()?.role === props.requiredRole}
+        when={
+          auth.user()?.role === 'admin' ||
+          auth.user()?.role === props.requiredRole ||
+          auth.user()?.allowed_segments?.includes('*')
+        }
         fallback={
           <div class="flex items-center justify-center min-h-screen flex-col gap-4 p-8">
             <h1 class="text-4xl font-bold text-destructive">Acesso Negado</h1>
             <p class="text-lg text-muted-foreground">Você não tem permissão para acessar esta página.</p>
             <p class="text-sm text-muted-foreground">403 - Forbidden</p>
+            <p class="text-xs text-muted mt-4">Role: {auth.user()?.role || 'desconhecido'}</p>
           </div>
         }
       >
-        {props.component}
+        <Suspense fallback={<PageLoader />}>
+          {props.component}
+        </Suspense>
       </Show>
     </Show>
+  );
+}
+
+// ✅ PERFORMANCE: Loading component para lazy routes
+function PageLoader() {
+  return (
+    <div class="flex items-center justify-center min-h-screen">
+      <div class="flex flex-col items-center gap-4">
+        <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p class="text-sm text-muted-foreground">Carregando...</p>
+      </div>
+    </div>
   );
 }
 
@@ -89,6 +123,7 @@ function App() {
       {/* Rotas Protegidas - Dentro do Layout */}
       <Route path="/" component={Layout}>
         <Route path="/dashboard" component={() => <PrivateRoute component={<Dashboard />} />} />
+        <Route path="/dashboard-v2" component={() => <PrivateRoute component={<DashboardV2 />} />} />
         <Route path="/metrics" component={() => <RoleRoute component={<Analytics />} requiredRole="admin" />} />
         <Route path="/rupturas" component={() => <PrivateRoute component={<Rupturas />} />} />
         <Route path="/transfers" component={() => <PrivateRoute component={<Transfers />} />} />
@@ -145,6 +180,11 @@ try {
   render(() => (
     <QueryClientProvider client={queryClient}>
       <App />
+      {/* ✅ USABILIDADE: Global UI Components */}
+      <ToastContainer />
+      <ConfirmDialogContainer />
+      {/* ✅ ACESSIBILIDADE: Screen Reader Announcer */}
+      <ScreenReaderAnnouncer />
     </QueryClientProvider>
   ), root);
   console.log('✅ App rendered successfully!');

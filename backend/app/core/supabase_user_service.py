@@ -190,7 +190,10 @@ class SupabaseUserService:
             # Get auth user data
             auth_user = self.client.auth.admin.get_user_by_id(user_id)
             email = auth_user.user.email if auth_user.user else "N/A"
-            is_active = not auth_user.user.banned_until if auth_user.user else True
+            
+            # Safe access to banned_until
+            banned_until = getattr(auth_user.user, "banned_until", None)
+            is_active = not banned_until if auth_user.user else True
             
             user_metadata = auth_user.user.user_metadata or {}
             allowed_segments = user_metadata.get("allowed_segments", [])

@@ -20,11 +20,11 @@ class ComponentFactory:
 
     @classmethod
     def get_data_adapter(cls):
-        """Obtém uma instância do adaptador de dados híbrido"""
+        """Obtém uma instância do adaptador de dados DuckDB Enhanced"""
         if "data_adapter" not in cls._components:
-            from app.infrastructure.data.hybrid_adapter import HybridDataAdapter
-            logger.info("Criando nova instância do HybridDataAdapter")
-            cls._components["data_adapter"] = HybridDataAdapter()
+            from app.infrastructure.data.duckdb_enhanced_adapter import get_duckdb_adapter
+            logger.info("Obtendo instância do DuckDBEnhancedAdapter")
+            cls._components["data_adapter"] = get_duckdb_adapter()
         return cls._components["data_adapter"]
 
     @classmethod

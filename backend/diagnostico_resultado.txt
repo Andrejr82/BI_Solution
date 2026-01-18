@@ -1,0 +1,117 @@
+================================================================================
+DIAGNOSTICO AVANCADO - SQL SERVER
+================================================================================
+
+
+================================================================================
+  1. CONFIGURACAO DO .ENV
+================================================================================
+DATABASE_URL: mssql+aioodbc://AgenteVirtual:Cacula@2020@127.0.0.1,1433/Projeto_Caculinha?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+PYODBC_CONNECTION_STRING: 
+
+
+================================================================================
+  2. TESTE DE CONECTIVIDADE DE REDE
+================================================================================
+[AVISO] PYODBC_CONNECTION_STRING nao configurado ou invalido
+
+================================================================================
+  3. DRIVERS ODBC INSTALADOS
+================================================================================
+Drivers ODBC disponiveis (2):
+  - SQL Server
+  - ODBC Driver 17 for SQL Server
+
+================================================================================
+  4. SERVICOS DO SQL SERVER (Windows)
+================================================================================
+Servicos SQL Server encontrados:
+  NOME_DO_SERVIÇO: MSSQLSERVER
+  NOME_PARA_EXIBIÇÃO: SQL Server (MSSQLSERVER)
+  NOME_DO_SERVIÇO: SQLBrowser
+  NOME_PARA_EXIBIÇÃO: SQL Server Browser
+  NOME_DO_SERVIÇO: SQLSERVERAGENT
+  NOME_PARA_EXIBIÇÃO: SQL Server Agent (MSSQLSERVER)
+  NOME_DO_SERVIÇO: SQLTELEMETRY
+  NOME_PARA_EXIBIÇÃO: Serviço do Programa de Aperfeiçoamento da Experiência do Usuário do SQL Server (MSSQLSERVER)
+
+================================================================================
+  5. SUGESTOES DE CONNECTION STRING
+================================================================================
+Tente estas alternativas no seu .env:
+
+# Opcao 1: SQL Server local (instancia padrao)
+DATABASE_URL=mssql+aioodbc://sa:SuaSenha@127.0.0.1/agentbi?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+PYODBC_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;DATABASE=agentbi;UID=sa;PWD=SuaSenha;TrustServerCertificate=yes
+
+# Opcao 2: SQL Server local com (local)
+DATABASE_URL=mssql+aioodbc://sa:SuaSenha@(local)/agentbi?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+PYODBC_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=(local);DATABASE=agentbi;UID=sa;PWD=SuaSenha;TrustServerCertificate=yes
+
+# Opcao 3: SQL Server com instancia nomeada
+DATABASE_URL=mssql+aioodbc://sa:SuaSenha@localhost\SQLEXPRESS/agentbi?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+PYODBC_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost\SQLEXPRESS;DATABASE=agentbi;UID=sa;PWD=SuaSenha;TrustServerCertificate=yes
+
+# Opcao 4: Autenticacao Windows (Trusted Connection)
+DATABASE_URL=mssql+aioodbc://@localhost/agentbi?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes&Trusted_Connection=yes
+PYODBC_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=agentbi;Trusted_Connection=yes;TrustServerCertificate=yes
+
+# Opcao 5: ODBC Driver 18 (mais recente)
+DATABASE_URL=mssql+aioodbc://sa:SuaSenha@localhost/agentbi?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no
+PYODBC_CONNECTION_STRING=DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=agentbi;UID=sa;PWD=SuaSenha;TrustServerCertificate=yes;Encrypt=no
+
+
+================================================================================
+  6. CHECKLIST DE SOLUCOES
+================================================================================
+
+[ ] 1. SQL Server esta instalado e rodando?
+      - Verifique no SQL Server Configuration Manager
+      - Ou execute: sc query MSSQLSERVER
+
+[ ] 2. TCP/IP esta habilitado?
+      - Abra SQL Server Configuration Manager
+      - SQL Server Network Configuration > Protocols for [INSTANCE]
+      - TCP/IP deve estar "Enabled"
+
+[ ] 3. SQL Server Browser esta rodando? (se usar instancia nomeada)
+      - Execute: sc query SQLBrowser
+      - Inicie se necessario: net start SQLBrowser
+
+[ ] 4. Firewall permite conexoes?
+      - Porta 1433 (TCP) para instancia padrao
+      - Porta 1434 (UDP) para SQL Server Browser
+      - Execute como admin: netsh advfirewall firewall add rule name="SQL Server" dir=in action=allow protocol=TCP localport=1433
+
+[ ] 5. Autenticacao SQL Server esta habilitada?
+      - SQL Server deve estar em modo "Mixed Mode"
+      - Verifique nas propriedades do servidor no SSMS
+
+[ ] 6. Usuario 'sa' esta habilitado e senha correta?
+      - Ou use autenticacao Windows (Trusted_Connection=yes)
+
+[ ] 7. Database existe?
+      - Conecte via SSMS e verifique se o database 'agentbi' existe
+      - Ou crie: CREATE DATABASE agentbi
+
+[ ] 8. Considere usar apenas Parquet/DuckDB
+      - Se SQL Server nao e essencial, desabilite:
+      - USE_SQL_SERVER=false
+      - FALLBACK_TO_PARQUET=true
+
+
+================================================================================
+  7. TESTE RAPIDO COM SQLCMD
+================================================================================
+
+Execute este comando no terminal para testar a conexao diretamente:
+
+sqlcmd -S localhost -U sa -P SuaSenha -Q "SELECT @@VERSION"
+
+Se funcionar, o problema esta na connection string Python.
+Se nao funcionar, o problema esta no SQL Server ou rede.
+
+
+================================================================================
+FIM DO DIAGNOSTICO
+================================================================================
